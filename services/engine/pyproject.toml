@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=70.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowdesk-engine"
+version = "0.9.0"
+description = "FlowDesk pricing & analytics engine (Black-76, GEX/DEX, snapshot builder, feed adapters)."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy==2.0.1",
+    "pydantic==2.8.2",
+    "tzdata==2024.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.2",
+    "ruff==0.5.7",
+    "mypy==1.11.1",
+]
+# Only needed to RUN scripts/ingest_databento.py against the live Databento API
+# (network + subscription required). Not needed for the engine, the historical
+# adapter, or the test suite. Pin to your account's supported SDK (see README).
+ingest = [
+    "databento==0.34.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

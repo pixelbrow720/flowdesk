@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "instrument": "ES",
+  "session_date": "2026-06-10",
+  "ts": "2026-06-10T13:31:00Z",
+  "minute_index": 1,
+  "state": "LIVE",
+  "stale": false,
+  "expired": false,
+  "forward": 5000.25,
+  "rate": 0.0517,
+  "axis": {
+    "strike_min": 4990,
+    "strike_max": 5010,
+    "step": 5
+  },
+  "regime": {
+    "net_gamma": -1230000000.0,
+    "sign": -1,
+    "stability_pct": 42.0
+  },
+  "profile": [
+    { "strike": 4990, "net_gex": -120000000.0, "net_dex": 34000000.0, "interpolated": false },
+    { "strike": 4995, "net_gex": -40000000.0, "net_dex": 28000000.0, "interpolated": true },
+    { "strike": 5000, "net_gex": 560000000.0, "net_dex": 22000000.0, "interpolated": false },
+    { "strike": 5005, "net_gex": 210000000.0, "net_dex": 18000000.0, "interpolated": true },
+    { "strike": 5010, "net_gex": -330000000.0, "net_dex": 9000000.0, "interpolated": false }
+  ],
+  "field": {
+    "price_grid": [4990, 4995, 5000, 5005, 5010],
+    "gamma": [-21000000.0, -8000000.0, 33000000.0, 12000000.0, -19000000.0],
+    "delta": [11000000.0, 10500000.0, 10000000.0, 9500000.0, 9000000.0]
+  },
+  "levels": {
+    "call_walls": [5050, 5025, 5015],
+    "put_walls": [4950, 4975, 4985],
+    "gamma_flip": 4998.5,
+    "largest_gex": 5000,
+    "largest_dex": 4990
+  }
+}

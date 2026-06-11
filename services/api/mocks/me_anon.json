@@ -1,0 +1,13 @@
+{
+  "access_state": "ANON",
+  "discord_id": null,
+  "has_desk": false,
+  "is_member": false,
+  "last_checked": null,
+  "grace_until": null,
+  "cta": {
+    "join_url": "https://flowjob.id",
+    "buy_url": "https://flowjob.id",
+    "recheck_supported": true
+  }
+}

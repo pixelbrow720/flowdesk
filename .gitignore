@@ -1,0 +1,37 @@
+# ── Node / pnpm ──
+node_modules/
+.pnpm-store/
+
+# ── Next.js ──
+.next/
+out/
+next-env.d.ts
+
+# ── Build output ──
+dist/
+build/
+*.tsbuildinfo
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+
+# ── Env & secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Data cache (raw Databento chains) ──
+/data/raw/
+
+# ── OS / editor ──
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

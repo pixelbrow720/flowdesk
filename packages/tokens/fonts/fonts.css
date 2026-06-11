@@ -1,0 +1,57 @@
+/* =============================================================================
+ * FlowDesk self-hosted fonts. Locked: Space Grotesk (UI/display) +
+ * JetBrains Mono (all numbers). NEVER Inter, never decorative.
+ *
+ * The actual .woff2 files are NOT included in this package (binary, licensed).
+ * The OWNER must drop them into the app's public dir at /fonts/ with the EXACT
+ * filenames below. See README -> "Self-hosting the fonts".
+ *
+ * Import once at the app root:  import "@flowdesk/tokens/fonts.css";
+ * (Place this AFTER nothing else needs the fonts; before tokens.css is fine.)
+ * ========================================================================== */
+
+/* ─────────────────── Space Grotesk — 400 / 500 / 600 / 700 ───────────────── */
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/SpaceGrotesk-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/SpaceGrotesk-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/SpaceGrotesk-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/SpaceGrotesk-Bold.woff2") format("woff2");
+}
+
+/* ─────────────────────── JetBrains Mono — 400 / 500 ────────────────────── */
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+}

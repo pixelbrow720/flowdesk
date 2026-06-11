@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe --version)",
+      "Bash(./.venv/Scripts/python.exe -m pip list)",
+      "Bash(where python *)",
+      "Bash(.venv/Scripts/python.exe --version)",
+      "Bash(.venv/Scripts/python.exe -m pip list)",
+      "Bash(../../.venv/Scripts/python.exe -c \"import scipy; print\\('scipy', scipy.__version__\\)\")",
+      "Bash(echo \"node_modules exists: $?\")",
+      "Bash(../../.venv/Scripts/python.exe -m pytest -q)",
+      "Bash(\"C:\\\\Users\\\\ollama\\\\Downloads\\\\flowdesk\\\\flowdesk\\\\.venv\\\\Scripts\\\\ruff.exe\" check *)",
+      "Bash(../../.venv/Scripts/python.exe -m pytest)",
+      "Bash(pnpm typecheck *)",
+      "PowerShell(cd \"C:\\\\Users\\\\ollama\\\\Downloads\\\\flowdesk\\\\flowdesk\"; $p = \\(Get-Command pnpm -ErrorAction SilentlyContinue\\); if \\($p\\) { \"pnpm: $\\($p.Source\\)\" } else { \"no pnpm; npm: $\\(\\(Get-Command npm -ErrorAction SilentlyContinue\\).Source\\); corepack: $\\(\\(Get-Command corepack -ErrorAction SilentlyContinue\\).Source\\)\" })",
+      "Bash(\"C:\\\\Users\\\\ollama\\\\Downloads\\\\flowdesk\\\\flowdesk\\\\.venv\\\\Scripts\\\\mypy.exe\")",
+      "Bash(../../.venv/Scripts/python.exe -m pytest tests/test_black76.py tests/test_iv.py tests/test_exposure.py)",
+      "Bash(../../.venv/Scripts/python.exe -m ruff check .)",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./apps/web/package.json'\\).scripts\\)\\)\")",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./packages/contracts/package.json'\\).scripts\\)\\)\")",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./packages/tokens/package.json'\\).scripts\\)\\)\")",
+      "Bash(../../.venv/Scripts/python.exe -m mypy)",
+      "Bash(grep -iA2 -E \"mypy|typecheck\")",
+      "Bash(node node_modules/.bin/tsc --noEmit)",
+      "Bash(echo \"web-tsc-exit=$?\")",
+      "Bash(\"C:\\\\Users\\\\ollama\\\\Downloads\\\\flowdesk\\\\flowdesk\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest -q)",
+      "Bash(../../.venv/Scripts/python.exe -m mypy src)",
+      "Bash(node ../../node_modules/.bin/tsc --noEmit)",
+      "Bash(echo \"tokens-tsc-exit=$?\")",
+      "Bash(sed -E 's/^.*\\\\] //')"
+    ]
+  }
+}

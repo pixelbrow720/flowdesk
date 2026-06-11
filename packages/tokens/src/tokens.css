@@ -1,0 +1,140 @@
+/* =============================================================================
+ * FlowDesk design tokens — CSS custom properties.
+ * Mirrors packages/tokens/src/tokens.ts byte-for-byte in value. Keep in sync.
+ *
+ * Default theme = DARK (:root). Light theme via [data-theme="light"].
+ * Import once at the app root:  import "@flowdesk/tokens/tokens.css";
+ *
+ * Rule: components MUST consume these variables (directly or via the Tailwind
+ * preset). Hard-coded hex/spacing in components is forbidden.
+ * ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Core palette (locked, theme-independent) ── */
+  --color-turquoise: #40e0d0; /* positive / support */
+  --color-crimson: #e0183c;   /* negative / resistance */
+  --color-base: #000000;      /* dark base */
+  --color-white: #ffffff;
+
+  /* ── Neutral monochrome ramp (dark UI chrome) ── */
+  --color-gray-50: #f5f6f7;
+  --color-gray-100: #e7e9eb;
+  --color-gray-200: #ccd0d4;
+  --color-gray-300: #aab1b8;
+  --color-gray-400: #838b93;
+  --color-gray-500: #626a72;
+  --color-gray-600: #4a5158;
+  --color-gray-700: #363b41;
+  --color-gray-800: #23272b;
+  --color-gray-900: #15181b;
+  --color-gray-950: #0a0c0d;
+
+  /* ── Semantic roles (DARK) ── */
+  --color-positive: var(--color-turquoise);
+  --color-negative: var(--color-crimson);
+  --color-support: var(--color-turquoise);
+  --color-resistance: var(--color-crimson);
+  --color-bg: var(--color-base);
+  --color-surface: var(--color-gray-950);
+  --color-border: var(--color-gray-800);
+  --color-text-primary: var(--color-gray-50);
+  --color-text-muted: var(--color-gray-400);
+
+  /* ── Heatmap ramp anchors (DARK: turquoise → black → crimson) ──
+   * NOTE: these are sRGB ANCHORS only. The WebGL heatmap MUST interpolate
+   * between them in a perceptual space (OKLab / OKLCH), NOT naive sRGB, so the
+   * ramp stays perceptually uniform and avoids muddy mid-tones. Stops are at
+   * 0.0 / 0.5 / 1.0. (See packages/tokens/src/tokens.ts -> `heatmap`.) */
+  --heat-low: #40e0d0;  /* stop 0.0 : strongest positive / support */
+  --heat-mid: #000000;  /* stop 0.5 : neutral (black in dark theme) */
+  --heat-high: #e0183c; /* stop 1.0 : strongest negative / resistance */
+
+  /* ── Spacing (4px base) ── */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+
+  /* ── Radius (restrained: 2 / 4 / 8) ── */
+  --radius-none: 0px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+
+  /* ── Font families ── */
+  --font-ui: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ── Type scale (rem) : size / line-height / weight / tracking ── */
+  --text-display-size: 3.5rem;
+  --text-display-line: 1.05;
+  --text-display-weight: 700;
+  --text-display-tracking: -0.02em;
+
+  --text-h1-size: 2.25rem;
+  --text-h1-line: 1.1;
+  --text-h1-weight: 600;
+  --text-h1-tracking: -0.015em;
+
+  --text-h2-size: 1.5rem;
+  --text-h2-line: 1.2;
+  --text-h2-weight: 600;
+  --text-h2-tracking: -0.01em;
+
+  --text-body-size: 1rem;
+  --text-body-line: 1.5;
+  --text-body-weight: 400;
+  --text-body-tracking: 0em;
+
+  --text-caption-size: 0.8125rem;
+  --text-caption-line: 1.4;
+  --text-caption-weight: 400;
+  --text-caption-tracking: 0.01em;
+
+  --text-mono-size: 0.875rem;
+  --text-mono-line: 1.4;
+  --text-mono-weight: 500;
+  --text-mono-tracking: 0em;
+
+  /* ── Motion ── */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ── Shadows & data-state glows ── */
+  --shadow-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-elevation-2: 0 4px 16px rgba(0, 0, 0, 0.7);
+  --shadow-glow-positive: 0 0 0 1px rgba(64, 224, 208, 0.35),
+    0 0 16px rgba(64, 224, 208, 0.25);
+  --shadow-glow-negative: 0 0 0 1px rgba(224, 24, 60, 0.35),
+    0 0 16px rgba(224, 24, 60, 0.25);
+}
+
+/* =============================================================================
+ * LIGHT THEME overrides. Only the theme-dependent roles change; the locked
+ * brand colors (turquoise/crimson) and the gray ramp stay identical.
+ * ========================================================================== */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg: var(--color-white);
+  --color-surface: var(--color-gray-50);
+  --color-border: var(--color-gray-200);
+  --color-text-primary: var(--color-gray-950);
+  --color-text-muted: var(--color-gray-500);
+
+  /* Heatmap (LIGHT: turquoise → white → crimson). Same OKLab interpolation
+   * note as above — only the midpoint anchor changes from black to white. */
+  --heat-low: #40e0d0;
+  --heat-mid: #ffffff;
+  --heat-high: #e0183c;
+}

@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowdesk-api"
+version = "0.1.0"
+description = "FlowDesk API/WS service (FastAPI): REST + WebSocket, Discord auth, Redis/Timescale reads."
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = [
+  "fastapi==0.112.2",
+  "uvicorn[standard]==0.30.6",
+  "pydantic==2.8.2",
+  "asyncpg==0.29.0",
+  "redis==5.0.8",
+  # Discord OAuth2 HTTP calls (PRD #6). Imported lazily in api/discord_client.py;
+  # promoted from dev to runtime in release 1.5 because the auth flow needs it.
+  "httpx==0.27.0",
+  # Canonical Snapshot contract mirror (engine/schema.py). Resolved as an
+  # editable workspace dependency in the monorepo (pip install -e services/engine).
+  "flowdesk-engine>=0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff==0.5.7",
+  "mypy==1.11.1",
+  "pytest==8.3.2",
+  "fakeredis==2.23.5",
+  "httpx==0.27.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+# `db` is a top-level package alongside `src`; tests import `db.repo`, `api.*`, `engine.schema`.
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "."]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "PTH", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+packages = ["api"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]

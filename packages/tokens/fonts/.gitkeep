@@ -1,0 +1,9 @@
+# Drop the self-hosted .woff2 files here (and copy them to apps/web/public/fonts/).
+# Required filenames (see ../../README.md -> "Self-hosting the fonts"):
+#   SpaceGrotesk-Regular.woff2   (400)
+#   SpaceGrotesk-Medium.woff2    (500)
+#   SpaceGrotesk-SemiBold.woff2  (600)
+#   SpaceGrotesk-Bold.woff2      (700)
+#   JetBrainsMono-Regular.woff2  (400)
+#   JetBrainsMono-Medium.woff2   (500)
+# TODO-FROM-OWNER: add the actual licensed .woff2 binaries.

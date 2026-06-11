@@ -1,0 +1,5 @@
+# pnpm workspaces — TypeScript/Node packages only.
+# Python services (services/engine, services/api) are managed separately via pyproject.toml.
+packages:
+  - "apps/*"
+  - "packages/*"
