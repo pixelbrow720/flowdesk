@@ -29,7 +29,8 @@ the previous scatter of root-level planning docs, per-phase READMEs, and the
 - [`reference/Stitching-Guide.md`](reference/Stitching-Guide.md) — how the release patches were stitched; full locked-contract text + acceptance gate.
 - [`reference/methodology-decisions.md`](reference/methodology-decisions.md) — the 5 methodology divergence decisions + heavy unbuilt items.
 - [`reference/implementation-status-2026-06-11.md`](reference/implementation-status-2026-06-11.md) — a dated, detailed status snapshot vs. the research blueprint.
-- [`research/`](research/) — the raw methodology research (HIRO, SpotGamma reverse-engineering, FlowGreeks blueprint, mega-riset 1 & 2).
+- [`research/verified/`](research/verified/) — **canonical, independently-verified research** (source of truth): the definitive report, the red-team validation audit, and `black76_validate.py` (Black-76 greeks re-derived vs finite-difference, academic sources checked, zero fabrications).
+- [`research/archive/`](research/archive/) — superseded raw methodology drafts (HIRO, SpotGamma reverse-engineering, FlowGreeks blueprint, mega-riset 1 & 2), kept for provenance only. The `verified/` package wins on any disagreement.
 
 ## Code-adjacent docs (kept next to the code they describe)
 
