@@ -8,6 +8,10 @@
 > the **140–290% ATM vol is the tell**, not a real crash signal. VEX/CHEX and the
 > SVI surface findings are therefore **WITHDRAWN pending a correct 0DTE re-pull.**
 > The DDOI section (flow-vs-ΔOI, no greeks) is unaffected and still valid.
+>
+> ✅ **UPDATE 2026-06-13: correct 0DTE data NOW EXISTS** for Jun 5/8/9/10 (`data/raw/zerodte/`,
+> IV verified sane ~26.7%, proper put skew). VEX/CHEX and SVI remain WITHDRAWN until
+> RE-RUN on that data (re-run still pending; only 4 of the 8 days were re-pulled).
 
 > **STATUS: Exploratory analysis layer, 8-day sample. NOT validated, NOT in the
 > Snapshot.** Built on the VALIDATED engine core (`black76.vanna/charm` FD-checked,

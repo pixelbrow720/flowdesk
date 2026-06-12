@@ -1,6 +1,16 @@
 # Data Symbology Bug + 0DTE Findings — Critical Record (harness v1)
 
-> **STATUS: Critical methodology finding from research (RISET1407.md, 2026-06-13).**
+> **UPDATE 2026-06-13 — ROOT CAUSE FIXED & PROVEN.** Correct 0DTE futures-option
+> data was pulled for **Jun 5, 8, 9, 10 2026** (4 trading days) into
+> `data/raw/zerodte/`, using the right per-day symbology (ES daily roots E2A–E2D /
+> EW1, NQ Q2A–Q2D / QN1; underlying ESM6/NQM6; `expiration == session date`). On
+> the Jun-9 crash day the chain prices to **sane IV ≈ 26.7% with proper put skew**
+> (was 140–290% artefact on the wrong quarterly data). The symbology bug is closed.
+> STILL PENDING: (a) re-run the greek layers (case study, VEX/CHEX, surface) on this
+> correct data — they remain WITHDRAWN until re-run; (b) calm days Jun 1–4 were not
+> pulled, so a full 8-day replication is not yet possible.
+>
+> **STATUS (original): Critical methodology finding from research (RISET1407.md, 2026-06-13).**
 > The 8-day case-study dataset was pulled with the WRONG symbology — it contains
 > QUARTERLY options, not 0DTE. The engine is correct; the data acquisition was
 > wrong. This document records the root cause, the fix recipe, and which prior

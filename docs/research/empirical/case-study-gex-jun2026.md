@@ -7,6 +7,11 @@
 > gamma-flip, walls — rest on mispriced gamma. **Treat every number here as
 > provisional and WITHDRAWN pending a correct 0DTE re-pull.** The narrative shape
 > (calm vs crash days) loosely tracks price, but the GEX magnitudes are not trustworthy.
+>
+> ✅ **UPDATE 2026-06-13: correct 0DTE data NOW EXISTS** for Jun 5/8/9/10 (`data/raw/zerodte/`,
+> IV verified sane ~26.7%). These GEX numbers are still WITHDRAWN until the case study
+> is RE-RUN on that data. Note: only 4 of these 8 days were re-pulled (calm days Jun 1–4
+> not yet acquired), so a full 8-day replication remains blocked on those.
 
 > **STATUS: Exploratory, descriptive, hypothesis-generating. This is NOT Lapis 2.**
 > No walk-forward, no FDR verdict, no significance test, no "validated" claim.

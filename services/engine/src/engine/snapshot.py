@@ -177,7 +177,10 @@ def t_expiry_from_clock(
 ) -> float:
     """Real-clock 0DTE year-fraction from ``ts`` to TODAY's settlement (ET).
 
-    Divergence #3 option (NOT wired as the default — see ``DEFAULT_T_EXPIRY``).
+    Divergence #3 option. Not the *engine* default (the pure engine keeps the
+    calendar-free placeholder ``DEFAULT_T_EXPIRY = 0.5/365``), but the API worker
+    DOES wire this as the runtime default per tick (see ``api.worker`` /
+    ``DEFAULT_T_EXPIRY`` there) — so production snapshots use real wall-clock time.
     Where the locked ``DEFAULT_T_EXPIRY = 0.5/365`` is a near-constant placeholder,
     this returns the *actual* remaining time to the 16:00 ET (default) settlement,
     so charm/theta/gamma sharpen correctly through the afternoon for 0DTE.

@@ -38,11 +38,11 @@ It is defined twice and the two definitions must stay identical:
   },
 
   "levels": {
-    "call_walls":  [ { "strike": 5350, "value": 1.0e8 } ],
-    "put_walls":   [ { "strike": 5250, "value": 9.0e7 } ],
+    "call_walls":  [ 5350, 5345, 5360 ],
+    "put_walls":   [ 5250, 5240, 5230 ],
     "gamma_flip":  5312.0,
-    "largest_gex": { "strike": 5350, "value": 1.0e8 },
-    "largest_dex": { "strike": 5250, "value": 8.0e7 }
+    "largest_gex": 5350,
+    "largest_dex": 5250
   },
 
   "ohlc": { "o": 5310, "h": 5315, "l": 5308, "c": 5312.25 },   // optional
