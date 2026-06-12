@@ -1,7 +1,7 @@
 # FlowDesk — Status Implementasi vs FlowGreeks-Riset-Lengkap.md
 
 > Dibuat 2026-06-11. Membandingkan implementasi nyata FlowDesk dengan cetak biru di
-> `Research/FlowGreeks-Riset-Lengkap.md` (Bagian 1–6). Tujuan: peta jujur "apa yang
+> `../research/FlowGreeks-Riset-Lengkap.md` (Bagian 1–6). Tujuan: peta jujur "apa yang
 > sudah dibangun" vs "apa yang belum", per bagian dokumen, dengan rujukan file.
 >
 > **Legenda status:** ✅ SELESAI · 🟡 SEBAGIAN · ❌ BELUM ADA · ⚠️ DIVERGENSI (kode beda dari riset, perlu keputusan)
@@ -136,7 +136,7 @@ Mayoritas **selaras**. Divergensi minor:
 
 ## DIVERGENSI — SUDAH DIPUTUSKAN (user, 2026-06-12)
 
-> Kelimanya sudah dieksekusi di kode. Detail opsi & tradeoff: `Research/REKOMENDASI-keputusan.md`.
+> Kelimanya sudah dieksekusi di kode. Detail opsi & tradeoff: `methodology-decisions.md`.
 
 ### #1 ✅ GEX berbasis VOL (opsi A — TETAP)
 - **Keputusan:** pertahankan `GEX = γ·VOL·M·F²·0.01` (locked). DDOI jadikan jalur v3 dengan kalibrasi, JANGAN cabut VOL-GEX.

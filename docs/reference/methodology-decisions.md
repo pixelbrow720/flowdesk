@@ -25,7 +25,7 @@ Status verifikasi saat dokumen ditulis:
 
 **(a) Kode sekarang.** `GEX_strike = gamma · VOL · M · F² · 0.01`, VOL kumulatif sejak
 RTH open. Net GEX>0 → pinning (turquoise), <0 → volatile (crimson). Ini **locked
-contract** (STITCHING_GUIDE §2).
+contract** (`Stitching-Guide.md` §2).
 
 **(b) Riset.** mega-riset & riset-spotgamma: SpotGamma sesungguhnya pakai **DDOI**
 (Daily Dealer Open Interest) — perubahan OI yang sudah di-sign per dealer-convention,
