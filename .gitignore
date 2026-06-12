@@ -33,6 +33,7 @@ venv/
 
 # ── Analysis harness outputs (regenerable from data) ──
 /analysis/charts/
+/analysis/*.txt
 
 # ── Logs & temp / scratch files ──
 *.log

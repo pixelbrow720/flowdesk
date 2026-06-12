@@ -1,5 +1,14 @@
 # Track F + DDOI — Exposure & Vol-Surface Layers (harness v1, exploratory)
 
+> ⚠️ **CONTAMINATION NOTICE (2026-06-13): the greek-based results below were
+> computed on WRONG-TENOR data.** The 8-day dataset was pulled with `ES.OPT`/`NQ.OPT`
+> parent symbology, which returns QUARTERLY options, not 0DTE (see
+> [`symbology-0dte-findings.md`](symbology-0dte-findings.md)). The engine priced
+> 9–16-day contracts as T≈0.14 days, so the IV / vanna / charm here are artefacts —
+> the **140–290% ATM vol is the tell**, not a real crash signal. VEX/CHEX and the
+> SVI surface findings are therefore **WITHDRAWN pending a correct 0DTE re-pull.**
+> The DDOI section (flow-vs-ΔOI, no greeks) is unaffected and still valid.
+
 > **STATUS: Exploratory analysis layer, 8-day sample. NOT validated, NOT in the
 > Snapshot.** Built on the VALIDATED engine core (`black76.vanna/charm` FD-checked,
 > `surface.fit_svi`, `engine.iv`) but run on a single 8-day correlated episode

@@ -1,5 +1,13 @@
 # Exploratory GEX Case Study — Jun 1–10 2026 (DESCRIPTIVE)
 
+> ⚠️ **CONTAMINATION NOTICE (2026-06-13): this case study ran on WRONG-TENOR data.**
+> The 8-day dataset is QUARTERLY options pulled via `ES.OPT`/`NQ.OPT`, not 0DTE
+> (see [`symbology-0dte-findings.md`](symbology-0dte-findings.md)). The engine
+> priced 9–16-day contracts as 0DTE (T≈0.14 days), so all GEX values — regime sign,
+> gamma-flip, walls — rest on mispriced gamma. **Treat every number here as
+> provisional and WITHDRAWN pending a correct 0DTE re-pull.** The narrative shape
+> (calm vs crash days) loosely tracks price, but the GEX magnitudes are not trustworthy.
+
 > **STATUS: Exploratory, descriptive, hypothesis-generating. This is NOT Lapis 2.**
 > No walk-forward, no FDR verdict, no significance test, no "validated" claim.
 > A single 8-day correlated episode builds intuition and catches gross bugs — it
