@@ -31,6 +31,7 @@ the previous scatter of root-level planning docs, per-phase READMEs, and the
 - [`reference/implementation-status-2026-06-11.md`](reference/implementation-status-2026-06-11.md) — a dated, detailed status snapshot vs. the research blueprint.
 - [`research/verified/`](research/verified/) — **canonical, independently-verified research** (source of truth): the definitive report, the red-team validation audit, and `black76_validate.py` (Black-76 greeks re-derived vs finite-difference, academic sources checked, zero fabrications).
 - [`research/archive/`](research/archive/) — superseded raw methodology drafts (HIRO, SpotGamma reverse-engineering, FlowGreeks blueprint, mega-riset 1 & 2), kept for provenance only. The `verified/` package wins on any disagreement.
+- [`research/empirical/`](research/empirical/) — **empirical findings (harness v1, NOT yet verified):** the Lapis 1 ΔOI reconciliation result (positive-control passed) and the exploratory GEX case study (descriptive, not Lapis 2). Single 8-day episode; awaiting ~90-day confirmation.
 
 ## Code-adjacent docs (kept next to the code they describe)
 

@@ -27,8 +27,12 @@ venv/
 .env.*
 !.env.example
 
-# ── Data cache (raw Databento chains) ──
+# ── Data cache (raw Databento chains + decoded/derived case-study artefacts) ──
 /data/raw/
+/data/case_study/
+
+# ── Analysis harness outputs (regenerable from data) ──
+/analysis/charts/
 
 # ── Logs & temp / scratch files ──
 *.log
