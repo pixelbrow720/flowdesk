@@ -93,7 +93,47 @@ fall back to the static long-call/short-put convention for the opening stock. Ou
 native CME aggressor side lets FLOW (and the hybrid #4) do the *intraday* direction
 better than Lee-Ready-based vendors — that is the genuine, defensible edge.
 
-## 5. What is and isn't claimed
+## 4b. Formula #4 BUILT — hybrid OI-anchored + flow-update ✅
+
+Implemented in [`/analysis/synthetic_oi_v4.py`](../../../analysis/synthetic_oi_v4.py)
+after a 2-agent deep-research pass (methodology + data-feasibility). Per strike `K`,
+type `τ`, minute `t`, dealer **signed contract position**:
+
+```
+Q4(K,τ,t) = s_static(τ)·OI_open(K,τ)  +  Σ_{trade i≤t}(−a_i)·size_i·w
+GEX4(t)   = Σ_K Σ_τ Γ_τ · Q4 · M · F² · 0.01      (locked kernel, signed-Q)
+```
+- `s_static` = +1 call / −1 put (irreducible fallback for carried-OI direction).
+- `OI_open` = prior-session settled OI (`ts_ref` = prior session — genuine
+  carried-in stock, static intraday; null sentinel 2147483647 dropped).
+- `a_i` = native CME aggressor (B/A/N); dealer takes the opposite (`−a_i`).
+- `w` ∈ [0,1] = open/close weight (the one proprietary knob), **tunable**, swept
+  {0, 0.5, 1}. `w=0` ⇒ pure OI-GEX; `OI_open=0, w=1` ⇒ pure FLOW-GEX. #4 strictly
+  generalizes every prior lens. **Non-circular** (never touches same-day ΔOI).
+
+**Data-feasibility (measured, 4 days):** aggressor `N=0%` (zero directional info
+lost — the edge over Lee-Ready is maximal); OI is true carried-in stock, static
+intraday; ES near-money OI coverage 97–100% and flow/OI 0.2–0.6 (anchor dominates,
+flow refines) → **ES robust**. NQ OI coverage 66–87%, flow/OI 0.67–1.25 (flow swamps
+a thin, partly-missing anchor) → **NQ flagged FRAGILE**. vol/OI 2–13× everywhere ⇒
+heavy round-tripping, so the open/close (`w`) attribution is unobservable and does
+real work — an explicit model assumption, not data.
+
+**Result (structural, 4 days):**
+- ES: `w=0`→`w=1` flips regime sign in only ~9% of minutes — the **OI anchor
+  dominates; flow is a measured refinement, not a hijack.**
+- **#4 fixes the v3 crash-day problem:** FLOW-only read +1 during the Jun 9/10
+  crash (looked wrong); #4 reads **−1 (volatile) on every crash day** because the OI
+  anchor keeps the regime sane while flow only tunes magnitude. The hybrid resolves
+  the stock-vs-flow tension — stock gives the correct base, flow adds real-time
+  sensitivity, without raw flow hijacking the signal. This is *why* #4 is more robust.
+- NQ flips more (thin anchor) — consistent with the fragility flag, not trusted.
+
+**Honest bound:** #4 is a product-grade positioning lens for **ES**; it is NOT
+proven predictive on 4 correlated days. Whether `w>0` (flow) adds forecasting power
+over `w=0` (pure OI) is the central question of the operator's ~90-day forward test.
+
+
 
 - **Is:** correct 0DTE data exists and prices sanely; three methodologically-sound
   positioning lenses run on it; FLOW is genuinely different from VOL (not "VOL with
