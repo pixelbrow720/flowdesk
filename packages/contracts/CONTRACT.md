@@ -40,6 +40,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `levels` | `Levels` | object | Key levels overlay. | PRD #0 §2 |
 | `ohlc` | `OHLC \| null` | object (optional) | Underlying futures OHLC for this minute (candle view). Absent/`null` when not captured; additive, no version bump. | PRD #4 |
 | `hiro` | `Hiro \| null` | object (optional) | Cumulative dealer hedging flow (HIRO). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
+| `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `hiro`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -117,3 +118,25 @@ intraday HIRO line is reconstructed FE-side from the per-minute frame sequence
 | `puts` | `number` | USD delta-notional | Cumulative HIRO from put trades only. | FlowGreeks |
 | `zerodte` | `number` | USD delta-notional | Cumulative HIRO from 0DTE trades (`T < 1/365`). | FlowGreeks |
 | `retail` | `number` | USD delta-notional | Cumulative HIRO from the heuristic retail proxy (odd-lot size; indicative only). | FlowGreeks |
+
+## `synthetic_oi` (SyntheticOi, optional) — **EXPERIMENTAL**
+
+Synthetic-OI #4 positioning lens (`engine.synthetic_oi`). Optional/additive
+(mirrors `hiro`/`ohlc`): absent or `null` when not captured — does **not** bump
+`schema_version`. Dealer position per strike = carried-in open interest with the
+static long-call/short-put sign, **updated** by native CME aggressor-signed flow
+weighted by `w`; `gex = Σ Γ·Q·M·F²·0.01`. Thin strikes (gamma unsolved upstream)
+are **skipped, not fabricated**.
+
+> **This is EXPERIMENTAL and NOT price-validated** — structurally checked on a
+> 4-day sample only. It lives **alongside** the locked VOL-based product GEX
+> (`profile[].net_gex`) and does **not** replace it. Consumers MUST treat it as
+> indicative, not authoritative. See
+> `docs/research/empirical/synthetic-oi-0dte.md`.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `gex` | `number` | USD per 1% move | Net synthetic-OI GEX at weight `w`. EXPERIMENTAL. | FlowGreeks |
+| `sign` | `-1 \| 0 \| 1` | enum | Sign of `gex`. | FlowGreeks |
+| `gex_static` | `number` | USD per 1% move | `w=0` pure-OI GEX baseline (SpotGamma-classic). | FlowGreeks |
+| `w` | `number` | `[0, 1]` | Open/close flow weight used for `gex` (`0` = pure OI, `1` = full flow update). | FlowGreeks |

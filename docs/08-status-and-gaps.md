@@ -44,11 +44,16 @@ the weakest methodology:
   inventory.
 - Cumulative volume double-counts round-trips and has no position decay.
 
-There is **no** synthetic-OI / DDOI / signed-flow reconstruction module
-(confirmed: no `oi`/`ddoi` engine file). The methodology research marks DDOI as
-the "inti gap metodologi" and defers it to v3. **Do not rip out VOL-GEX; do not
-build DDOI without approval.** When validation (#1) exists, DDOI becomes a
-parallel, measurable layer to compare against VOL-GEX.
+A first **synthetic-OI signed-flow-update lens now exists** — `synthetic_oi.py`,
+wired as the **optional, EXPERIMENTAL** `synthetic_oi` Snapshot field (OI-anchored
+position updated by native aggressor flow, weight `w∈[0,1]`). It lives **alongside**
+VOL-GEX, does **not** replace it, and is **not price-validated** (structural check
+on a 4-day sample only) — so it does **not** close gap #1. A full **DDOI** /
+ΔOI-reconciled reconstruction is still **not built** (no `ddoi` engine file); the
+methodology research marks DDOI as the "inti gap metodologi" and defers it to v3.
+**Do not rip out VOL-GEX; do not build DDOI without approval.** When validation
+(#1) exists, both synthetic-OI and DDOI become parallel, measurable layers to
+compare against VOL-GEX.
 
 ### 3. Live feed is a stub 🔴
 `feed/live.py` raises `LiveFeedNotAvailable`. Today only historical replay works.

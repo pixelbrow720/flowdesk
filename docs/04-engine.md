@@ -16,6 +16,7 @@ chain + forward + rate + session_state
    ├─ field.py      price×strike projection grid (numpy + scipy)
    ├─ levels.py     call/put walls, gamma flip, largest GEX/DEX
    ├─ hiro.py       optional signed order-flow aggregate
+   ├─ synthetic_oi.py  optional OI-anchored + flow-update GEX lens (EXPERIMENTAL)
    ├─ surface.py    SVI fit + expected move (ISOLATED — not yet in Snapshot)
    └─ snapshot.py   assembles + validates the canonical Snapshot
 ```
@@ -70,6 +71,25 @@ HIRO_t = Σ s·δ·q·M·F   with aggressor s: B=+1, A=−1, N=0 (from trades.si
 Aggregated into `total / calls / puts / zerodte / retail`. Emitted as the
 **optional** `hiro` Snapshot field (decision #5, no version bump). Uses
 `trades.side` (decision #4) — **no `tbbo` required**.
+
+### `synthetic_oi.py` (optional output — EXPERIMENTAL)
+Synthetic-OI #4 positioning lens: an **alternative** GEX basis that anchors on
+carried-in open interest and updates it with native aggressor-signed flow.
+
+```
+Q(strike) = s_static·OI_open + (−net_aggressor_flow)·w   with s_static long-call/short-put
+GEX       = Σ Γ·Q·M·F²·0.01
+```
+
+`w ∈ [0, 1]` is tunable (`w=0` = pure OI-GEX / SpotGamma-classic baseline,
+`w=1` = full flow update). Thin strikes whose gamma is unsolved upstream are
+**skipped, not fabricated**. Reuses the locked dealer signs and `GEX_PCT_SCALE`.
+Emitted as the **optional** `synthetic_oi` Snapshot field (additive, no version
+bump — follows the `hiro`/`ohlc` precedent), computed only when signed flow is
+supplied. **This lives ALONGSIDE the locked VOL-GEX (`exposure.py`) and does NOT
+replace it.** It is **EXPERIMENTAL / not price-validated** — structurally checked
+on a 4-day sample only. See
+[`research/empirical/synthetic-oi-0dte.md`](research/empirical/synthetic-oi-0dte.md).
 
 ### `surface.py` (ISOLATED — built, not wired)
 SVI volatility-surface fit + expected-move calculation. Complete and tested but
