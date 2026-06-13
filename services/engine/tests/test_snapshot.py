@@ -113,7 +113,7 @@ _ISO_DT_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 _SNAPSHOT_KEYS = {
     "schema_version", "instrument", "session_date", "ts", "minute_index",
     "state", "stale", "expired", "forward", "rate", "axis", "regime",
-    "profile", "field", "levels", "ohlc", "hiro",
+    "profile", "field", "levels", "ohlc", "hiro", "synthetic_oi",
 }
 
 
@@ -163,6 +163,12 @@ def _assert_zod_compatible(d: dict) -> None:
     assert hr is None or set(hr) == {"total", "calls", "puts", "zerodte", "retail"}
     if hr is not None:
         assert all(math.isfinite(hr[k]) for k in ("total", "calls", "puts", "zerodte", "retail"))
+    so = d["synthetic_oi"]
+    assert so is None or set(so) == {"gex", "sign", "gex_static", "w"}
+    if so is not None:
+        assert so["sign"] in (-1, 0, 1)
+        assert 0.0 <= so["w"] <= 1.0
+        assert all(math.isfinite(so[k]) for k in ("gex", "gex_static"))
 
 
 def test_serialized_passes_zod_contract() -> None:

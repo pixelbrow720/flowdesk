@@ -229,25 +229,60 @@ class MinuteWorker:
 
         return t_expiry_from_clock(ts_utc)
 
-    def _hiro_for(self, instrument: str, ts_utc: datetime, forward: float) -> Any:
+    def _fetch_signed_trades(self, instrument: str, ts_utc: datetime) -> Any:
+        """The signed per-trade tape for this minute, or ``None`` if unavailable.
+
+        Fetched ONCE per tick and shared by HIRO + synthetic-OI (both consume the
+        same ``get_hiro_trades`` list) to avoid a redundant per-minute scan. The
+        live stub / test fakes lack ``get_hiro_trades`` -> ``None`` -> both fields
+        degrade to None, mirroring the ``ohlc`` precedent.
+        """
+        get_trades = getattr(self._feed, "get_hiro_trades", None)
+        if get_trades is None:
+            return None
+        return get_trades(instrument, ts_utc)
+
+    def _hiro_for(self, instrument: str, ts_utc: datetime, forward: float, trades: Any = None) -> Any:
         """Cumulative HIRO series for this minute, or ``None`` if unavailable.
 
         HIRO (Divergence #5 -> option A) is an optional snapshot field: when the
         feed cannot supply signed per-trade data (live stub / test fakes lack
         ``get_hiro_trades``) the snapshot simply carries ``hiro=None``, mirroring
         the ``ohlc`` precedent. Computed from the engine's pure ``hiro_series``.
+        ``trades`` may be a pre-fetched tape (shared with synthetic-OI) to avoid
+        re-fetching; when ``None`` it is fetched here.
         """
-        get_trades = getattr(self._feed, "get_hiro_trades", None)
-        if get_trades is None:
+        if trades is None:
+            trades = self._fetch_signed_trades(instrument, ts_utc)
+        if trades is None:
             return None
         from engine.hiro import hiro_series
         from engine.snapshot import MULTIPLIER
 
-        trades = get_trades(instrument, ts_utc)
         # The scalar cumulative snapshot for this minute (.final); the intraday
         # HIRO line is reconstructed FE-side from the per-minute frame sequence,
         # so no per-trade path is embedded in the snapshot.
         return hiro_series(trades, float(forward), MULTIPLIER[instrument], self._rate).final
+
+    def _net_flow_for(self, trades: Any) -> Any:
+        """Per-(strike, is_call) net aggressor-signed flow for synthetic-OI, or None.
+
+        Aggregates ``Sum(aggressor_sign * size)`` from the SAME ``trades`` tape HIRO
+        consumes (B=+1, A=-1, N=0). Returns ``None`` when no signed tape is available
+        (live stub / fakes) so ``synthetic_oi`` degrades to None like ``hiro``.
+        """
+        if trades is None:
+            return None
+        from engine.hiro import aggressor_sign
+
+        flow: dict[tuple[float, bool], float] = {}
+        for tr in trades:
+            s = aggressor_sign(tr.side)
+            if s == 0:
+                continue
+            key = (float(tr.strike), bool(tr.is_call))
+            flow[key] = flow.get(key, 0.0) + s * float(tr.size)
+        return flow or None
 
     async def _produce_live(self, instrument: str, now: datetime) -> bool:
         """Pull -> build -> store -> publish. Returns True if a snapshot shipped."""
@@ -262,6 +297,8 @@ class MinuteWorker:
         quotes = to_engine_chain(chain, t_expiry=self._t_expiry_for(ts_utc))
         forward = float(getattr(chain, "forward"))
         axis = _axis_from_chain(instrument, chain)
+        # Fetch the signed tape ONCE; HIRO and synthetic-OI both consume it.
+        trades = self._fetch_signed_trades(instrument, ts_utc)
         snapshot = build_snapshot(
             instrument,
             ts_utc,
@@ -273,7 +310,8 @@ class MinuteWorker:
             t_expiry=self._t_expiry_for(ts_utc),
             stale=False,
             expired=False,
-            hiro=self._hiro_for(instrument, ts_utc, forward),
+            hiro=self._hiro_for(instrument, ts_utc, forward, trades),
+            net_flow=self._net_flow_for(trades),
         )
         # Publish to Redis FIRST so the live terminal/WS stay healthy even when
         # Timescale is down; the durable write is best-effort and must never undo

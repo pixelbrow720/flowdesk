@@ -165,6 +165,30 @@ class Hiro(BaseModel):
     """Cumulative HIRO from the (heuristic) retail proxy, USD delta-notional."""
 
 
+class SyntheticOi(BaseModel):
+    """Synthetic-OI #4 positioning lens (EXPERIMENTAL — NOT price-validated).
+
+    Optional/additive (mirrors ``hiro``/``ohlc``): ``None`` when not captured, no
+    ``schema_version`` bump. Dealer position = carried-in open interest (static
+    long-call/short-put sign) UPDATED by native CME aggressor-signed flow, weighted
+    by ``w``. ``gex`` is the synthetic GEX at ``w``; ``gex_static`` is the ``w=0``
+    pure-OI baseline (SpotGamma-classic). This lives ALONGSIDE the locked VOL-based
+    product GEX and does NOT replace it. Validated only structurally on a 4-day
+    sample — consumers MUST treat this as experimental, not authoritative. See
+    ``engine.synthetic_oi`` and docs/research/empirical/synthetic-oi-0dte.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gex: float
+    """Net synthetic-OI GEX at weight ``w``, USD per 1% move. EXPERIMENTAL."""
+    sign: RegimeSign
+    """Sign of ``gex``: -1 | 0 | 1."""
+    gex_static: float
+    """``w=0`` pure-OI GEX baseline (SpotGamma-classic), USD per 1% move."""
+    w: float = Field(ge=0, le=1)
+    """Open/close flow weight in [0, 1] used for ``gex``."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -200,6 +224,8 @@ class Snapshot(BaseModel):
     """Underlying OHLC for this minute (candle view). None when not captured."""
     hiro: Hiro | None = None
     """Cumulative dealer hedging flow (HIRO). None when not captured. PRD FlowGreeks."""
+    synthetic_oi: SyntheticOi | None = None
+    """Synthetic-OI #4 positioning lens (EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

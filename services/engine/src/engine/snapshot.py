@@ -34,7 +34,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, List, Mapping, Optional, Sequence, Union
 from zoneinfo import ZoneInfo
 
 from engine.black76 import delta as bs_delta
@@ -322,6 +322,8 @@ def build_snapshot(
     expired: Optional[bool] = None,
     ohlc: Optional[tuple[float, float, float, float]] = None,
     hiro: Optional["HiroSnapshot"] = None,
+    net_flow: Optional["Mapping[tuple[float, bool], float]"] = None,
+    synthetic_oi_w: float = 1.0,
 ) -> Snapshot:
     """Assemble ONE validated Snapshot for ``instrument`` at ``ts_utc``.
 
@@ -364,6 +366,16 @@ def build_snapshot(
     rows = _solve_chain(chain, F, rate, t_expiry)
     profile = build_profile(rows, M, F)
     ng, sign, stability = _regime(profile)
+
+    # Synthetic-OI #4 (EXPERIMENTAL, optional/additive): OI anchor updated by
+    # native aggressor flow. Computed only when the caller supplies per-leg signed
+    # flow (the worker aggregates it from the same tape HIRO uses); None otherwise,
+    # mirroring the hiro/ohlc precedent. Does NOT touch the locked VOL-based GEX.
+    syn_oi = None
+    if net_flow is not None:
+        from engine.synthetic_oi import build_synthetic_oi
+
+        syn_oi = build_synthetic_oi(rows, net_flow, M, F, w=synthetic_oi_w)
 
     field = build_field(
         rows, FieldAxis(smin, smax, step), F, M, rate, price_grid,
@@ -414,6 +426,7 @@ def build_snapshot(
             if hiro is not None
             else None
         ),
+        "synthetic_oi": syn_oi.to_dict() if syn_oi is not None else None,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)

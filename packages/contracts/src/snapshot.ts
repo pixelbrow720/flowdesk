@@ -133,6 +133,25 @@ export interface Hiro {
   retail: number;
 }
 
+/**
+ * Synthetic-OI #4 positioning lens (EXPERIMENTAL — NOT price-validated).
+ * Optional/additive (mirrors `hiro`/`ohlc`): absent when not captured, does NOT
+ * bump `SCHEMA_VERSION`. Dealer position = carried-in open interest (static
+ * long-call/short-put sign) updated by native CME aggressor-signed flow, weighted
+ * by `w`. Lives alongside the locked VOL-based GEX; does NOT replace it. Validated
+ * only structurally on a 4-day sample — treat as experimental, not authoritative.
+ */
+export interface SyntheticOi {
+  /** Net synthetic-OI GEX at weight `w`, USD per 1% move. EXPERIMENTAL. */
+  gex: number;
+  /** Sign of `gex`: -1 | 0 | 1. */
+  sign: RegimeSign;
+  /** w=0 pure-OI GEX baseline (SpotGamma-classic), USD per 1% move. */
+  gex_static: number;
+  /** Open/close flow weight in [0, 1] used for `gex`. */
+  w: number;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
@@ -169,6 +188,8 @@ export interface Snapshot {
   ohlc?: OHLC | null;
   /** Cumulative dealer hedging flow (HIRO). null when not captured. */
   hiro?: Hiro | null;
+  /** Synthetic-OI #4 positioning lens (EXPERIMENTAL). null when not captured. */
+  synthetic_oi?: SyntheticOi | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -284,6 +305,16 @@ export const HiroSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link SyntheticOi}. */
+export const SyntheticOiSchema = z
+  .object({
+    gex: finiteNumber,
+    sign: RegimeSignSchema,
+    gex_static: finiteNumber,
+    w: z.number().min(0).max(1),
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -304,6 +335,7 @@ export const SnapshotSchema = z
     levels: LevelsSchema,
     ohlc: OHLCSchema.nullish(),
     hiro: HiroSchema.nullish(),
+    synthetic_oi: SyntheticOiSchema.nullish(),
   })
   .strict();
 
@@ -345,6 +377,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof FieldSchema>, FieldGrid>>,
   Expect<Equals<z.infer<typeof OHLCSchema>, OHLC>>,
   Expect<Equals<z.infer<typeof HiroSchema>, Hiro>>,
+  Expect<Equals<z.infer<typeof SyntheticOiSchema>, SyntheticOi>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];

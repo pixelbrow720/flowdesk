@@ -126,5 +126,6 @@
   "session_date": "2026-06-10",
   "stale": false,
   "state": "LIVE",
+  "synthetic_oi": null,
   "ts": "2026-06-10T13:31:00Z"
 }
