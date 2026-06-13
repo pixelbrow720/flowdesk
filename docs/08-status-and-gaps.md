@@ -22,19 +22,32 @@ teardown of the plumbing.
 
 ## The gaps, in priority order
 
-### 1. No validation / backtest harness — the biggest gap 🔴
-The engine computes GEX/DEX/levels that **nobody has tested against reality**:
-- Nothing reconciles the synthetic, VOL-based dealer positioning against
-  **official ΔOI** (from `statistics`).
-- Nothing tests whether /ES-options GEX has **any predictive relationship** to
-  /ES price (pinning, flip-level reactions, etc.).
-- The golden test only proves **self-consistency**, not correctness.
+### 1. Validation harness — MECHANISM built; evidence still missing 🟡→🔴
+The engine computes GEX/DEX/levels whose **predictive relationship to price is
+still unproven**. A first offline harness now EXISTS (`analysis/harness/`,
+[`research/empirical/validation-harness.md`](research/empirical/validation-harness.md)):
+- `metrics.py` — pure, unit-tested metric core (17 tests): magnitude reconciliation
+  (volume-controlled partial Spearman), distance-matched level-attraction, pin rate.
+- `run_validation.py` — streams the 4 correct 0DTE sessions, builds per-minute
+  snapshots, feeds the metrics.
 
-This is the root cause of "feels done but lacking." Recommended first build:
-an offline harness that (a) reconstructs end-of-day dealer position and compares
-it to next-day ΔOI, and (b) measures whether price respects gamma-flip / walls
-intraday across the 90-day window. **Confirm scope with the human before building
-— it's a heavy item.**
+**What it does NOT do — the gap is still open:**
+- It is **mechanism, not evidence**: 4 correlated sessions (one crash day). Every
+  number is descriptive; the real test is the operator's ~90-day forward run, which
+  calls this same code.
+- **Directional ΔOI reconciliation is impossible on 0DTE** (contracts expire same
+  session → zero cross-day key overlap; settle-OI is sign-definite). Only the
+  **magnitude** relation is testable, and — first honest result — its raw rho (~0.4)
+  **collapses to ~0.08–0.24 once volume is controlled**, i.e. the apparent
+  reconciliation is mostly "active strikes are active," not positioning skill.
+- **No pinning signal** is visible on the 4 days (excess-attraction small/mixed,
+  pin-rate ≈ 0) — as expected at this n; not a result either way.
+- The golden test still only proves **self-consistency**, not correctness.
+
+So this stays the #1 gap until the forward run exists — but the *machine* to run it
+is now built and adversarially hardened (a look-ahead bug and a distance-baseline
+bias were caught and fixed in review). **DDOI / wall validation needs an OI-aware
+pass and is deferred** (settle-OI at the open would be look-ahead).
 
 ### 2. The GEX core is the naive version 🔴 (decided, but know its limits)
 `exposure.py` uses **cumulative VOL × a hardcoded static dealer sign**
