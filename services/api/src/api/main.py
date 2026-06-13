@@ -75,7 +75,8 @@ def _guild_id() -> str:
 
 
 def _desk_role_id() -> str:
-    return os.environ.get("DISCORD_DESK_ROLE_ID", "")
+    # Locked contract uses DESK_ROLE_ID; fall back to the legacy DISCORD_DESK_ROLE_ID.
+    return os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
 
 
 def _now() -> datetime:
@@ -95,9 +96,18 @@ def require_session_dep(request: Request) -> Session:
     return require_session(current_session(request))
 
 
-def require_desk_dep(request: Request) -> Session:
-    """401 if unauthenticated, 403 if no DESK role and no active grace."""
-    return require_desk(current_session(request))
+async def require_desk_dep(request: Request, response: Response) -> Session:
+    """401 if unauthenticated, 403 if no DESK role and no active grace.
+
+    Enforces entitlement freshness on the DATA PLANE: runs the daily Discord
+    re-check (at most once per interval per session, via ``_run_access_check``)
+    before gating, so a revoked role is caught on /api/snapshot, /api/replay*,
+    etc. — not only on /api/me. A refreshed cookie is merged onto the response.
+    """
+    session = current_session(request)
+    if session is not None:
+        session = await _run_access_check(request, response, session, force=False)
+    return require_desk(session)
 
 
 def get_state_store(request: Request) -> Any:
@@ -116,7 +126,7 @@ def get_repo(request: Request) -> Any:
     return repo
 
 
-def _run_access_check(
+async def _run_access_check(
     request: Request, response: Response, session: Session, *, force: bool
 ) -> Session:
     """Run the PRD #6 §5 access check (daily or forced) and refresh the cookie.
@@ -142,7 +152,7 @@ def _run_access_check(
     if due:
         client = get_discord_client(request)
         try:
-            member = client.fetch_member(
+            member = await client.fetch_member(
                 access_token=session.access_token or "", guild_id=_guild_id()
             )
         except (DiscordUnavailable, DiscordAuthError):
@@ -176,9 +186,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         app.state.state_store = create_state_store(redis_url)
     if dsn:
-        from db.repo import SnapshotRepository, create_pool
+        from db.repo import SnapshotRepository, apply_migrations, create_pool
 
         pool = await create_pool(dsn)
+        # Apply pending migrations on boot (idempotent; tracked in schema_migrations).
+        try:
+            async with pool.acquire() as conn:
+                await apply_migrations(conn)
+        except Exception:  # noqa: BLE001 - log-and-continue; don't crash boot on migrate
+            import logging
+
+            logging.getLogger("api.main").exception("apply_migrations failed on boot")
         app.state.repo = SnapshotRepository(pool)
     try:
         yield
@@ -214,6 +232,14 @@ def create_app() -> FastAPI:
             content={"error": "invalid request parameters", "code": "VALIDATION"},
         )
 
+    @app.exception_handler(Exception)
+    async def _catch_all_handler(_request: Request, exc: Exception) -> JSONResponse:
+        # Last-resort guard: never leak a stack trace; emit the structured shape.
+        return JSONResponse(
+            status_code=500,
+            content={"error": "internal server error", "code": "INTERNAL"},
+        )
+
     # ----- health -----
     @app.get("/api/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -228,7 +254,12 @@ def create_app() -> FastAPI:
         _session: Session = Depends(require_desk_dep),
         store: Any = Depends(get_state_store),
     ) -> Snapshot:
-        payload = await store.get_now(instrument)
+        try:
+            payload = await store.get_now(instrument)
+        except ApiError:
+            raise
+        except Exception as exc:  # configured-but-down Redis -> 503, not raw 500
+            raise ServiceUnavailable("state store unavailable") from exc
         if payload is None:
             raise NotFound(f"no snapshot available for {instrument}")
         return Snapshot.model_validate(payload)
@@ -254,11 +285,25 @@ def create_app() -> FastAPI:
     async def replay(
         instrument: Instrument = Query(...),
         date: str = Query(...),
-        from_minute: int = Query(...),
-        to_minute: int = Query(...),
+        from_minute: int = Query(..., ge=0),
+        to_minute: int = Query(..., ge=0),
         _session: Session = Depends(require_desk_dep),
         repo: Any = Depends(get_repo),
     ) -> ReplayResponse:
+        # Validate the date here so a malformed value is a 422, not a raw 500
+        # from date.fromisoformat deep in the repo.
+        from datetime import date as _date
+
+        try:
+            _date.fromisoformat(date)
+        except ValueError as exc:
+            raise ApiError(
+                "date must be ISO YYYY-MM-DD", code="VALIDATION", status_code=422
+            ) from exc
+        if from_minute > to_minute:
+            raise ApiError(
+                "from_minute must be <= to_minute", code="VALIDATION", status_code=422
+            )
         payloads = await repo.get_range(instrument, date, from_minute, to_minute)
         return ReplayResponse(
             snapshots=[Snapshot.model_validate(p) for p in payloads]
@@ -269,14 +314,14 @@ def create_app() -> FastAPI:
     async def me(request: Request, response: Response) -> MeResponse:
         session = current_session(request)
         if session is not None:
-            session = _run_access_check(request, response, session, force=False)
+            session = await _run_access_check(request, response, session, force=False)
         return build_me_response(session, now=_now())
 
     # ----- me/recheck (force an immediate Discord re-check; 401 if anonymous) -----
     @app.post("/api/me/recheck", response_model=MeResponse)
     async def me_recheck(request: Request, response: Response) -> MeResponse:
         session = require_session(current_session(request))
-        session = _run_access_check(request, response, session, force=True)
+        session = await _run_access_check(request, response, session, force=True)
         return build_me_response(session, now=_now())
 
     # ----- Discord OAuth2 routes (login / callback / logout) -----

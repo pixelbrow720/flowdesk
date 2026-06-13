@@ -27,6 +27,7 @@ __all__ = [
     "GET_SNAPSHOT_SQL",
     "LIST_SESSIONS_SQL",
     "GET_RANGE_SQL",
+    "SCHEMA_MIGRATIONS_DDL",
     "MIGRATIONS_DIR",
     "SnapshotRepository",
     "SessionInfo",
@@ -71,7 +72,24 @@ GET_RANGE_SQL = (
     'SELECT "payload" FROM "snapshots" '
     'WHERE "instrument" = $1 AND "session_date" = $2 '
     'AND "minute_index" BETWEEN $3 AND $4 '
-    'ORDER BY "minute_index" ASC'
+    'ORDER BY "minute_index" ASC '
+    'LIMIT 500'
+)
+
+# Migration bookkeeping: a tiny tracking table so each .sql file applies once.
+SCHEMA_MIGRATIONS_DDL = (
+    'CREATE TABLE IF NOT EXISTS "schema_migrations" ('
+    '"filename" TEXT NOT NULL PRIMARY KEY, '
+    '"applied_at" TIMESTAMPTZ NOT NULL DEFAULT now())'
+)
+
+IS_MIGRATION_APPLIED_SQL = (
+    'SELECT 1 FROM "schema_migrations" WHERE "filename" = $1 LIMIT 1'
+)
+
+RECORD_MIGRATION_SQL = (
+    'INSERT INTO "schema_migrations" ("filename") VALUES ($1) '
+    'ON CONFLICT ("filename") DO NOTHING'
 )
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
@@ -195,13 +213,16 @@ class SnapshotRepository:
         to_minute: int,
     ) -> list[dict[str, Any]]:
         """Ordered snapshot payloads for a minute range (PRD #10 replay playback)."""
+        lo, hi = int(from_minute), int(to_minute)
+        if lo > hi:  # defensive: swap an inverted range rather than scan nothing
+            lo, hi = hi, lo
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 GET_RANGE_SQL,
                 str(instrument),
                 date.fromisoformat(str(session_date)),
-                int(from_minute),
-                int(to_minute),
+                lo,
+                hi,
             )
         return [_decode_payload(row["payload"]) for row in rows]
 
@@ -224,6 +245,21 @@ def read_migration(name: str = "0001_init.sql") -> str:
     return (MIGRATIONS_DIR / name).read_text(encoding="utf-8")
 
 
-async def apply_migrations(conn: Connection, name: str = "0001_init.sql") -> None:
-    """Apply a migration file. asyncpg executes multi-statement SQL when no args."""
-    await conn.execute(read_migration(name))
+async def apply_migrations(conn: Connection) -> list[str]:
+    """Apply every ``.sql`` migration once, in filename order. Idempotent.
+
+    Ensures a ``schema_migrations`` tracking table exists, then for each file in
+    ``migrations/`` (sorted by name) skips any already recorded and otherwise
+    executes it and records ``filename``/``applied_at``. Safe to call on every
+    boot. Returns the filenames applied during this call. asyncpg executes
+    multi-statement SQL when invoked with no args.
+    """
+    await conn.execute(SCHEMA_MIGRATIONS_DDL)
+    applied: list[str] = []
+    for path in sorted(MIGRATIONS_DIR.glob("*.sql"), key=lambda p: p.name):
+        if await conn.fetchrow(IS_MIGRATION_APPLIED_SQL, path.name) is not None:
+            continue
+        await conn.execute(path.read_text(encoding="utf-8"))
+        await conn.execute(RECORD_MIGRATION_SQL, path.name)
+        applied.append(path.name)
+    return applied

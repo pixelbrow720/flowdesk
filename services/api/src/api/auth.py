@@ -70,7 +70,8 @@ def _guild_id() -> str:
 
 
 def _desk_role_id() -> str:
-    return os.environ.get("DISCORD_DESK_ROLE_ID", "")
+    # Locked contract uses DESK_ROLE_ID; fall back to the legacy DISCORD_DESK_ROLE_ID.
+    return os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
 
 
 def cookies_secure() -> bool:
@@ -158,9 +159,9 @@ def register_auth_routes(app: FastAPI) -> None:
         client = get_discord_client(request)
         redirect_uri = redirect_uri_for(request)
         try:
-            token = client.exchange_code(code=code, redirect_uri=redirect_uri)
-            user = client.fetch_user(access_token=token)
-            member = client.fetch_member(access_token=token, guild_id=_guild_id())
+            token = await client.exchange_code(code=code, redirect_uri=redirect_uri)
+            user = await client.fetch_user(access_token=token)
+            member = await client.fetch_member(access_token=token, guild_id=_guild_id())
         except DiscordAuthError as exc:
             raise Unauthenticated("Discord authentication failed") from exc
         except DiscordUnavailable as exc:

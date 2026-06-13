@@ -186,7 +186,10 @@ class MinuteWorker:
         now = now or self._clock()
         out: dict[str, SessionState] = {}
         for instrument in self._instruments:
-            out[instrument] = await self._tick_instrument(instrument, now)
+            try:
+                out[instrument] = await self._tick_instrument(instrument, now)
+            except Exception:  # one bad instrument must not skip the others
+                log.exception("tick failed for %s", instrument)
         return out
 
     async def _tick_instrument(self, instrument: str, now: datetime) -> SessionState:
@@ -272,8 +275,14 @@ class MinuteWorker:
             expired=False,
             hiro=self._hiro_for(instrument, ts_utc, forward),
         )
-        await self._repo.save_snapshot(snapshot)
+        # Publish to Redis FIRST so the live terminal/WS stay healthy even when
+        # Timescale is down; the durable write is best-effort and must never undo
+        # or prevent the live publish.
         await self._state.set_now(instrument, snapshot)
+        try:
+            await self._repo.save_snapshot(snapshot)
+        except Exception as exc:
+            log.warning("save_snapshot failed for %s @ %s: %s", instrument, ts_utc, exc)
         return True
 
     async def _republish_stale(self, instrument: str, last: Any) -> bool:

@@ -163,6 +163,30 @@ def test_snapshot_200_for_desk() -> None:
     assert res.json()["schema_version"] == 1
 
 
+def test_snapshot_403_for_revoked_stale_session() -> None:  # CRITICAL #1 regression
+    # Cookie still says has_desk=True but is STALE (last_checked far in the past)
+    # and its grace already expired; Discord now reports no desk role (unregistered
+    # token -> empty roles via FakeDiscordClient). The data-plane re-check in
+    # require_desk_dep MUST catch the revocation and return 403. Before the fix the
+    # cached has_desk was trusted for up to 7 days and this returned 200.
+    client = make_client()
+    revoked = serialize_session(
+        Session(
+            discord_id="123",
+            has_desk=True,
+            is_member=True,
+            last_checked="2020-01-01T00:00:00Z",  # >24h stale -> re-check due
+            grace_until="2020-01-02T00:00:00Z",  # grace already expired
+            access_token="revoked-tok",  # unregistered -> empty roles
+        ),
+        SECRET,
+    )
+    client.cookies.set(SESSION_COOKIE, revoked)
+    res = client.get("/api/snapshot", params={"instrument": "ES"})
+    assert res.status_code == 403
+    assert res.json()["code"] == "FORBIDDEN"
+
+
 def test_snapshot_latest_alias_200() -> None:
     client = make_client()
     _desk(client)

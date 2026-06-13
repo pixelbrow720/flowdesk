@@ -42,11 +42,12 @@ from __future__ import annotations
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional, Set
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
-from api.security import SESSION_COOKIE, parse_session_cookie
+from api.security import SESSION_COOKIE, has_active_grace, parse_session_cookie
 
 __all__ = [
     "WS_CLOSE_NO_SESSION",
@@ -117,6 +118,13 @@ class _InstrumentHub:
         async with self._store.subscribe(self._instrument) as sub:
             async for snapshot in sub.messages():
                 for queue in list(self._queues):
+                    # Bounded queue + drop-oldest: a stalled client must not grow
+                    # memory without bound on this network-exposed socket.
+                    if queue.full():
+                        try:
+                            queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            pass
                     queue.put_nowait(snapshot)
 
 
@@ -141,7 +149,10 @@ class ConnectionManager:
     @asynccontextmanager
     async def stream(self, instrument: str) -> AsyncIterator["asyncio.Queue[dict[str, Any]]"]:
         """Yield a queue that receives every snapshot for ``instrument``."""
-        queue: "asyncio.Queue[dict[str, Any]]" = asyncio.Queue()
+        # Bounded: paired with the drop-oldest fan-out in _InstrumentHub._run so a
+        # slow/stalled client cannot grow memory without bound. 256 minutes of
+        # buffered frames is far beyond any sane client lag at 1-frame/min cadence.
+        queue: "asyncio.Queue[dict[str, Any]]" = asyncio.Queue(maxsize=256)
         hub = self._hub(instrument)
         hub.add(queue)
         try:
@@ -201,6 +212,39 @@ async def _safe_close(websocket: WebSocket, code: int = 1000) -> None:
         pass
 
 
+async def _ws_refresh_entitlement(websocket: WebSocket, session: Any) -> Any:
+    """Best-effort role re-check on the WS handshake (CRITICAL #1, data plane).
+
+    WS cannot re-issue the session cookie, so this is DENY-ONLY: it never upgrades
+    entitlement, only catches a role that was revoked since the cookie was signed.
+    Fires the Discord member fetch at most once per ``RECHECK_INTERVAL_S`` per
+    session, and ONLY when the session carries an access token (so test sessions
+    without a token stay network-free). On Discord error the cached entitlement is
+    kept (never sudden-lock, PRD #6 §5).
+    """
+    if not session.access_token:
+        return session
+    from api.auth_session import RECHECK_INTERVAL_S, _parse_iso, check_access
+
+    now = datetime.now(timezone.utc)
+    last = _parse_iso(session.last_checked)
+    if last is not None and (now - last).total_seconds() <= RECHECK_INTERVAL_S:
+        return session  # not due
+    client = getattr(websocket.app.state, "discord_client", None)
+    if client is None:
+        return session
+    member: Any = ...  # sentinel: no re-check performed -> keep cache
+    try:
+        member = await client.fetch_member(
+            access_token=session.access_token,
+            guild_id=os.environ.get("DISCORD_GUILD_ID", ""),
+        )
+    except Exception:  # noqa: BLE001 - Discord down: keep cached entitlement
+        member = ...
+    role_id = os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
+    return check_access(session, now=now, member=member, desk_role_id=role_id).session
+
+
 # --------------------------------------------------------------------------- #
 # Endpoint handler.                                                            #
 # --------------------------------------------------------------------------- #
@@ -211,7 +255,10 @@ async def serve(websocket: WebSocket, instrument: str) -> None:
     if session is None:
         await websocket.close(code=WS_CLOSE_NO_SESSION)
         return
-    if not session.has_desk:
+    # Data-plane entitlement freshness: re-check the role on the WS handshake too,
+    # not only on /api/me (CRITICAL #1). Deny-only; honors active grace like REST.
+    session = await _ws_refresh_entitlement(websocket, session)
+    if not session.has_desk and not has_active_grace(session):
         await websocket.close(code=WS_CLOSE_NO_DESK)
         return
     if instrument not in VALID_INSTRUMENTS:

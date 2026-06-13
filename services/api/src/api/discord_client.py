@@ -86,15 +86,15 @@ class DiscordClient(Protocol):
         """Build the Discord authorize URL (no network)."""
         ...
 
-    def exchange_code(self, *, code: str, redirect_uri: str) -> str:
+    async def exchange_code(self, *, code: str, redirect_uri: str) -> str:
         """Exchange an authorization code for an OAuth access token."""
         ...
 
-    def fetch_user(self, *, access_token: str) -> DiscordUser:
+    async def fetch_user(self, *, access_token: str) -> DiscordUser:
         """GET /users/@me -> the authenticated user."""
         ...
 
-    def fetch_member(self, *, access_token: str, guild_id: str) -> Optional[GuildMember]:
+    async def fetch_member(self, *, access_token: str, guild_id: str) -> Optional[GuildMember]:
         """GET the user's member object for ``guild_id``.
 
         Returns ``None`` when the user is not a member of the guild (HTTP 404).
@@ -131,21 +131,23 @@ class HttpxDiscordClient:
             client_id=self._client_id, state=state, redirect_uri=redirect_uri
         )
 
-    def _post(self, url: str, data: dict[str, str]):
+    async def _post(self, url: str, data: dict[str, str]):
         import httpx
 
         try:
-            resp = httpx.post(url, data=data, timeout=self._timeout_s)
+            async with httpx.AsyncClient(timeout=self._timeout_s) as client:
+                resp = await client.post(url, data=data)
         except httpx.HTTPError as exc:  # network/timeout
             raise DiscordUnavailable(str(exc)) from exc
         return resp
 
-    def _get(self, url: str, access_token: str):
+    async def _get(self, url: str, access_token: str):
         import httpx
 
         headers = {"Authorization": f"Bearer {access_token}"}
         try:
-            resp = httpx.get(url, headers=headers, timeout=self._timeout_s)
+            async with httpx.AsyncClient(timeout=self._timeout_s) as client:
+                resp = await client.get(url, headers=headers)
         except httpx.HTTPError as exc:
             raise DiscordUnavailable(str(exc)) from exc
         return resp
@@ -158,8 +160,8 @@ class HttpxDiscordClient:
         if code >= 400:
             raise DiscordAuthError(f"discord {code}")
 
-    def exchange_code(self, *, code: str, redirect_uri: str) -> str:
-        resp = self._post(
+    async def exchange_code(self, *, code: str, redirect_uri: str) -> str:
+        resp = await self._post(
             TOKEN_ENDPOINT,
             {
                 "grant_type": "authorization_code",
@@ -175,15 +177,15 @@ class HttpxDiscordClient:
             raise DiscordAuthError("no access_token in token response")
         return str(token)
 
-    def fetch_user(self, *, access_token: str) -> DiscordUser:
-        resp = self._get(f"{API_BASE}/users/@me", access_token)
+    async def fetch_user(self, *, access_token: str) -> DiscordUser:
+        resp = await self._get(f"{API_BASE}/users/@me", access_token)
         self._raise_for_status(resp)
         return DiscordUser(id=str(resp.json()["id"]))
 
-    def fetch_member(
+    async def fetch_member(
         self, *, access_token: str, guild_id: str
     ) -> Optional[GuildMember]:
-        resp = self._get(
+        resp = await self._get(
             f"{API_BASE}/users/@me/guilds/{guild_id}/member", access_token
         )
         if resp.status_code == 404:
@@ -238,17 +240,17 @@ class FakeDiscordClient:
             client_id=self.client_id, state=state, redirect_uri=redirect_uri
         )
 
-    def exchange_code(self, *, code: str, redirect_uri: str) -> str:
+    async def exchange_code(self, *, code: str, redirect_uri: str) -> str:
         self.calls.append("exchange_code")
         self._maybe_fail()
         return self.token
 
-    def fetch_user(self, *, access_token: str) -> DiscordUser:
+    async def fetch_user(self, *, access_token: str) -> DiscordUser:
         self.calls.append("fetch_user")
         self._maybe_fail()
         return DiscordUser(id=self.user_id)
 
-    def fetch_member(
+    async def fetch_member(
         self, *, access_token: str, guild_id: str
     ) -> Optional[GuildMember]:
         self.calls.append("fetch_member")
