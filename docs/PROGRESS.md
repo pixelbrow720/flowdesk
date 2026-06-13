@@ -41,7 +41,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | 1 | Synthetic-OI **#7 total-hedging** (gamma+charm+vanna on Q base) | heavy | ✅ DONE (commit pending) |
 | 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ✅ DONE (commit pending) |
 | 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ✅ DONE (commit pending) |
-| 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ⏳ NOT STARTED |
+| 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ✅ DONE (commit pending) |
 | 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ⏳ NOT STARTED |
 | 6 | **Baseline lint/type cleanup** (gap #6) | light | ⏳ NOT STARTED |
 | D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ⏳ NOT STARTED |
@@ -52,6 +52,26 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point 4 DONE: synthetic-OI #6 size-tiered
+- `engine/synthetic_oi.py`: added `tier_weight(size)` + constants (RETAIL_MAX_SIZE=5,
+  BLOCK_MIN_SIZE {ES:50, NQ:25}, RETAIL_TIER_WEIGHT=0, BLOCK_TIER_WEIGHT=1.5). All
+  thresholds UNVALIDATED guesses (labelled, to be swept). Identity at weights=1 → #4.
+- `worker.py`: new `_net_flow_tiered_for(trades, instrument)` — applies tier_weight
+  per trade BEFORE summing (intercepts before the flat sum). Passed as new
+  `net_flow_tiered` param.
+- `snapshot.py`: new `net_flow_tiered` param → reuses build_synthetic_oi → new field
+  `synthetic_oi_tiered` (REUSES the SyntheticOi model — no new pydantic/zod model, no
+  new invariant entry). schema_version stays 1.
+- Mirror: schema.py + snapshot.ts add `synthetic_oi_tiered: SyntheticOi|null` +
+  SnapshotSchema entry. CONTRACT.md row + note. golden gains only the null line.
+- tests: 3 new tier_weight tests in test_synthetic_oi.py; _SNAPSHOT_KEYS + zod-compat
+  block updated. NOTE the per-trade tiering lives in the WORKER (the engine still
+  takes a summed map), so #5 (decay) will need the SAME worker-side per-trade pattern
+  + a trade timestamp on HiroTrade (currently absent) + an eval time.
+- VERIFIED: engine 183 pass, api 78 pass, contracts tsc exit 0 + validate ok.
+- docs: 04-engine.md, roadmap header (#6+#7 BUILT), CONTRACT.md, PROGRESS.md.
+- Next: Point 5 (synthetic-OI #5 decay-weighted) — needs HiroTrade timestamp.
 
 ### 2026-06-13 — Point 3 DONE: cross-day OI-wall validation in harness
 - `analysis/harness/metrics.py`: added pure `oi_walls` (top-N raw-OI call/put walls

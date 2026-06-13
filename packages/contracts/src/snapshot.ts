@@ -265,6 +265,8 @@ export interface Snapshot {
   hiro?: Hiro | null;
   /** Synthetic-OI #4 positioning lens (EXPERIMENTAL). null when not captured. */
   synthetic_oi?: SyntheticOi | null;
+  /** Synthetic-OI #6 size-tiered lens (EXPERIMENTAL, same shape as #4). null when not captured. */
+  synthetic_oi_tiered?: SyntheticOi | null;
   /** Extended dealer exposure VEX/CHEX (EXPERIMENTAL). null when not captured. */
   exposure_ext?: ExposureExt | null;
   /** Synthetic-OI #7 total-hedging map (EXPERIMENTAL). null when not captured. */
@@ -453,6 +455,7 @@ export const SnapshotSchema = z
     ohlc: OHLCSchema.nullish(),
     hiro: HiroSchema.nullish(),
     synthetic_oi: SyntheticOiSchema.nullish(),
+    synthetic_oi_tiered: SyntheticOiSchema.nullish(),
     exposure_ext: ExposureExtSchema.nullish(),
     total_hedging: TotalHedgingSchema.nullish(),
     surface: SurfaceSchema.nullish(),

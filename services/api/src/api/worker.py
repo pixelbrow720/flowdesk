@@ -284,6 +284,32 @@ class MinuteWorker:
             flow[key] = flow.get(key, 0.0) + s * float(tr.size)
         return flow or None
 
+    def _net_flow_tiered_for(self, trades: Any, instrument: str) -> Any:
+        """Size-TIERED per-leg net aggressor flow for synthetic-OI #6, or None.
+
+        Same as ``_net_flow_for`` but each trade's signed size is multiplied by a
+        size-tier weight (retail odd-lots downweighted, institutional blocks up)
+        BEFORE summing — EXPERIMENTAL, thresholds unvalidated. Block floor is
+        per-instrument. Reduces to ``_net_flow_for`` when the tier weights are all 1.
+        """
+        if trades is None:
+            return None
+        from engine.hiro import aggressor_sign
+        from engine.synthetic_oi import BLOCK_MIN_SIZE, tier_weight
+
+        block_min = BLOCK_MIN_SIZE.get(instrument, 50.0)
+        flow: dict[tuple[float, bool], float] = {}
+        for tr in trades:
+            s = aggressor_sign(tr.side)
+            if s == 0:
+                continue
+            g = tier_weight(float(tr.size), block_min=block_min)
+            if g == 0.0:
+                continue
+            key = (float(tr.strike), bool(tr.is_call))
+            flow[key] = flow.get(key, 0.0) + s * float(tr.size) * g
+        return flow or None
+
     async def _produce_live(self, instrument: str, now: datetime) -> bool:
         """Pull -> build -> store -> publish. Returns True if a snapshot shipped."""
         ts_utc = _utc_minute(now)
@@ -312,6 +338,7 @@ class MinuteWorker:
             expired=False,
             hiro=self._hiro_for(instrument, ts_utc, forward, trades),
             net_flow=self._net_flow_for(trades),
+            net_flow_tiered=self._net_flow_tiered_for(trades, instrument),
             with_exposure_ext=True,
             with_surface=True,
         )

@@ -46,10 +46,52 @@ __all__ = [
     "q_per_leg",
     "synthetic_gex",
     "build_synthetic_oi",
+    "tier_weight",
+    "BLOCK_MIN_SIZE",
+    "RETAIL_MAX_SIZE",
+    "RETAIL_TIER_WEIGHT",
+    "BLOCK_TIER_WEIGHT",
 ]
 
 #: Per-leg key for the net-aggressor-flow map: (strike, is_call).
 FlowKey = Tuple[float, bool]
+
+# --- Synthetic-OI #6 size-tiering (EXPERIMENTAL — thresholds are UNVALIDATED) --- #
+# The idea (docs/research/empirical/synthetic-oi-roadmap.md #6): large trades are
+# institutional/dealer-relevant, small odd-lots are retail noise; weight each
+# trade's signed flow by a size tier before it enters the synthetic-OI Q. These
+# constants are STARTING GUESSES that MUST be swept on the real tape — do not treat
+# them as calibrated. With all weights == 1.0 the tiered model reduces exactly to #4.
+#: Retail size ceiling (odd-lot proxy); matches engine.hiro.RETAIL_MAX_SIZE.
+RETAIL_MAX_SIZE: float = 5.0
+#: Per-instrument block-size floor (institutional). /NQ trades thinner than /ES.
+BLOCK_MIN_SIZE = {"ES": 50.0, "NQ": 25.0}
+#: Tier weights: retail downweighted toward 0 (noise), block upweighted.
+RETAIL_TIER_WEIGHT: float = 0.0
+BLOCK_TIER_WEIGHT: float = 1.5
+
+
+def tier_weight(
+    size: float,
+    *,
+    retail_max: float = RETAIL_MAX_SIZE,
+    block_min: float = 50.0,
+    retail_weight: float = RETAIL_TIER_WEIGHT,
+    block_weight: float = BLOCK_TIER_WEIGHT,
+) -> float:
+    """Size-tier multiplier for one trade's signed flow (synthetic-OI #6).
+
+    ``size <= retail_max`` -> ``retail_weight`` (retail noise, default 0);
+    ``size >= block_min``  -> ``block_weight`` (institutional block, default 1.5);
+    otherwise ``1.0``. With ``retail_weight == block_weight == 1.0`` this is the
+    identity (the tiered model then reduces exactly to #4). Thresholds are
+    EXPERIMENTAL guesses (see module constants) — sweep them on the tape.
+    """
+    if size <= retail_max:
+        return retail_weight
+    if size >= block_min:
+        return block_weight
+    return 1.0
 
 
 def q_per_leg(

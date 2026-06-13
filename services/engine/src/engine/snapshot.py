@@ -323,6 +323,7 @@ def build_snapshot(
     ohlc: Optional[tuple[float, float, float, float]] = None,
     hiro: Optional["HiroSnapshot"] = None,
     net_flow: Optional["Mapping[tuple[float, bool], float]"] = None,
+    net_flow_tiered: Optional["Mapping[tuple[float, bool], float]"] = None,
     synthetic_oi_w: float = 1.0,
     with_exposure_ext: bool = False,
     with_surface: bool = False,
@@ -378,6 +379,16 @@ def build_snapshot(
         from engine.synthetic_oi import build_synthetic_oi
 
         syn_oi = build_synthetic_oi(rows, net_flow, M, F, w=synthetic_oi_w)
+
+    # Synthetic-OI #6 (EXPERIMENTAL): same hybrid model as #4 but on the SIZE-TIERED
+    # flow map (retail odd-lots downweighted, institutional blocks up — thresholds
+    # UNVALIDATED). Reuses the SyntheticOi shape; None unless the caller supplies the
+    # tiered map. With tier weights all 1.0 it equals #4.
+    syn_oi_tiered = None
+    if net_flow_tiered is not None:
+        from engine.synthetic_oi import build_synthetic_oi
+
+        syn_oi_tiered = build_synthetic_oi(rows, net_flow_tiered, M, F, w=synthetic_oi_w)
 
     # Synthetic-OI #7 total-hedging (EXPERIMENTAL, optional/additive): gamma+charm+
     # vanna on the SAME synthetic position Q as #4. Computed only when the caller
@@ -463,6 +474,9 @@ def build_snapshot(
             else None
         ),
         "synthetic_oi": syn_oi.to_dict() if syn_oi is not None else None,
+        "synthetic_oi_tiered": (
+            syn_oi_tiered.to_dict() if syn_oi_tiered is not None else None
+        ),
         "exposure_ext": exp_ext.to_dict() if exp_ext is not None else None,
         "total_hedging": tot_hedge.to_dict() if tot_hedge is not None else None,
         "surface": surface.to_dict() if surface is not None else None,

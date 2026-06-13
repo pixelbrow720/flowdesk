@@ -1,12 +1,13 @@
 # Synthetic-OI Roadmap — Formulas #5 / #6 / #7
 
-> **STATUS: #7 BUILT (2026-06-13); #5 + #6 PLAN ONLY.** `#7 total-hedging` is now
-> implemented (`engine/total_hedging.py`, optional `total_hedging` Snapshot field,
-> EXPERIMENTAL). #5 (decay-weighted) and #6 (size-tiered) remain buildable specs
-> only — nothing implemented. Every formula, decay constant, size threshold, and
-> field shape for #5/#6 below is a **proposal flagged as such** — the research doc
-> supplies only one-line intents. **No formula here is price-validated**; all ship
-> EXPERIMENTAL like #4.
+> **STATUS: #6 + #7 BUILT (2026-06-13); #5 PLAN ONLY.** `#7 total-hedging`
+> (`engine/total_hedging.py`, `total_hedging` field) and `#6 size-tiered`
+> (`engine.synthetic_oi.tier_weight`, `synthetic_oi_tiered` field) are now
+> implemented — both optional, EXPERIMENTAL. #5 (decay-weighted) remains a buildable
+> spec only — nothing implemented. The #5 formula, decay constant, and field shape
+> below are a **proposal flagged as such**; #6's size thresholds, though built, are
+> **UNVALIDATED guesses** to be swept. **No formula here is price-validated**; all
+> ship EXPERIMENTAL like #4.
 
 **Date:** 2026-06-13 · **Template:** `engine/synthetic_oi.py` (#4, built) ·
 **Discipline (non-negotiable, inherited from #4):** additive **optional** Snapshot

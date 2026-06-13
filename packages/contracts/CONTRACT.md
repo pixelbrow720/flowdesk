@@ -41,6 +41,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `ohlc` | `OHLC \| null` | object (optional) | Underlying futures OHLC for this minute (candle view). Absent/`null` when not captured; additive, no version bump. | PRD #4 |
 | `hiro` | `Hiro \| null` | object (optional) | Cumulative dealer hedging flow (HIRO). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
 | `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `hiro`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
+| `synthetic_oi_tiered` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #6 size-tiered lens — same `SyntheticOi` shape as `synthetic_oi`, but flow is size-weighted (retail odd-lots down, blocks up; thresholds UNVALIDATED). Absent/`null` when not captured; additive, no version bump. Not price-validated. | FlowGreeks |
 | `exposure_ext` | `ExposureExt \| null` | object (optional) | **EXPERIMENTAL** extended dealer exposure: VEX (vanna) + CHEX (charm), same VOL basis as GEX/DEX. Absent/`null` when not captured; additive, no version bump. Lives ALONGSIDE GEX/DEX, not price-validated. **Units differ from GEX** (see section). | FlowGreeks |
 | `total_hedging` | `TotalHedging \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #7 total-hedging map: gamma + charm + vanna on the synthetic position `Q` (not VOL). Absent/`null` when not captured; additive, no version bump. Three separate terms (units differ — never summed). Alongside the locked VOL-GEX, not price-validated. | FlowGreeks |
 | `surface` | `Surface \| null` | object (optional) | **EXPERIMENTAL** vol-surface summary: raw-SVI slice + ATM vol + expected move + skew. Absent/`null` when not captured (fewer than 5 non-thin strikes); additive, no version bump. Deterministic fit, not a price-validated signal. | FlowGreeks |
@@ -144,7 +145,12 @@ are **skipped, not fabricated**.
 | `gex_static` | `number` | USD per 1% move | `w=0` pure-OI GEX baseline (SpotGamma-classic). | FlowGreeks |
 | `w` | `number` | `[0, 1]` | Open/close flow weight used for `gex` (`0` = pure OI, `1` = full flow update). | FlowGreeks |
 
-## `exposure_ext` (ExposureExt, optional) — **EXPERIMENTAL**
+> **`synthetic_oi_tiered`** (top-level, same `SyntheticOi` shape) is synthetic-OI
+> **#6**: identical model, but the aggressor flow is multiplied by a per-trade
+> **size-tier** weight before entering `Q` — retail odd-lots downweighted toward 0,
+> institutional blocks upweighted. The size thresholds are **UNVALIDATED guesses**
+> (`engine.synthetic_oi.BLOCK_MIN_SIZE` / `RETAIL_MAX_SIZE`), per-instrument; sweep
+> them on the tape. With all tier weights = 1 it reduces exactly to `synthetic_oi`.
 
 Extended dealer exposure: **VEX** (vanna) and **CHEX** (charm), aggregated on the
 SAME VOL basis and locked dealer signs (`+1` call / `-1` put) as the product

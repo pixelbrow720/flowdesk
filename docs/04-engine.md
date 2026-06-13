@@ -93,6 +93,13 @@ replace it.** It is **EXPERIMENTAL / not price-validated** — structurally chec
 on a 4-day sample only. See
 [`research/empirical/synthetic-oi-0dte.md`](research/empirical/synthetic-oi-0dte.md).
 
+**Synthetic-OI #6 (size-tiered)** is the same module: `tier_weight(size)` scales
+each trade's signed flow by a size tier (retail odd-lots → ~0, institutional blocks
+→ >1; per-instrument `BLOCK_MIN_SIZE`, thresholds **UNVALIDATED**) before the worker
+sums it into a second flow map. That map drives `build_synthetic_oi` again, emitted
+as the optional `synthetic_oi_tiered` field (same `SyntheticOi` shape). With all
+tier weights = 1 it reduces exactly to #4.
+
 ### `exposure_ext.py` (optional output — EXPERIMENTAL)
 Aggregates the higher-order dealer greeks on the **same VOL basis + locked dealer
 signs** as `exposure.py`:

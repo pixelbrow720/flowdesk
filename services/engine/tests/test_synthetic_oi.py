@@ -10,7 +10,13 @@ from __future__ import annotations
 import math
 
 from engine.exposure import ChainRow, GEX_PCT_SCALE
-from engine.synthetic_oi import build_synthetic_oi, synthetic_gex
+from engine.synthetic_oi import (
+    BLOCK_TIER_WEIGHT,
+    RETAIL_TIER_WEIGHT,
+    build_synthetic_oi,
+    synthetic_gex,
+    tier_weight,
+)
 
 M = 50.0  # /ES multiplier
 F = 100.0
@@ -75,3 +81,29 @@ def test_w_out_of_range_rejected() -> None:
             assert False, f"w={bad} should have raised"
         except ValueError:
             pass
+
+
+# --------------------------------------------------------------------------- #
+# #6 size-tiering: tier_weight
+# --------------------------------------------------------------------------- #
+def test_tier_weight_buckets() -> None:
+    # retail (<= retail_max) -> retail_weight (0 by default)
+    assert tier_weight(1.0) == RETAIL_TIER_WEIGHT
+    assert tier_weight(5.0) == RETAIL_TIER_WEIGHT          # boundary inclusive
+    # mid -> 1.0
+    assert tier_weight(20.0, block_min=50.0) == 1.0
+    # block (>= block_min) -> block_weight
+    assert tier_weight(50.0, block_min=50.0) == BLOCK_TIER_WEIGHT
+    assert tier_weight(999.0, block_min=50.0) == BLOCK_TIER_WEIGHT
+
+
+def test_tier_weight_identity_reduces_to_flat() -> None:
+    # with all weights 1.0 the tiering is the identity (so #6 -> #4 exactly).
+    for size in (1.0, 10.0, 100.0):
+        assert tier_weight(size, retail_weight=1.0, block_weight=1.0) == 1.0
+
+
+def test_tier_weight_per_instrument_block_floor() -> None:
+    # /NQ block floor (25) is lower than /ES (50): a 30-lot is a block on NQ, mid on ES.
+    assert tier_weight(30.0, block_min=25.0) == BLOCK_TIER_WEIGHT   # NQ
+    assert tier_weight(30.0, block_min=50.0) == 1.0                 # ES
