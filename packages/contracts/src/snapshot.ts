@@ -173,6 +173,28 @@ export interface ExposureExt {
   chex_sign: RegimeSign;
 }
 
+/**
+ * Synthetic-OI #7 total-hedging map — gamma + charm + vanna on the Q base.
+ * EXPERIMENTAL.
+ *
+ * Optional/additive (mirrors `synthetic_oi`/`exposure_ext`): null when not
+ * captured, no schema_version bump. Applies all three hedging greeks to the SAME
+ * synthetic dealer position Q as synthetic-OI #4 (dealer sign baked in). THREE
+ * SEPARATE fields — units differ (price-move / day / vol-point), so they must NOT
+ * be summed. Lives alongside the locked VOL-GEX, does NOT replace it. Structural
+ * only — treat as experimental, not authoritative.
+ */
+export interface TotalHedging {
+  /** Gamma term on Q, USD per 1% price move (== synthetic-OI GEX at `w`). */
+  gamma_hedge: number;
+  /** Charm term on Q, USD dealer dollar-delta drift per calendar day. */
+  charm_hedge: number;
+  /** Vanna term on Q, USD dealer dollar-delta per 1% IV (vol-point). */
+  vanna_hedge: number;
+  /** Open/close flow weight in [0, 1] used for the Q base. */
+  w: number;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
@@ -213,6 +235,8 @@ export interface Snapshot {
   synthetic_oi?: SyntheticOi | null;
   /** Extended dealer exposure VEX/CHEX (EXPERIMENTAL). null when not captured. */
   exposure_ext?: ExposureExt | null;
+  /** Synthetic-OI #7 total-hedging map (EXPERIMENTAL). null when not captured. */
+  total_hedging?: TotalHedging | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -348,6 +372,16 @@ export const ExposureExtSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link TotalHedging}. */
+export const TotalHedgingSchema = z
+  .object({
+    gamma_hedge: finiteNumber,
+    charm_hedge: finiteNumber,
+    vanna_hedge: finiteNumber,
+    w: z.number().min(0).max(1),
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -370,6 +404,7 @@ export const SnapshotSchema = z
     hiro: HiroSchema.nullish(),
     synthetic_oi: SyntheticOiSchema.nullish(),
     exposure_ext: ExposureExtSchema.nullish(),
+    total_hedging: TotalHedgingSchema.nullish(),
   })
   .strict();
 
@@ -413,6 +448,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof HiroSchema>, Hiro>>,
   Expect<Equals<z.infer<typeof SyntheticOiSchema>, SyntheticOi>>,
   Expect<Equals<z.infer<typeof ExposureExtSchema>, ExposureExt>>,
+  Expect<Equals<z.infer<typeof TotalHedgingSchema>, TotalHedging>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];

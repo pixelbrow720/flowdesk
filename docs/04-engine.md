@@ -18,6 +18,7 @@ chain + forward + rate + session_state
    ├─ hiro.py       optional signed order-flow aggregate
    ├─ synthetic_oi.py  optional OI-anchored + flow-update GEX lens (EXPERIMENTAL)
    ├─ exposure_ext.py  optional VEX/CHEX (vanna/charm) aggregation (EXPERIMENTAL)
+   ├─ total_hedging.py optional #7 gamma+charm+vanna on the synthetic-OI Q base (EXPERIMENTAL)
    ├─ surface.py    SVI fit + expected move (ISOLATED — not yet in Snapshot)
    └─ snapshot.py   assembles + validates the canonical Snapshot
 ```
@@ -112,6 +113,27 @@ needed); **thin strikes are skipped**, never fabricated. Emitted as the optional
 `with_exposure_ext` (the worker + session generator pass `True`). **EXPERIMENTAL /
 not price-validated.** See
 [`research/empirical/track-f-ddoi-exposure-vol.md`](research/empirical/track-f-ddoi-exposure-vol.md).
+
+### `total_hedging.py` (optional output — EXPERIMENTAL)
+Synthetic-OI **#7**: applies all three hedging greeks to the **same synthetic
+position `Q`** that `synthetic_oi.py` (#4) builds (`Q = s_static·OI + (−flow)·w`),
+instead of to VOL:
+
+```
+gamma_hedge = Σ Γ·Q·M·F²·0.01          (per 1% price move — == synthetic_oi GEX at w)
+charm_hedge = Σ charm·Q·M·F·(1/365)    (per calendar day)
+vanna_hedge = Σ vanna·Q·M·F·0.01       (per 1% IV, vol-point)
+```
+
+Three **separate** fields — never summed (units differ). Because `Q` already
+carries the locked dealer sign (via the shared `synthetic_oi.q_per_leg` helper), the
+greeks are weighted by `Q` **directly** — no re-applied sign, unlike the VOL-based
+`exposure_ext`. `gamma_hedge` is exactly the #4 synthetic GEX at the same `w` (the
+strongest correctness anchor); `charm_hedge`/`vanna_hedge` capture the
+afternoon-decay and vol-sensitivity pressure a gamma-only map misses. Thin strikes
+skipped. Computed only when signed flow is supplied (same gate as `synthetic_oi`).
+**EXPERIMENTAL / not price-validated.** See
+[`research/empirical/synthetic-oi-roadmap.md`](research/empirical/synthetic-oi-roadmap.md).
 
 ### `surface.py` (ISOLATED — built, not wired)
 SVI volatility-surface fit + expected-move calculation. Complete and tested but

@@ -42,6 +42,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `hiro` | `Hiro \| null` | object (optional) | Cumulative dealer hedging flow (HIRO). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
 | `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `hiro`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
 | `exposure_ext` | `ExposureExt \| null` | object (optional) | **EXPERIMENTAL** extended dealer exposure: VEX (vanna) + CHEX (charm), same VOL basis as GEX/DEX. Absent/`null` when not captured; additive, no version bump. Lives ALONGSIDE GEX/DEX, not price-validated. **Units differ from GEX** (see section). | FlowGreeks |
+| `total_hedging` | `TotalHedging \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #7 total-hedging map: gamma + charm + vanna on the synthetic position `Q` (not VOL). Absent/`null` when not captured; additive, no version bump. Three separate terms (units differ — never summed). Alongside the locked VOL-GEX, not price-validated. | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -164,3 +165,28 @@ aggregate has **never been checked against price**.
 | `vex_sign` | `-1 \| 0 \| 1` | enum | Sign of `net_vex`. | FlowGreeks |
 | `net_chex` | `number` | USD δ-notional per day | Net charm exposure = `Σ sign·charm·VOL·M·F·(1/365)`. EXPERIMENTAL. | FlowGreeks |
 | `chex_sign` | `-1 \| 0 \| 1` | enum | Sign of `net_chex`. | FlowGreeks |
+
+## `total_hedging` (TotalHedging, optional) — **EXPERIMENTAL**
+
+Synthetic-OI #7 total-hedging map (`engine.total_hedging`). Applies all three
+hedging greeks (gamma, charm, vanna) to the SAME synthetic dealer position `Q` that
+synthetic-OI #4 builds (`Q = s_static·OI_open + (−net_aggressor_flow)·w`, dealer
+sign baked in). Optional/additive (mirrors `synthetic_oi`/`exposure_ext`): absent or
+`null` when not captured — does **not** bump `schema_version`. Computed only when
+the caller supplies signed flow (the `Q` base needs it).
+
+> **EXPERIMENTAL and NOT price-validated.** Lives **alongside** the locked VOL-GEX
+> and does **not** replace it. **Three separate terms — never summed:** their units
+> differ (price-move / day / vol-point). Because `Q` already carries the dealer
+> sign, the greeks are weighted by `Q` directly (no re-applied sign — unlike the
+> VOL-based `exposure_ext`). `gamma_hedge` equals the `synthetic_oi.gex` at the same
+> `w` (it is GEX on `Q`); `charm_hedge`/`vanna_hedge` add the afternoon-decay and
+> vol-sensitivity dimensions a gamma-only map misses. See
+> `docs/research/empirical/synthetic-oi-roadmap.md`.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `gamma_hedge` | `number` | USD per 1% move | Gamma term `Σ Γ·Q·M·F²·0.01` (== `synthetic_oi.gex` at `w`). | FlowGreeks |
+| `charm_hedge` | `number` | USD δ-notional per day | Charm term `Σ charm·Q·M·F·(1/365)`. | FlowGreeks |
+| `vanna_hedge` | `number` | USD δ-notional per 1% IV | Vanna term `Σ vanna·Q·M·F·0.01` (vol-point scale). | FlowGreeks |
+| `w` | `number` | `[0, 1]` | Open/close flow weight used for the `Q` base. | FlowGreeks |

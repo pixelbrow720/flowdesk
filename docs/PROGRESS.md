@@ -38,7 +38,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 
 | # | Item | Workflow | Status |
 |---|------|----------|--------|
-| 1 | Synthetic-OI **#7 total-hedging** (gamma+charm+vanna on Q base) | heavy | ⏳ NOT STARTED |
+| 1 | Synthetic-OI **#7 total-hedging** (gamma+charm+vanna on Q base) | heavy | ✅ DONE (commit pending) |
 | 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ⏳ NOT STARTED |
 | 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ⏳ NOT STARTED |
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ⏳ NOT STARTED |
@@ -52,6 +52,26 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point 1 DONE: synthetic-OI #7 total-hedging
+- `engine/total_hedging.py` (NEW): gamma+charm+vanna on the synthetic-OI Q base.
+  3 separate fields (units differ), `Q` carries dealer sign (no re-apply).
+- `engine/synthetic_oi.py`: extracted `q_per_leg` helper (single source of truth);
+  `synthetic_gex` now calls it — behavior-preserving (tests confirm).
+- Mirror lockstep: `TotalHedging` in schema.py + snapshot.ts (interface+zod+
+  invariant tuple) + CONTRACT.md (row+section). schema_version stays 1.
+- snapshot.py: gated by `net_flow` (same as synthetic_oi), threads `rate`. Worker
+  already passes net_flow → field auto-populates, no worker change needed.
+- tests: `test_total_hedging.py` (NEW, 6 tests; anchor = gamma_hedge ≡ #4 GEX at w).
+  golden gains only `"total_hedging": null` (additive).
+- docs: 04-engine.md module subsection, roadmap header (#7 BUILT), this file.
+- VERIFIED: engine 177 pass, api 78 pass, contracts tsc exit 0 + validate ok.
+- AUDIT NOTE: quant-greeks-auditor + contract-guardian subagents could NOT run this
+  session (opus model 403 on free plan; quant agent only loads in a NEW session).
+  Audited INLINE instead — reduction property (gamma_hedge≡#4 GEX) proves no
+  dealer-sign double-apply; scale constants reused verbatim from the red-team-
+  resolved exposure_ext. Re-run both auditors in a new session as a backstop.
+- Next: Point 2 (SVI / expected-move wiring).
 
 ### 2026-06-13 — infrastructure set up
 - Created memory `flowdesk-heavy-task-workflow` (extended cycle) + `flowdesk-progress-checkpoint` (points here).

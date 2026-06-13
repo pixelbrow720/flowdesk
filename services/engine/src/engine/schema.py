@@ -213,6 +213,31 @@ class ExposureExt(BaseModel):
     """Sign of ``net_chex``: -1 | 0 | 1."""
 
 
+class TotalHedging(BaseModel):
+    """Synthetic-OI #7 total-hedging map — gamma + charm + vanna on the Q base
+    (EXPERIMENTAL — NOT price-validated).
+
+    Optional/additive (mirrors ``synthetic_oi``/``exposure_ext``): ``None`` when not
+    captured, no ``schema_version`` bump. Applies all three hedging greeks to the
+    SAME synthetic dealer position ``Q`` as synthetic-OI #4 (OI anchor + flow,
+    dealer sign baked in). THREE SEPARATE fields — the units differ (price-move /
+    day / vol-point), so they must NOT be summed. Lives ALONGSIDE the locked
+    VOL-GEX, does NOT replace it. Structural only — consumers MUST treat as
+    experimental. See ``engine.total_hedging`` and
+    docs/research/empirical/synthetic-oi-roadmap.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gamma_hedge: float
+    """Gamma term on Q, USD per 1% price move (== synthetic-OI GEX at ``w``)."""
+    charm_hedge: float
+    """Charm term on Q, USD dealer dollar-delta drift per calendar day."""
+    vanna_hedge: float
+    """Vanna term on Q, USD dealer dollar-delta per 1% IV (vol-point)."""
+    w: float = Field(ge=0, le=1)
+    """Open/close flow weight in [0, 1] used for the ``Q`` base."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -252,6 +277,8 @@ class Snapshot(BaseModel):
     """Synthetic-OI #4 positioning lens (EXPERIMENTAL). None when not captured."""
     exposure_ext: ExposureExt | None = None
     """Extended dealer exposure VEX/CHEX (EXPERIMENTAL). None when not captured."""
+    total_hedging: TotalHedging | None = None
+    """Synthetic-OI #7 total-hedging map (EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

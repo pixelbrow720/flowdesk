@@ -378,6 +378,16 @@ def build_snapshot(
 
         syn_oi = build_synthetic_oi(rows, net_flow, M, F, w=synthetic_oi_w)
 
+    # Synthetic-OI #7 total-hedging (EXPERIMENTAL, optional/additive): gamma+charm+
+    # vanna on the SAME synthetic position Q as #4. Computed only when the caller
+    # supplies signed flow (the Q base needs it); None otherwise. Three separate
+    # fields (units differ — never summed). Does NOT touch the locked VOL-based GEX.
+    tot_hedge = None
+    if net_flow is not None:
+        from engine.total_hedging import build_total_hedging
+
+        tot_hedge = build_total_hedging(rows, net_flow, M, F, rate, w=synthetic_oi_w)
+
     # Extended exposure VEX/CHEX (EXPERIMENTAL, optional/additive): vanna/charm
     # aggregated on the SAME VOL basis + locked dealer signs as GEX/DEX. Needs no
     # external tape (re-evaluates greeks from the carried per-leg IV + t_expiry),
@@ -441,6 +451,7 @@ def build_snapshot(
         ),
         "synthetic_oi": syn_oi.to_dict() if syn_oi is not None else None,
         "exposure_ext": exp_ext.to_dict() if exp_ext is not None else None,
+        "total_hedging": tot_hedge.to_dict() if tot_hedge is not None else None,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)

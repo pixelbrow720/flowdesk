@@ -43,12 +43,32 @@ from engine.exposure import (
 __all__ = [
     "FlowKey",
     "SyntheticOiSnapshot",
+    "q_per_leg",
     "synthetic_gex",
     "build_synthetic_oi",
 ]
 
 #: Per-leg key for the net-aggressor-flow map: (strike, is_call).
 FlowKey = Tuple[float, bool]
+
+
+def q_per_leg(
+    row: ChainRow,
+    net_flow: Mapping[FlowKey, float],
+    w: float,
+) -> Tuple[float, float]:
+    """Synthetic dealer position ``(q_call, q_put)`` for one strike row.
+
+    ``Q = s_static * OI + (-net_flow) * w`` per leg. The dealer sign (+1 call /
+    -1 put) is BAKED IN here, so downstream aggregations weight greeks by ``Q``
+    directly and must NOT re-apply a dealer sign. Single source of truth for the
+    #4 position model, reused by ``synthetic_gex`` and ``engine.total_hedging``.
+    """
+    c_flow = float(net_flow.get((row.strike, True), 0.0))
+    p_flow = float(net_flow.get((row.strike, False), 0.0))
+    q_call = DEALER_SIGN_CALL * row.call_oi + (-c_flow) * w
+    q_put = DEALER_SIGN_PUT * row.put_oi + (-p_flow) * w
+    return q_call, q_put
 
 
 @dataclass(frozen=True)
@@ -90,10 +110,7 @@ def synthetic_gex(
     for r in rows:
         if r.thin:
             continue  # gamma unsolved upstream -> do not fabricate a contribution
-        c_flow = float(net_flow.get((r.strike, True), 0.0))
-        p_flow = float(net_flow.get((r.strike, False), 0.0))
-        q_call = DEALER_SIGN_CALL * r.call_oi + (-c_flow) * w
-        q_put = DEALER_SIGN_PUT * r.put_oi + (-p_flow) * w
+        q_call, q_put = q_per_leg(r, net_flow, w)
         total += (r.call_gamma * q_call + r.put_gamma * q_put) * scale
     return total
 

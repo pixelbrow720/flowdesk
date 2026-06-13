@@ -128,5 +128,6 @@
   "stale": false,
   "state": "LIVE",
   "synthetic_oi": null,
+  "total_hedging": null,
   "ts": "2026-06-10T13:31:00Z"
 }
