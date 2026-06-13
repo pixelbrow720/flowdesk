@@ -30,6 +30,7 @@ Only the standard library + sibling ``engine.exposure`` constants are used.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Mapping, Sequence, Tuple
 
@@ -47,10 +48,12 @@ __all__ = [
     "synthetic_gex",
     "build_synthetic_oi",
     "tier_weight",
+    "decay_weight",
     "BLOCK_MIN_SIZE",
     "RETAIL_MAX_SIZE",
     "RETAIL_TIER_WEIGHT",
     "BLOCK_TIER_WEIGHT",
+    "DEFAULT_HALF_LIFE_MIN",
 ]
 
 #: Per-leg key for the net-aggressor-flow map: (strike, is_call).
@@ -92,6 +95,31 @@ def tier_weight(
     if size >= block_min:
         return block_weight
     return 1.0
+
+
+# --- Synthetic-OI #5 decay-weighting (EXPERIMENTAL — half-life is UNVALIDATED) -- #
+# The idea (docs/research/empirical/synthetic-oi-roadmap.md #5): recent flow should
+# outweigh old flow, so an intraday round-trip (buy then sell of the same lot) nets
+# toward zero as both legs age — mitigating the double-count the VOL basis suffers.
+# Each trade's signed flow is multiplied by exp(-lambda * age) before entering Q,
+# with lambda = ln2 / half_life. The half-life is the proprietary knob (UNVALIDATED).
+#: Default flow half-life in minutes (a STARTING GUESS — sweep on the tape).
+DEFAULT_HALF_LIFE_MIN: float = 30.0
+
+
+def decay_weight(age_minutes: float, *, half_life_min: float = DEFAULT_HALF_LIFE_MIN) -> float:
+    """Exponential time-decay multiplier for one trade's signed flow (synthetic-OI #5).
+
+    ``weight = exp(-ln2 * age / half_life)`` — a trade ``half_life`` minutes old gets
+    weight 0.5, a fresh trade gets 1.0. ``age_minutes`` is the trade's age at the
+    snapshot eval time (clamped to >= 0). ``half_life_min <= 0`` disables decay
+    (returns 1.0), so #5 then reduces exactly to #4. Half-life is an EXPERIMENTAL
+    knob (as unobservable as ``w``) — sweep it; do not treat it as calibrated.
+    """
+    if half_life_min <= 0.0:
+        return 1.0
+    age = max(0.0, age_minutes)
+    return math.exp(-math.log(2.0) * age / half_life_min)
 
 
 def q_per_leg(

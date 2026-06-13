@@ -310,6 +310,34 @@ class MinuteWorker:
             flow[key] = flow.get(key, 0.0) + s * float(tr.size) * g
         return flow or None
 
+    def _net_flow_decay_for(self, trades: Any, ts_utc: datetime) -> Any:
+        """Time-DECAY-weighted per-leg net aggressor flow for synthetic-OI #5, or None.
+
+        Same as ``_net_flow_for`` but each trade's signed size is multiplied by
+        ``exp(-ln2 * age / half_life)`` BEFORE summing, where ``age`` is the trade's
+        age in minutes at the snapshot eval time ``ts_utc`` — recent flow outweighs
+        old flow. EXPERIMENTAL, half-life unvalidated. Trades with no timestamp are
+        skipped (cannot age them). Reduces to ``_net_flow_for`` when decay is off.
+        """
+        if trades is None:
+            return None
+        from engine.hiro import aggressor_sign
+        from engine.synthetic_oi import decay_weight
+
+        flow: dict[tuple[float, bool], float] = {}
+        for tr in trades:
+            s = aggressor_sign(tr.side)
+            if s == 0:
+                continue
+            tr_ts = getattr(tr, "ts", None)
+            if tr_ts is None:
+                continue  # cannot age a trade with no timestamp -> exclude
+            age_min = (ts_utc - tr_ts).total_seconds() / 60.0
+            g = decay_weight(age_min)
+            key = (float(tr.strike), bool(tr.is_call))
+            flow[key] = flow.get(key, 0.0) + s * float(tr.size) * g
+        return flow or None
+
     async def _produce_live(self, instrument: str, now: datetime) -> bool:
         """Pull -> build -> store -> publish. Returns True if a snapshot shipped."""
         ts_utc = _utc_minute(now)
@@ -339,6 +367,7 @@ class MinuteWorker:
             hiro=self._hiro_for(instrument, ts_utc, forward, trades),
             net_flow=self._net_flow_for(trades),
             net_flow_tiered=self._net_flow_tiered_for(trades, instrument),
+            net_flow_decay=self._net_flow_decay_for(trades, ts_utc),
             with_exposure_ext=True,
             with_surface=True,
         )

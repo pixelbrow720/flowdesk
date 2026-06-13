@@ -311,6 +311,8 @@ class Snapshot(BaseModel):
     """Synthetic-OI #4 positioning lens (EXPERIMENTAL). None when not captured."""
     synthetic_oi_tiered: SyntheticOi | None = None
     """Synthetic-OI #6 size-tiered lens (EXPERIMENTAL, same shape as #4). None when not captured."""
+    synthetic_oi_decay: SyntheticOi | None = None
+    """Synthetic-OI #5 decay-weighted lens (EXPERIMENTAL, same shape as #4). None when not captured."""
     exposure_ext: ExposureExt | None = None
     """Extended dealer exposure VEX/CHEX (EXPERIMENTAL). None when not captured."""
     total_hedging: TotalHedging | None = None

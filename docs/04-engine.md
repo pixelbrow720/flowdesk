@@ -100,6 +100,13 @@ sums it into a second flow map. That map drives `build_synthetic_oi` again, emit
 as the optional `synthetic_oi_tiered` field (same `SyntheticOi` shape). With all
 tier weights = 1 it reduces exactly to #4.
 
+**Synthetic-OI #5 (decay-weighted)** is the same module: `decay_weight(age)` scales
+each trade's signed flow by `exp(−ln2·age/half_life)` (recent flow > old, mitigating
+intraday round-trip double-count; `DEFAULT_HALF_LIFE_MIN`, **UNVALIDATED**) before
+the worker sums it into a third flow map. Needs the per-trade timestamp — `HiroTrade`
+now carries an optional `ts` (the feed already had it; it was dropped at the
+boundary). Emitted as `synthetic_oi_decay`. With decay disabled it reduces to #4.
+
 ### `exposure_ext.py` (optional output — EXPERIMENTAL)
 Aggregates the higher-order dealer greeks on the **same VOL basis + locked dealer
 signs** as `exposure.py`:

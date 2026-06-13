@@ -1,13 +1,15 @@
 # Synthetic-OI Roadmap — Formulas #5 / #6 / #7
 
-> **STATUS: #6 + #7 BUILT (2026-06-13); #5 PLAN ONLY.** `#7 total-hedging`
-> (`engine/total_hedging.py`, `total_hedging` field) and `#6 size-tiered`
-> (`engine.synthetic_oi.tier_weight`, `synthetic_oi_tiered` field) are now
-> implemented — both optional, EXPERIMENTAL. #5 (decay-weighted) remains a buildable
-> spec only — nothing implemented. The #5 formula, decay constant, and field shape
-> below are a **proposal flagged as such**; #6's size thresholds, though built, are
-> **UNVALIDATED guesses** to be swept. **No formula here is price-validated**; all
-> ship EXPERIMENTAL like #4.
+> **STATUS: #5 + #6 + #7 ALL BUILT (2026-06-13).** All three synthetic-OI successors
+> are now implemented, each optional + EXPERIMENTAL:
+> - `#7 total-hedging` → `engine/total_hedging.py`, `total_hedging` field.
+> - `#6 size-tiered` → `engine.synthetic_oi.tier_weight`, `synthetic_oi_tiered` field.
+> - `#5 decay-weighted` → `engine.synthetic_oi.decay_weight`, `synthetic_oi_decay` field.
+>
+> Their knobs — #6's size thresholds and #5's half-life — are **UNVALIDATED guesses**
+> to be swept on the tape. **No formula here is price-validated**; all ship
+> EXPERIMENTAL like #4, alongside (never replacing) the locked VOL-GEX. The specs
+> below are kept as the design record + the sweep/forward-test plan.
 
 **Date:** 2026-06-13 · **Template:** `engine/synthetic_oi.py` (#4, built) ·
 **Discipline (non-negotiable, inherited from #4):** additive **optional** Snapshot

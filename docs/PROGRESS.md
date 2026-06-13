@@ -42,7 +42,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ✅ DONE (commit pending) |
 | 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ✅ DONE (commit pending) |
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ✅ DONE (commit pending) |
-| 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ⏳ NOT STARTED |
+| 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ✅ DONE (commit pending) |
 | 6 | **Baseline lint/type cleanup** (gap #6) | light | ⏳ NOT STARTED |
 | D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ⏳ NOT STARTED |
 | P | **Proprietary metrics** (Volatility Trigger / Hedge Wall / Risk Pivot etc.) — reverse-engineered, labelled approximation | heavy | ⏳ NOT STARTED |
@@ -52,6 +52,26 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point 5 DONE: synthetic-OI #5 decay-weighted
+- `engine/synthetic_oi.py`: added `decay_weight(age_minutes)` = exp(-ln2*age/half_life)
+  + `DEFAULT_HALF_LIFE_MIN=30` (UNVALIDATED). half_life<=0 disables -> reduces to #4.
+- `engine/hiro.py`: `HiroTrade` gains optional `ts: datetime|None` (HIRO unaffected).
+- `feed/historical.py`: `get_hiro_trades` now passes `ts=event` (the timestamp was
+  already paired at line 264, just dropped at the return — now carried through).
+- `worker.py`: `_net_flow_decay_for(trades, ts_utc)` weights each trade by
+  decay_weight(age at the snapshot eval time) BEFORE summing; trades w/o ts skipped.
+  Passed as new `net_flow_decay` param.
+- `snapshot.py`: new `net_flow_decay` param -> reuses build_synthetic_oi -> new field
+  `synthetic_oi_decay` (REUSES SyntheticOi model). schema_version stays 1.
+- Mirror: schema.py + snapshot.ts add the field + SnapshotSchema entry. CONTRACT.md
+  row + note. golden gains only the null line.
+- tests: 4 decay_weight tests (fresh/half-life, monotone, disabled->1, clamp neg age);
+  _SNAPSHOT_KEYS + zod-compat updated.
+- VERIFIED: engine 187 pass, api 78 pass, contracts tsc exit 0 + validate ok.
+- All of #5/#6/#7 now built. docs: 04-engine.md, roadmap header (ALL BUILT),
+  CONTRACT.md, PROGRESS.md.
+- Next: Point 6 (baseline lint/type cleanup — LIGHT workflow).
 
 ### 2026-06-13 — Point 4 DONE: synthetic-OI #6 size-tiered
 - `engine/synthetic_oi.py`: added `tier_weight(size)` + constants (RETAIL_MAX_SIZE=5,

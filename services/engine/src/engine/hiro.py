@@ -41,6 +41,7 @@ Only the standard library + sibling ``engine`` modules are used.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Optional, Sequence
 
 from engine.black76 import OptionType
@@ -102,6 +103,9 @@ class HiroTrade:
     side: AggressorSide
     t_expiry: float
     iv: Optional[float] = None
+    ts: Optional[datetime] = None
+    """Trade timestamp (UTC). Optional; carried for time-decay-weighted lenses
+    (synthetic-OI #5). HIRO itself does not use it."""
 
 
 @dataclass(frozen=True)

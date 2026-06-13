@@ -269,6 +269,7 @@ class HistoricalSimAdapter(FeedAdapter):
                             size=float(size),
                             side=side,
                             t_expiry=t_expiry,
+                            ts=event,
                         ),
                     )
                 )

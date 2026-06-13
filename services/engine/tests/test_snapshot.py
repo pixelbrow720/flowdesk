@@ -114,7 +114,8 @@ _SNAPSHOT_KEYS = {
     "schema_version", "instrument", "session_date", "ts", "minute_index",
     "state", "stale", "expired", "forward", "rate", "axis", "regime",
     "profile", "field", "levels", "ohlc", "hiro", "synthetic_oi",
-    "synthetic_oi_tiered", "exposure_ext", "total_hedging", "surface",
+    "synthetic_oi_tiered", "synthetic_oi_decay", "exposure_ext",
+    "total_hedging", "surface",
 }
 
 
@@ -176,6 +177,12 @@ def _assert_zod_compatible(d: dict) -> None:
         assert sot["sign"] in (-1, 0, 1)
         assert 0.0 <= sot["w"] <= 1.0
         assert all(math.isfinite(sot[k]) for k in ("gex", "gex_static"))
+    sod = d["synthetic_oi_decay"]
+    assert sod is None or set(sod) == {"gex", "sign", "gex_static", "w"}
+    if sod is not None:
+        assert sod["sign"] in (-1, 0, 1)
+        assert 0.0 <= sod["w"] <= 1.0
+        assert all(math.isfinite(sod[k]) for k in ("gex", "gex_static"))
     ee = d["exposure_ext"]
     assert ee is None or set(ee) == {"net_vex", "vex_sign", "net_chex", "chex_sign"}
     if ee is not None:

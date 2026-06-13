@@ -12,8 +12,10 @@ import math
 from engine.exposure import ChainRow, GEX_PCT_SCALE
 from engine.synthetic_oi import (
     BLOCK_TIER_WEIGHT,
+    DEFAULT_HALF_LIFE_MIN,
     RETAIL_TIER_WEIGHT,
     build_synthetic_oi,
+    decay_weight,
     synthetic_gex,
     tier_weight,
 )
@@ -107,3 +109,32 @@ def test_tier_weight_per_instrument_block_floor() -> None:
     # /NQ block floor (25) is lower than /ES (50): a 30-lot is a block on NQ, mid on ES.
     assert tier_weight(30.0, block_min=25.0) == BLOCK_TIER_WEIGHT   # NQ
     assert tier_weight(30.0, block_min=50.0) == 1.0                 # ES
+
+
+# --------------------------------------------------------------------------- #
+# #5 decay-weighting: decay_weight
+# --------------------------------------------------------------------------- #
+def test_decay_weight_fresh_and_half_life() -> None:
+    # fresh trade -> 1.0; one half-life old -> 0.5; two -> 0.25.
+    assert math.isclose(decay_weight(0.0, half_life_min=30.0), 1.0, rel_tol=1e-12)
+    assert math.isclose(decay_weight(30.0, half_life_min=30.0), 0.5, rel_tol=1e-12)
+    assert math.isclose(decay_weight(60.0, half_life_min=30.0), 0.25, rel_tol=1e-12)
+
+
+def test_decay_weight_monotone_decreasing() -> None:
+    prev = 1.0
+    for age in (5.0, 15.0, 45.0, 120.0):
+        w = decay_weight(age, half_life_min=DEFAULT_HALF_LIFE_MIN)
+        assert w < prev
+        prev = w
+
+
+def test_decay_weight_disabled_reduces_to_one() -> None:
+    # half_life <= 0 disables decay (so #5 -> #4 exactly).
+    for age in (0.0, 30.0, 999.0):
+        assert decay_weight(age, half_life_min=0.0) == 1.0
+
+
+def test_decay_weight_clamps_negative_age() -> None:
+    # a trade timestamped slightly after eval time (clock skew) clamps to weight 1.0.
+    assert decay_weight(-5.0, half_life_min=30.0) == 1.0
