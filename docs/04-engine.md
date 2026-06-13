@@ -19,7 +19,7 @@ chain + forward + rate + session_state
    ├─ synthetic_oi.py  optional OI-anchored + flow-update GEX lens (EXPERIMENTAL)
    ├─ exposure_ext.py  optional VEX/CHEX (vanna/charm) aggregation (EXPERIMENTAL)
    ├─ total_hedging.py optional #7 gamma+charm+vanna on the synthetic-OI Q base (EXPERIMENTAL)
-   ├─ surface.py    SVI fit + expected move (ISOLATED — not yet in Snapshot)
+   ├─ surface.py    optional SVI fit + expected-move surface summary (EXPERIMENTAL)
    └─ snapshot.py   assembles + validates the canonical Snapshot
 ```
 
@@ -135,10 +135,16 @@ skipped. Computed only when signed flow is supplied (same gate as `synthetic_oi`
 **EXPERIMENTAL / not price-validated.** See
 [`research/empirical/synthetic-oi-roadmap.md`](research/empirical/synthetic-oi-roadmap.md).
 
-### `surface.py` (ISOLATED — built, not wired)
-SVI volatility-surface fit + expected-move calculation. Complete and tested but
-**not part of the Snapshot** and not consumed anywhere yet. Wiring it in (plus
-VEX/CHEX from vanna/charm) is a roadmap item.
+### `surface.py` (optional output — EXPERIMENTAL)
+SVI volatility-surface fit + expected-move calculation. `build_surface` fits a
+raw-SVI slice to the solved per-leg IVs (OTM side: put below the forward, call
+at/above), and summarises it into the optional `surface` Snapshot field: ATM vol,
+1-sigma lognormal **expected move** (`F·atm_vol·√T`), ATM skew, fit RMSE, the
+no-butterfly flag, and the five raw-SVI params (so a consumer can reconstruct the
+whole smile). `None` when fewer than 5 non-thin strikes exist (no fabricated fit).
+Gated by `with_surface` (worker + session generator pass `True`). Deterministic
+(stdlib Nelder-Mead) and tested, but **not** a price-validated signal —
+EXPERIMENTAL.
 
 ### `snapshot.py`
 The assembler. `build_snapshot(...)` runs the pipeline and returns a validated

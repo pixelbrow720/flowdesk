@@ -43,6 +43,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `hiro`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
 | `exposure_ext` | `ExposureExt \| null` | object (optional) | **EXPERIMENTAL** extended dealer exposure: VEX (vanna) + CHEX (charm), same VOL basis as GEX/DEX. Absent/`null` when not captured; additive, no version bump. Lives ALONGSIDE GEX/DEX, not price-validated. **Units differ from GEX** (see section). | FlowGreeks |
 | `total_hedging` | `TotalHedging \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #7 total-hedging map: gamma + charm + vanna on the synthetic position `Q` (not VOL). Absent/`null` when not captured; additive, no version bump. Three separate terms (units differ — never summed). Alongside the locked VOL-GEX, not price-validated. | FlowGreeks |
+| `surface` | `Surface \| null` | object (optional) | **EXPERIMENTAL** vol-surface summary: raw-SVI slice + ATM vol + expected move + skew. Absent/`null` when not captured (fewer than 5 non-thin strikes); additive, no version bump. Deterministic fit, not a price-validated signal. | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -190,3 +191,26 @@ the caller supplies signed flow (the `Q` base needs it).
 | `charm_hedge` | `number` | USD δ-notional per day | Charm term `Σ charm·Q·M·F·(1/365)`. | FlowGreeks |
 | `vanna_hedge` | `number` | USD δ-notional per 1% IV | Vanna term `Σ vanna·Q·M·F·0.01` (vol-point scale). | FlowGreeks |
 | `w` | `number` | `[0, 1]` | Open/close flow weight used for the `Q` base. | FlowGreeks |
+
+## `surface` (Surface, optional) — **EXPERIMENTAL**
+
+Vol-surface summary (`engine.surface`): a raw-SVI slice fit to the solved per-leg
+IVs (OTM side — put below the forward, call at/above), plus the 1-sigma lognormal
+expected move. Optional/additive (mirrors `total_hedging`/`exposure_ext`): absent or
+`null` when fewer than 5 non-thin strikes are available — does **not** bump
+`schema_version`. The fit is deterministic (stdlib Nelder-Mead) and tested, but it
+is **not** a price-validated signal. Carries the raw-SVI params so a consumer can
+reconstruct the whole smile. See `docs/research/empirical/synthetic-oi-0dte.md`.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `atm_vol` | `number` | annualised, per 1.00 | At-the-money IV from the SVI fit at `k=0`. | FlowGreeks |
+| `expected_move` | `number` | index points | 1-sigma lognormal move `F·atm_vol·√T`. | FlowGreeks |
+| `skew` | `number` | vol per unit log-moneyness | ATM slope of SVI vol (negative = put skew). | FlowGreeks |
+| `rmse` | `number` | vol units | Fit RMSE. | FlowGreeks |
+| `arb_free` | `boolean` | — | Gatheral sufficient no-butterfly conditions hold. | FlowGreeks |
+| `svi_a` | `number` | variance | Raw-SVI `a` (vertical level). | FlowGreeks |
+| `svi_b` | `number` | ≥ 0 | Raw-SVI `b` (slope / wing tightness). | FlowGreeks |
+| `svi_rho` | `number` | `(-1, 1)` | Raw-SVI `rho` (skew / rotation). | FlowGreeks |
+| `svi_m` | `number` | log-moneyness | Raw-SVI `m` (smile-minimum shift). | FlowGreeks |
+| `svi_sigma` | `number` | `> 0` | Raw-SVI `sigma` (ATM curvature smoothness). | FlowGreeks |

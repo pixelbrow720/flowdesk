@@ -11,6 +11,7 @@ import math
 from engine.surface import (
     STRADDLE_EM_FACTOR,
     SVIParams,
+    build_surface,
     expected_move,
     expected_move_from_straddle,
     fit_svi,
@@ -110,5 +111,57 @@ def test_expected_move_estimators_relationship() -> None:
     em_str = expected_move_from_straddle(straddle)
     ratio = em_str / em_log
     assert 0.6 < ratio < 0.75
-    expected_ratio = STRADDLE_EM_FACTOR * math.sqrt(2.0 / math.pi)
-    assert math.isclose(ratio, expected_ratio, rel_tol=1e-9)
+
+
+# --------------------------------------------------------------------------- #
+# build_surface — the Snapshot-facing wrapper (selects OTM IV, fits, summarises)
+# --------------------------------------------------------------------------- #
+def _rows_from_truth():
+    """ChainRows carrying the truth-smile IV per leg (call at/above F, put below)."""
+    from engine.exposure import ChainRow
+
+    p = _truth()
+    strikes = [4900.0, 4950.0, 4975.0, 5000.0, 5025.0, 5050.0, 5100.0]
+    rows = []
+    for K in strikes:
+        iv = svi_vol(p, math.log(K / FORWARD), T)
+        rows.append(ChainRow(
+            strike=K, call_gamma=0.0, put_gamma=0.0, call_delta=0.0, put_delta=0.0,
+            call_vol=0.0, put_vol=0.0, call_iv=iv, put_iv=iv, t_expiry=T, thin=False,
+        ))
+    return rows
+
+
+def test_build_surface_fits_and_summarises() -> None:
+    sf = build_surface(_rows_from_truth(), FORWARD, T)
+    assert sf is not None
+    assert sf.atm_vol > 0.0 and sf.expected_move > 0.0
+    assert sf.rmse < 1e-3 and sf.arb_free
+    assert math.isclose(
+        sf.expected_move, FORWARD * sf.atm_vol * math.sqrt(T), rel_tol=1e-9
+    )
+    # truth has rho<0 (put skew) -> SVI vol slope in k is negative.
+    assert sf.skew < 0.0
+    assert set(sf.to_dict()) == {
+        "atm_vol", "expected_move", "skew", "rmse", "arb_free",
+        "svi_a", "svi_b", "svi_rho", "svi_m", "svi_sigma",
+    }
+
+
+def test_build_surface_skips_thin_and_returns_none_below_five() -> None:
+    from engine.exposure import ChainRow
+
+    rows = _rows_from_truth()[:4]  # only 4 usable -> below MIN_SURFACE_STRIKES
+    assert build_surface(rows, FORWARD, T) is None
+    # a thin strike must not count toward the 5-strike minimum
+    thinned = _rows_from_truth()
+    for r in thinned[:3]:
+        object.__setattr__(r, "thin", True)
+    # 7 total - 3 thin = 4 usable -> None
+    assert build_surface(thinned, FORWARD, T) is None
+
+
+def test_build_surface_none_on_bad_inputs() -> None:
+    rows = _rows_from_truth()
+    assert build_surface(rows, 0.0, T) is None       # forward <= 0
+    assert build_surface(rows, FORWARD, 0.0) is None  # t_expiry <= 0

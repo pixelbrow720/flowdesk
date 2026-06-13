@@ -77,15 +77,20 @@ Heatmap, profiles, levels, and auth exist as primitives. The full integrated
 TRACE-style dashboard (`1.png`), the intraday **HIRO line** render, and
 end-to-end live-WS wiring are the largest remaining FE work.
 
-### 5. Surface / vanna / charm — VEX/CHEX now wired; SVI still isolated 🟡
-`black76` vanna/charm are now **aggregated into the Snapshot** as the optional,
-**EXPERIMENTAL** `exposure_ext` field (VEX/CHEX, `engine.exposure_ext`) — same VOL
-basis + locked dealer signs as GEX/DEX, gated by `with_exposure_ext` (worker +
-session generator pass `True`). It is structurally built and FD-validated at the
-greek level, but **not price-validated** — it does **not** close gap #1. Still
-isolated: `surface.py` (SVI fit + expected move) remains **not in the Snapshot**
-and consumed nowhere — wiring it in (plus an expected-move field) is the remaining
-additive work here.
+### 5. Surface / vanna / charm — WIRED ✅ (EXPERIMENTAL)
+`black76` vanna/charm and `surface.py` are no longer isolated — all are now
+**aggregated into the Snapshot** as optional, **EXPERIMENTAL** fields:
+- `exposure_ext` (VEX/CHEX, `engine.exposure_ext`) — vanna/charm on the VOL basis +
+  locked dealer signs.
+- `total_hedging` (`engine.total_hedging`) — gamma+charm+vanna on the synthetic-OI
+  `Q` base (#7).
+- `surface` (`engine.surface`) — raw-SVI slice + ATM vol + **expected move** + skew.
+
+All gated by explicit flags (`with_exposure_ext` / `with_surface` / the `net_flow`
+gate), passed `True` by the worker + session generator. They are structurally built
+and FD-validated at the greek level, but **not price-validated** — they do **not**
+close gap #1. The remaining isolated piece is gone; this gap is closed (additive,
+no contract change).
 
 ### 6. Baseline lint/type noise 🟡
 Pre-existing, not blocking, do not blind-fix:

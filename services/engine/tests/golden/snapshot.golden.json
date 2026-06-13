@@ -127,6 +127,7 @@
   "session_date": "2026-06-10",
   "stale": false,
   "state": "LIVE",
+  "surface": null,
   "synthetic_oi": null,
   "total_hedging": null,
   "ts": "2026-06-10T13:31:00Z"

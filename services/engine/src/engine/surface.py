@@ -42,7 +42,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, List, Optional, Sequence
+
+if TYPE_CHECKING:  # pragma: no cover - typing only (no import-time cycle)
+    from engine.exposure import ChainRow
 
 #: Nelder-Mead objective: maps a parameter vector to a scalar loss.
 Objective = Callable[[List[float]], float]
@@ -50,10 +53,12 @@ Objective = Callable[[List[float]], float]
 __all__ = [
     "SVIParams",
     "VolSlice",
+    "SurfaceSnapshot",
     "total_variance",
     "svi_vol",
     "is_butterfly_arbitrage_free",
     "fit_svi",
+    "build_surface",
     "expected_move",
     "expected_move_from_straddle",
 ]
@@ -312,3 +317,92 @@ def expected_move_from_straddle(straddle_mid: float, *, factor: float = STRADDLE
     if straddle_mid < 0.0:
         raise ValueError(f"straddle_mid must be >= 0, got {straddle_mid!r}")
     return factor * straddle_mid
+
+
+#: Min non-thin strikes needed for a determined 5-parameter SVI fit.
+MIN_SURFACE_STRIKES: int = 5
+#: Log-moneyness half-step for the ATM skew finite difference (per 1.0 of k).
+_SKEW_DK: float = 0.01
+
+
+@dataclass(frozen=True)
+class SurfaceSnapshot:
+    """Vol-surface summary for one minute (EXPERIMENTAL — additive Snapshot field).
+
+    Carries the fitted raw-SVI params (so a consumer can reconstruct the whole
+    smile), the ATM vol, the 1-sigma lognormal expected move, the ATM skew, the fit
+    RMSE and the no-butterfly flag. ``None`` when fewer than ``MIN_SURFACE_STRIKES``
+    non-thin strikes are available. Structural only — the fit is deterministic and
+    tested, but it is not a price-validated signal.
+    """
+
+    atm_vol: float
+    expected_move: float
+    skew: float
+    rmse: float
+    arb_free: bool
+    svi_a: float
+    svi_b: float
+    svi_rho: float
+    svi_m: float
+    svi_sigma: float
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "atm_vol": self.atm_vol,
+            "expected_move": self.expected_move,
+            "skew": self.skew,
+            "rmse": self.rmse,
+            "arb_free": self.arb_free,
+            "svi_a": self.svi_a,
+            "svi_b": self.svi_b,
+            "svi_rho": self.svi_rho,
+            "svi_m": self.svi_m,
+            "svi_sigma": self.svi_sigma,
+        }
+
+
+def build_surface(
+    rows: "Sequence[ChainRow]",
+    forward: float,
+    t_expiry: float,
+) -> "Optional[SurfaceSnapshot]":
+    """Fit a raw-SVI slice from the solved chain and summarise it, or ``None``.
+
+    Uses the OTM IV per strike (put below the forward, call at/above) — the liquid
+    side, matching the validated research path. Thin strikes (IV unsolved) are
+    skipped. Returns ``None`` when fewer than :data:`MIN_SURFACE_STRIKES` usable
+    strikes remain (no fabricated fit). ATM skew is the slope of SVI vol in
+    log-moneyness across +-``_SKEW_DK`` around the money (negative = put skew).
+    """
+    if not (forward > 0.0) or not (t_expiry > 0.0):
+        return None
+    strikes: List[float] = []
+    vols: List[float] = []
+    for r in rows:
+        if r.thin:
+            continue
+        iv = r.put_iv if r.strike < forward else r.call_iv
+        if iv is None or not (iv > 0.0):
+            continue
+        strikes.append(float(r.strike))
+        vols.append(float(iv))
+    if len(strikes) < MIN_SURFACE_STRIKES:
+        return None
+    slice_ = fit_svi(strikes, vols, forward, t_expiry)
+    p = slice_.params
+    skew = (
+        svi_vol(p, _SKEW_DK, t_expiry) - svi_vol(p, -_SKEW_DK, t_expiry)
+    ) / (2.0 * _SKEW_DK)
+    return SurfaceSnapshot(
+        atm_vol=slice_.atm_vol,
+        expected_move=slice_.expected_move,
+        skew=skew,
+        rmse=slice_.rmse,
+        arb_free=slice_.arb_free,
+        svi_a=p.a,
+        svi_b=p.b,
+        svi_rho=p.rho,
+        svi_m=p.m,
+        svi_sigma=p.sigma,
+    )

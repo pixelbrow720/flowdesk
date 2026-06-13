@@ -39,7 +39,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | # | Item | Workflow | Status |
 |---|------|----------|--------|
 | 1 | Synthetic-OI **#7 total-hedging** (gamma+charm+vanna on Q base) | heavy | ✅ DONE (commit pending) |
-| 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ⏳ NOT STARTED |
+| 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ✅ DONE (commit pending) |
 | 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ⏳ NOT STARTED |
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ⏳ NOT STARTED |
 | 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ⏳ NOT STARTED |
@@ -52,6 +52,24 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point 2 DONE: SVI / expected-move surface wiring (gap #5 closed)
+- `engine/surface.py`: added `SurfaceSnapshot` + `build_surface` — fits raw-SVI to
+  the solved OTM IVs (put<F, call≥F), summarises atm_vol / expected_move (F·σ·√T) /
+  skew / rmse / arb_free + the 5 raw-SVI params. `None` when <5 non-thin strikes.
+- Mirror lockstep: `Surface` in schema.py + snapshot.ts (interface+zod+invariant) +
+  CONTRACT.md (row+section). schema_version stays 1.
+- snapshot.py: gated by `with_surface` flag (no flow needed); derives t_expiry from
+  solved rows. worker.py + gen_session_snapshots.py pass `with_surface=True`.
+- tests: 3 new in test_surface.py (fit+summarise, thin-skip/<5→None, bad inputs);
+  _SNAPSHOT_KEYS + zod-compat block updated. golden gains only `"surface": null`.
+- docs: 04-engine.md (surface.py no longer ISOLATED), 08-status #5 CLOSED, CONTRACT.md.
+- VERIFIED: engine 180 pass, api 78 pass, contracts tsc exit 0 + validate ok.
+- Hit a self-inflicted bug: my Edit merged 2 stray leftover lines into a new test
+  (NameError `ratio`); caught by running tests, fixed. Auditors still can't run
+  (opus 403); audited inline — reduction not applicable here, but the SVI fit is
+  covered by the pre-existing recovers-known-smile test + my new wrapper tests.
+- Next: Point 3 (OI-aware wall-validation pass in harness).
 
 ### 2026-06-13 — Point 1 DONE: synthetic-OI #7 total-hedging
 - `engine/total_hedging.py` (NEW): gamma+charm+vanna on the synthetic-OI Q base.

@@ -195,6 +195,38 @@ export interface TotalHedging {
   w: number;
 }
 
+/**
+ * Vol-surface summary — raw-SVI slice + expected move. EXPERIMENTAL.
+ *
+ * Optional/additive (mirrors `total_hedging`/`exposure_ext`): null when not
+ * captured (fewer than 5 non-thin strikes), no schema_version bump. The fit is
+ * deterministic and tested, but NOT a price-validated signal. Carries the fitted
+ * raw-SVI params (so a consumer can reconstruct the whole smile), the ATM vol, the
+ * 1-sigma lognormal expected move, the ATM skew and fit quality.
+ */
+export interface Surface {
+  /** At-the-money implied vol (annualised, per 1.00) from the SVI fit at k=0. */
+  atm_vol: number;
+  /** 1-sigma lognormal expected move `F*atm_vol*sqrt(T)`, index points. */
+  expected_move: number;
+  /** ATM skew: slope of SVI vol in log-moneyness (negative = put skew). */
+  skew: number;
+  /** Fit RMSE in vol units. */
+  rmse: number;
+  /** Gatheral sufficient no-butterfly conditions hold for the slice. */
+  arb_free: boolean;
+  /** Raw-SVI `a` (vertical level). */
+  svi_a: number;
+  /** Raw-SVI `b` (slope/wing tightness, >= 0). */
+  svi_b: number;
+  /** Raw-SVI `rho` (skew/rotation, |rho| < 1). */
+  svi_rho: number;
+  /** Raw-SVI `m` (horizontal shift of smile minimum). */
+  svi_m: number;
+  /** Raw-SVI `sigma` (ATM curvature smoothness, > 0). */
+  svi_sigma: number;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
@@ -237,6 +269,8 @@ export interface Snapshot {
   exposure_ext?: ExposureExt | null;
   /** Synthetic-OI #7 total-hedging map (EXPERIMENTAL). null when not captured. */
   total_hedging?: TotalHedging | null;
+  /** Vol-surface summary (SVI + expected move, EXPERIMENTAL). null when not captured. */
+  surface?: Surface | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -382,6 +416,22 @@ export const TotalHedgingSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link Surface}. */
+export const SurfaceSchema = z
+  .object({
+    atm_vol: finiteNumber,
+    expected_move: finiteNumber,
+    skew: finiteNumber,
+    rmse: finiteNumber,
+    arb_free: z.boolean(),
+    svi_a: finiteNumber,
+    svi_b: finiteNumber,
+    svi_rho: finiteNumber,
+    svi_m: finiteNumber,
+    svi_sigma: finiteNumber,
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -405,6 +455,7 @@ export const SnapshotSchema = z
     synthetic_oi: SyntheticOiSchema.nullish(),
     exposure_ext: ExposureExtSchema.nullish(),
     total_hedging: TotalHedgingSchema.nullish(),
+    surface: SurfaceSchema.nullish(),
   })
   .strict();
 
@@ -449,6 +500,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof SyntheticOiSchema>, SyntheticOi>>,
   Expect<Equals<z.infer<typeof ExposureExtSchema>, ExposureExt>>,
   Expect<Equals<z.infer<typeof TotalHedgingSchema>, TotalHedging>>,
+  Expect<Equals<z.infer<typeof SurfaceSchema>, Surface>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];

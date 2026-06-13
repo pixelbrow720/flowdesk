@@ -238,6 +238,40 @@ class TotalHedging(BaseModel):
     """Open/close flow weight in [0, 1] used for the ``Q`` base."""
 
 
+class Surface(BaseModel):
+    """Vol-surface summary — raw-SVI slice + expected move (EXPERIMENTAL).
+
+    Optional/additive (mirrors ``total_hedging``/``exposure_ext``): ``None`` when not
+    captured (fewer than 5 non-thin strikes), no ``schema_version`` bump. The fit is
+    deterministic and tested, but it is NOT a price-validated signal. Carries the
+    fitted raw-SVI params so a consumer can reconstruct the whole smile, plus the ATM
+    vol, the 1-sigma lognormal expected move, the ATM skew and fit quality. See
+    ``engine.surface`` and docs/research/empirical/synthetic-oi-0dte.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    atm_vol: float
+    """At-the-money implied vol (annualised, per 1.00) from the SVI fit at k=0."""
+    expected_move: float
+    """1-sigma lognormal expected move ``F·atm_vol·sqrt(T)``, index points."""
+    skew: float
+    """ATM skew: slope of SVI vol in log-moneyness (negative = put skew)."""
+    rmse: float
+    """Fit RMSE in vol units."""
+    arb_free: bool
+    """Gatheral sufficient no-butterfly conditions hold for the slice."""
+    svi_a: float
+    """Raw-SVI ``a`` (vertical level)."""
+    svi_b: float
+    """Raw-SVI ``b`` (slope/wing tightness, >= 0)."""
+    svi_rho: float
+    """Raw-SVI ``rho`` (skew/rotation, |rho| < 1)."""
+    svi_m: float
+    """Raw-SVI ``m`` (horizontal shift of smile minimum)."""
+    svi_sigma: float
+    """Raw-SVI ``sigma`` (ATM curvature smoothness, > 0)."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -279,6 +313,8 @@ class Snapshot(BaseModel):
     """Extended dealer exposure VEX/CHEX (EXPERIMENTAL). None when not captured."""
     total_hedging: TotalHedging | None = None
     """Synthetic-OI #7 total-hedging map (EXPERIMENTAL). None when not captured."""
+    surface: Surface | None = None
+    """Vol-surface summary (SVI + expected move, EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

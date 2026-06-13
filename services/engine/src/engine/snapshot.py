@@ -325,6 +325,7 @@ def build_snapshot(
     net_flow: Optional["Mapping[tuple[float, bool], float]"] = None,
     synthetic_oi_w: float = 1.0,
     with_exposure_ext: bool = False,
+    with_surface: bool = False,
 ) -> Snapshot:
     """Assemble ONE validated Snapshot for ``instrument`` at ``ts_utc``.
 
@@ -400,6 +401,18 @@ def build_snapshot(
 
         exp_ext = build_exposure_ext(rows, M, F, rate)
 
+    # Vol surface (EXPERIMENTAL, optional/additive): raw-SVI slice + expected move
+    # from the already-solved per-leg IVs. No external data; deterministic fit.
+    # Gated by an explicit flag (like exposure_ext); None unless requested or when
+    # fewer than 5 non-thin strikes exist. Does NOT touch the locked profile.
+    surface = None
+    if with_surface:
+        from engine.surface import build_surface
+
+        surf_t = next((r.t_expiry for r in rows if not r.thin and r.t_expiry), t_expiry)
+        if surf_t is not None:
+            surface = build_surface(rows, F, surf_t)
+
     field = build_field(
         rows, FieldAxis(smin, smax, step), F, M, rate, price_grid,
         smoothing_bw=smoothing_bw,
@@ -452,6 +465,7 @@ def build_snapshot(
         "synthetic_oi": syn_oi.to_dict() if syn_oi is not None else None,
         "exposure_ext": exp_ext.to_dict() if exp_ext is not None else None,
         "total_hedging": tot_hedge.to_dict() if tot_hedge is not None else None,
+        "surface": surface.to_dict() if surface is not None else None,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)
