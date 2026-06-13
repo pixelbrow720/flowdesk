@@ -40,7 +40,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 |---|------|----------|--------|
 | 1 | Synthetic-OI **#7 total-hedging** (gamma+charm+vanna on Q base) | heavy | ✅ DONE (commit pending) |
 | 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ✅ DONE (commit pending) |
-| 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ⏳ NOT STARTED |
+| 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ✅ DONE (commit pending) |
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ⏳ NOT STARTED |
 | 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ⏳ NOT STARTED |
 | 6 | **Baseline lint/type cleanup** (gap #6) | light | ⏳ NOT STARTED |
@@ -52,6 +52,24 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point 3 DONE: cross-day OI-wall validation in harness
+- `analysis/harness/metrics.py`: added pure `oi_walls` (top-N raw-OI call/put walls
+  on the correct side of spot). 3 new unit tests.
+- `analysis/harness/run_validation.py`: run_day now carries per-strike settle-OI +
+  closes + axis strikes; main() adds a cross-day pass — PRIOR session's settle-OI
+  walls tested against the CURRENT session's price (look-ahead-free: T-1 precedes T,
+  strikes persist cross-day even though 0DTE contracts don't). Reuses the
+  distance-matched attraction + pin_rate.
+- Ran end-to-end: raw-OI walls land DEEP OTM (lottery/tail-hedge strikes), often
+  outside the next day's axis (nbase=0 -> n/a, not fake-0); no pull toward them.
+  HONEST NEGATIVE: this shows WHY the product ranks walls by gamma-dollar not raw OI.
+- A stronger gamma-$ wall test needs prior-day per-leg gamma (not just settle-OI) —
+  deferred to the forward pull; documented in validation-harness.md §6.
+- VERIFIED: 20 pure metrics tests pass; harness runs clean. (No engine/contract
+  change — harness-only.)
+- docs: validation-harness.md §3/§4/§6 updated.
+- Next: Point 4 (synthetic-OI #6 size-tiered + per-trade-tape refactor).
 
 ### 2026-06-13 — Point 2 DONE: SVI / expected-move surface wiring (gap #5 closed)
 - `engine/surface.py`: added `SurfaceSnapshot` + `build_surface` — fits raw-SVI to

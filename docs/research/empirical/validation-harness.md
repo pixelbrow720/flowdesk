@@ -53,10 +53,14 @@ dbn streaming + `build_snapshot` calls + printing. So the part that must be
 | `magnitude_reconciliation` | Spearman \|net aggressor flow\| vs settle-OI per leg; raw **and** volume-partialled | partial control; no verdict string |
 | `level_attraction_vs_baseline` | normalized open→close distance shrink to a level, vs **distance-matched** baseline strikes | level taken from the **open** snapshot (causal); baseline matched on \|strike−forward\| |
 | `pin_rate` | fraction of per-minute closes within one strike step of the level | reported with n; descriptive only |
+| `oi_walls` (cross-day) | top-N raw-OI call/put walls from the **PRIOR** session's settle-OI, tested against the **CURRENT** session's price | T-1 fully precedes T (pre-committed, no look-ahead); scored via the same distance-matched attraction + pin rate |
 
-Walls are **not** scored: they need OI, and the only OI available is the EOD
-settle — using it at the open would be look-ahead. Walls belong to a separate
-OI-aware pass.
+The **cross-day OI-wall** test is the only look-ahead-free wall test this data
+supports. Same-session walls need same-session settle-OI, which is only known at the
+close — using it at the open would be circular. Prior-session settle-OI walls are
+pre-committed and strikes persist across days (even though the 0DTE contracts do
+not). This validates a **weaker** claim than the product's intraday gamma-dollar
+wall (we lack prior-day gamma), and it is labelled as such.
 
 ## 4. First results (4 days — descriptive, NOT a signal)
 
@@ -68,6 +72,14 @@ OI-aware pass.
 - **Price interaction:** excess-attraction is small and mixed in sign; pin-rate ≈ 0
   at one-step tolerance. **No pinning signal visible** — as expected at n=4 days;
   not evidence either way.
+- **Cross-day OI walls:** raw-OI walls land **deep OTM** (e.g. /ES call-wall ~6%
+  above spot, put-wall ~10-19% below — cheap 0DTE tail-hedge / lottery strikes that
+  accumulate OI, amplified by put-hedge demand on the Jun 5 crash day). Many fall
+  **outside the next day's strike axis** entirely (`nbase=0`, reported as `n/a`, not
+  a fake 0). Where measurable, excess-attraction is negative and pin-rate is 0 — **no
+  pull toward raw-OI walls.** This is itself informative: it shows *why* the product
+  ranks walls by **gamma-dollar** (`gamma·OI`) not raw OI — gamma → 0 deep OTM kills
+  exactly these lottery strikes. Descriptive on 3 day-pairs, not a result.
 - Thin/illiquid session-instruments are **excluded with logging** (a 6-minute floor;
   Jun 9 /NQ dropped at 5 valid minutes), not silently passed.
 
@@ -93,5 +105,7 @@ This is the **mechanism**, not the verdict. To turn it into evidence:
 - Run the operator's **~90-day** forward pull through the same `run_validation.py`
   (manual; respects the anti-lock Databento protocol — batch, 1 req/schema, no
   aggressive retry, `get_cost` first).
-- Add an **OI-aware wall pass** (needs intraday OI, not just settle).
+- The **cross-day raw-OI wall** pass is built (§3); a stronger **gamma-dollar** wall
+  test (the product's actual wall) would need the prior session's per-leg gamma, not
+  just settle-OI — deferred until the forward pull carries it.
 - Only then promote any finding toward [`../verified/`](../verified/).

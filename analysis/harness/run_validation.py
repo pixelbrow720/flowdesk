@@ -40,6 +40,7 @@ from analysis.harness.metrics import (  # noqa: E402
     distance_matched_levels,
     level_attraction_vs_baseline,
     magnitude_reconciliation,
+    oi_walls,
     pin_rate,
 )
 from engine.snapshot import ChainQuote, build_snapshot, t_expiry_from_clock  # noqa: E402
@@ -249,11 +250,17 @@ def run_day(instr: str, day: str, defs: dict) -> dict | None:
     settle_by_key: dict = {}
     flow_by_key: dict = {}
     vol_by_key: dict = {}
+    call_oi_by_strike: dict = {}
+    put_oi_by_strike: dict = {}
     last_s = sample_secs[-1]
     for iid, (otype, k, _ed) in legs.items():
         is_call = otype == "call"
         if iid in oi:
             settle_by_key[(k, is_call)] = oi[iid]
+            if is_call:
+                call_oi_by_strike[k] = call_oi_by_strike.get(k, 0.0) + oi[iid]
+            else:
+                put_oi_by_strike[k] = put_oi_by_strike.get(k, 0.0) + oi[iid]
         fv = nf.get(iid, {}).get(last_s)
         if fv is not None:
             flow_by_key[(k, is_call)] = fv
@@ -293,6 +300,12 @@ def run_day(instr: str, day: str, defs: dict) -> dict | None:
         "fwd_open": fwd_open, "fwd_close": fwd_close,
         "n_minutes": len(closes), "dropped": dropped,
         "reconciliation": recon, "price": price,
+        # Carried for the NEXT session's cross-day OI-wall test (look-ahead-free:
+        # today's settle-OI walls are tested against tomorrow's price).
+        "call_oi_by_strike": call_oi_by_strike,
+        "put_oi_by_strike": put_oi_by_strike,
+        "closes": closes,
+        "all_strikes": all_strikes,
     }
 
 
@@ -309,12 +322,15 @@ def main() -> int:
     print("on this sample nothing here is a signal; append ~90 sessions before reading.\n")
     defs = load_defs()
     rows = []
+    by_key: dict = {}
     for day in DAYS:
         for instr in ("ES", "NQ"):
             res = run_day(instr, day, defs)
             if res is None:
                 continue
             rows.append(res)
+            if res["status"] == "ok":
+                by_key[(instr, day)] = res
             if res["status"] != "ok":
                 print(f"  {day} {instr}: {res['status']} "
                       f"(n_minutes={res.get('n_minutes', 0)}, dropped={res.get('dropped', 0)})")
@@ -331,6 +347,40 @@ def main() -> int:
                 pin = pv["pin_rate"]
                 print(f"        {nm:>12} @{pv['level']:.0f}: "
                       f"excess_attraction={exs} (nbase={pv['n_baseline']})  pin_rate={pin:.2f}")
+
+    # ---- cross-day OI-wall test (look-ahead-free) ------------------------------
+    # PRIOR session's settle-OI walls (raw OI, SpotGamma-classic) tested against the
+    # CURRENT session's price. T-1 fully precedes T, so the walls are pre-committed;
+    # strikes persist across days even though the 0DTE contracts do not. This is a
+    # WEAKER claim than the product's intraday gamma-$ wall (we lack prior-day gamma),
+    # but it is the only wall test this data supports without look-ahead.
+    print("\n--- cross-day OI-wall persistence (prior settle-OI walls vs next-day price) ---")
+    wall_n = 0
+    for instr in ("ES", "NQ"):
+        for prev, cur in zip(DAYS[:-1], DAYS[1:]):
+            p = by_key.get((instr, prev))
+            c = by_key.get((instr, cur))
+            if not p or not c:
+                continue
+            fwd_open_c = c["fwd_open"]
+            walls = oi_walls(p["call_oi_by_strike"], p["put_oi_by_strike"], fwd_open_c)
+            for side in ("call_walls", "put_walls"):
+                levels = walls[side]
+                if not levels:
+                    continue
+                lvl = levels[0]  # rank-1 wall
+                baseline = distance_matched_levels(lvl, c["all_strikes"], fwd_open_c,
+                                                   band=STEP[instr])
+                attr = level_attraction_vs_baseline(fwd_open_c, c["fwd_close"], lvl, baseline)
+                pin = pin_rate(c["closes"], lvl, tolerance=STEP[instr])
+                exs = f"{attr['excess']:+.3f}" if attr["excess"] is not None else "n/a"
+                print(f"  {prev[5:]}->{cur[5:]} {instr} {side[:4]}1 @{lvl:.0f} "
+                      f"(F={fwd_open_c:.0f}): excess_attraction={exs} "
+                      f"(nbase={attr['n_baseline']})  pin_rate={pin['pin_rate']:.2f}")
+                wall_n += 1
+    if wall_n == 0:
+        print("  (no consecutive session pairs with usable OI walls)")
+
     print(f"\n{len([r for r in rows if r['status'] == 'ok'])} session-instruments computed. "
           f"Append ~90 sessions and re-run before reading ANY result as a signal.")
     return 0

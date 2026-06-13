@@ -13,6 +13,7 @@ from analysis.harness.metrics import (
     level_attraction,
     level_attraction_vs_baseline,
     magnitude_reconciliation,
+    oi_walls,
     partial_spearman,
     pin_rate,
 )
@@ -145,3 +146,31 @@ def test_pin_rate_counts_within_tolerance() -> None:
 def test_pin_rate_empty_series() -> None:
     out = pin_rate([], level=5000.0, tolerance=5.0)
     assert out["pin_rate"] is None and out["n"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# oi_walls
+# --------------------------------------------------------------------------- #
+def test_oi_walls_picks_top_oi_on_correct_side() -> None:
+    fwd = 5000.0
+    call_oi = {5010.0: 100.0, 5020.0: 500.0, 5030.0: 300.0, 4990.0: 999.0}
+    put_oi = {4990.0: 400.0, 4980.0: 800.0, 4970.0: 200.0, 5020.0: 999.0}
+    out = oi_walls(call_oi, put_oi, fwd, top_n=2)
+    # call walls: only strikes ABOVE 5000, ranked by OI -> 5020 (500) > 5030 (300)
+    assert out["call_walls"] == [5020.0, 5030.0]
+    # put walls: only strikes BELOW 5000, ranked by OI -> 4980 (800) > 4990 (400)
+    assert out["put_walls"] == [4980.0, 4990.0]
+
+
+def test_oi_walls_excludes_wrong_side_and_zero_oi() -> None:
+    fwd = 5000.0
+    call_oi = {5010.0: 0.0, 5020.0: 100.0}   # 5010 zero-OI dropped
+    put_oi = {4990.0: 50.0}
+    out = oi_walls(call_oi, put_oi, fwd, top_n=3)
+    assert out["call_walls"] == [5020.0]
+    assert out["put_walls"] == [4990.0]
+
+
+def test_oi_walls_empty_when_no_strikes() -> None:
+    out = oi_walls({}, {}, 5000.0)
+    assert out["call_walls"] == [] and out["put_walls"] == []

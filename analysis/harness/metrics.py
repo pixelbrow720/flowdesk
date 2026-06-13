@@ -54,6 +54,7 @@ __all__ = [
     "level_attraction",
     "level_attraction_vs_baseline",
     "pin_rate",
+    "oi_walls",
 ]
 
 
@@ -190,3 +191,31 @@ def pin_rate(closes: Sequence[float], level: float, tolerance: float) -> dict:
         return {"pin_rate": None, "n": 0, "tolerance": tolerance}
     hits = sum(1 for c in closes if abs(c - level) <= tolerance)
     return {"pin_rate": hits / len(closes), "n": len(closes), "tolerance": tolerance}
+
+
+def oi_walls(
+    call_oi: Mapping[float, float],
+    put_oi: Mapping[float, float],
+    forward: float,
+    *,
+    top_n: int = 3,
+) -> dict:
+    """Top-N call/put strikes by raw open interest, on the correct side of spot.
+
+    Call walls = highest-call-OI strikes ABOVE the forward; put walls =
+    highest-put-OI strikes BELOW. This is the SpotGamma-classic **raw-OI** wall —
+    deliberately NOT the product's intraday gamma-dollar wall (`gamma·OI`), because
+    in the cross-day harness test we only have the prior session's settled OI, not
+    its gamma. The caller MUST pass the PRIOR session's settle-OI and test it
+    against the CURRENT session's price, so the levels are pre-committed (no
+    look-ahead). Returns strikes ordered by OI descending (index 0 = rank 1).
+    """
+    calls = sorted(
+        (k for k, v in call_oi.items() if k > forward and v > 0.0),
+        key=lambda k: call_oi[k], reverse=True,
+    )
+    puts = sorted(
+        (k for k, v in put_oi.items() if k < forward and v > 0.0),
+        key=lambda k: put_oi[k], reverse=True,
+    )
+    return {"call_walls": calls[:top_n], "put_walls": puts[:top_n]}
