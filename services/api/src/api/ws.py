@@ -239,7 +239,7 @@ async def _ws_refresh_entitlement(websocket: WebSocket, session: Any) -> Any:
             access_token=session.access_token,
             guild_id=os.environ.get("DISCORD_GUILD_ID", ""),
         )
-    except Exception:  # noqa: BLE001 - Discord down: keep cached entitlement
+    except Exception:  # Discord down: keep cached entitlement
         member = ...
     role_id = os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
     return check_access(session, now=now, member=member, desk_role_id=role_id).session
@@ -293,7 +293,7 @@ async def serve(websocket: WebSocket, instrument: str) -> None:
             for task in tasks:
                 try:
                     await task
-                except BaseException:  # noqa: BLE001 - shutdown best-effort
+                except BaseException:  # shutdown best-effort
                     pass
             await _safe_close(websocket)
 

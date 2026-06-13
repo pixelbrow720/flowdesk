@@ -32,7 +32,7 @@ from api.security import SESSION_COOKIE
 
 # Signing secret for the test session cookies (release-1.5+ signed-cookie scheme;
 # the app verifies with os.environ["SESSION_SECRET"]). See tests/AUTH_TEST_NOTES.md.
-SECRET = "test-secret-please-change"  # noqa: S105 - test-only, not from prod
+SECRET = "test-secret-please-change"  # test-only, not from prod
 
 # Valid Snapshot per engine/schema.py (axis.step; regime.sign int; level lists).
 SAMPLE: dict[str, Any] = {

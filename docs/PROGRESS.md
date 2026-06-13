@@ -43,7 +43,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ✅ DONE (commit pending) |
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ✅ DONE (commit pending) |
 | 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ✅ DONE (commit pending) |
-| 6 | **Baseline lint/type cleanup** (gap #6) | light | ⏳ NOT STARTED |
+| 6 | **Baseline lint/type cleanup** (gap #6) | light | ✅ DONE (commit pending) |
 | D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ⏳ NOT STARTED |
 | P | **Proprietary metrics** (Volatility Trigger / Hedge Wall / Risk Pivot etc.) — reverse-engineered, labelled approximation | heavy | ⏳ NOT STARTED |
 
@@ -52,6 +52,22 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point 6 DONE: scoped lint/type cleanup (gap #6)
+- Engine ruff: had exactly 1 finding (MINE — unused `ChainRow` import in
+  test_surface.py from point 2); removed -> engine ruff now CLEAN (exit 0).
+- API ruff: 169 baseline. Did NOT blind-fix (docs warn B008 are FastAPI Depends
+  false positives; UP*/N818 are intentional). Fixed ONLY unambiguous dead code:
+  F401 (10 unused imports) + RUF100 (14 dead noqa) via `ruff --select F401,RUF100
+  --fix`. 169 -> 160. The remaining 160 (UP007/UP017/B008/N818/S105/...) are the
+  documented baseline, deliberately LEFT ALONE.
+- F821 `Fernet` in auth_session.py: investigated — FALSE POSITIVE (quoted annotation
+  + intentional lazy import). Not a bug, not touched.
+- mypy: CLEAN on all modules I added/modified this session (total_hedging,
+  exposure_ext, synthetic_oi, surface). No new type debt. Locked-core mypy baseline
+  (~16 strict errors in snapshot.py/field.py/feed) left as-is per docs.
+- VERIFIED: engine 187 pass, api 78 pass. No engine/contract/schema change.
+- Next: Point D (DDOI engine — HEAVY workflow, same-session EXPERIMENTAL).
 
 ### 2026-06-13 — Point 5 DONE: synthetic-OI #5 decay-weighted
 - `engine/synthetic_oi.py`: added `decay_weight(age_minutes)` = exp(-ln2*age/half_life)

@@ -33,7 +33,6 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Mapping, Optional, Sequence
 
 from api.session import (
-    ET,
     SessionState,
     MarketCalendar,
     default_calendar,

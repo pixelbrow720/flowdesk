@@ -26,7 +26,7 @@ from api.security import SESSION_COOKIE
 # Signing secret for the test session cookies. The app verifies the cookie with
 # ``os.environ["SESSION_SECRET"]`` (api.security.parse_session_cookie), so the
 # same value must be both serialized into the cookie and present in the env.
-SECRET = "test-secret-please-change"  # noqa: S105 - test-only, not from prod
+SECRET = "test-secret-please-change"  # test-only, not from prod
 
 # A valid Snapshot per engine/schema.py (axis.step; regime.sign is int; levels
 # are lists of floats / null). Mirrors the 0.8 golden shape.

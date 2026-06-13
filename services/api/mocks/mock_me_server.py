@@ -69,12 +69,12 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def do_OPTIONS(self) -> None:  # noqa: N802 (http.server API)
+    def do_OPTIONS(self) -> None:  # (http.server API)
         self.send_response(204)
         self._cors()
         self.end_headers()
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         path = self.path.split("?", 1)[0]
         if path == "/api/me":
             self._json(200, _load(_me_state()))
@@ -83,7 +83,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._json(404, {"error": "not found", "code": "NOT_FOUND"})
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         path = self.path.split("?", 1)[0]
         if path == "/api/me/recheck":
             state = _me_state()

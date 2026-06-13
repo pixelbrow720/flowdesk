@@ -193,7 +193,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
             async with pool.acquire() as conn:
                 await apply_migrations(conn)
-        except Exception:  # noqa: BLE001 - log-and-continue; don't crash boot on migrate
+        except Exception:  # log-and-continue; don't crash boot on migrate
             import logging
 
             logging.getLogger("api.main").exception("apply_migrations failed on boot")

@@ -149,8 +149,6 @@ def test_build_surface_fits_and_summarises() -> None:
 
 
 def test_build_surface_skips_thin_and_returns_none_below_five() -> None:
-    from engine.exposure import ChainRow
-
     rows = _rows_from_truth()[:4]  # only 4 usable -> below MIN_SURFACE_STRIKES
     assert build_surface(rows, FORWARD, T) is None
     # a thin strike must not count toward the 5-strike minimum

@@ -110,7 +110,7 @@ def test_fixtures_match_models_and_states() -> None:
 # =========================================================================== #
 # HTTP (FastAPI TestClient)                                                   #
 # =========================================================================== #
-SECRET = "test-secret-please-change"  # noqa: S105
+SECRET = "test-secret-please-change"
 GUILD = "guild-1"
 
 

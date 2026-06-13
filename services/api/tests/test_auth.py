@@ -31,7 +31,7 @@ from api.discord_client import FakeDiscordClient, GuildMember
 from api.security import has_active_grace, require_desk
 from api.errors import Forbidden, Unauthenticated
 
-SECRET = "test-secret-please-change"  # noqa: S105 - test-only, not from prod
+SECRET = "test-secret-please-change"  # test-only, not from prod
 GUILD = "guild-1"
 DESK = "role-desk"
 OTHER = "role-other"
