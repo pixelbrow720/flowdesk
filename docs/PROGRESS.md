@@ -53,6 +53,39 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-13 — INDEPENDENT AUDIT RE-RUN (role-separation enforced)
+User mandated: Claude = orchestrator + rule-enforcer ONLY; coder writes code only
+(no research/no audit); research+audit go to dedicated subagents; no bias. Added 2
+permanent agents (`quant-research-creative`, `quant-research-expert`) +
+`flowdesk-role-separation` memory. Re-ran the audit/validate stages independently on
+all 8 built points (NOT a rebuild):
+- **quant-greeks-auditor**: all 6 engine modules **SOUND** — FD cross-checks +
+  reduction anchors (gamma_hedge≡#4 GEX at w; decay/tier→#4 at trivial knobs)
+  numerically confirmed against the running engine. One non-blocking input-contract
+  caveat: total_hedging skips on (thin OR iv None), synthetic_gex skips on thin only
+  — agree under the documented "non-thin ⇒ IV solved" invariant (all tests honour it).
+- **contract-guardian**: mirror **CONSISTENT** — 6 new fields parity-clean, schema_
+  version stays 1, golden additive, tsc+validate exit 0. Nothing to fix.
+- **redteam-auditor**: headline attacks **REFUTED** — DDOI is look-ahead-free
+  (tape window [open, ts+1min), historical.py:259), VOL-orthogonal (abs(size), no
+  aggressor sign), non-circular; all 6 experimental fields isolated from locked
+  profile/levels/regime (frozen dataclasses, no in-place mutation). Real findings:
+  (a) DDOI worker `_net_flow_ddoi_for` was UNTESTED → FIXED (see below); (b) DDOI
+  open/close time-label is snapshot-relative (most-recent trade forced to "closing")
+  — disclosed heuristic, harmless while EXPERIMENTAL/flat, would matter if promoted;
+  (c) volatility_trigger picks the FIRST cumulative-OI-gamma crossing (arbitrary if
+  multi-cross) — labelled approximate, alongside locked gamma_flip. Also: redteam
+  correctly ignored a prompt-injection attempt in its tool context.
+- **quant-research-expert**: BLOCKER — agent created this turn, only loads in a NEW
+  session (custom agents don't hot-load). Fact/feasibility re-verification of the
+  doc/commit claims is DEFERRED to next session. RETRY then.
+- **FIX (coder-only, role-separated)**: added `services/api/tests/test_worker_ddoi.py`
+  (5 tests) — asserts look-ahead-free intent + sign-flip invariance (B↔A yields
+  identical map, proving no telescope-to-VOL) + time-weight value + ts=None skip.
+  Verified: API suite 78→**83 passed**.
+- NET: no math/contract/isolation defects found; the one code gap (untested worker
+  path) is closed. Backstop still open: run quant-research-expert next session.
+
 ### 2026-06-13 — Point P DONE: proprietary-style levels (reverse-engineered) — ALL POINTS COMPLETE
 - `engine/proprietary.py` (NEW): reverse-engineered SpotGamma-NAMED levels on the
   OI-gamma basis — volatility_trigger (cumulative net-OI-gamma zero-crossing),
