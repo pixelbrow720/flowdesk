@@ -118,6 +118,7 @@
       "strike": 5020.0
     }
   ],
+  "proprietary": null,
   "rate": 0.050407902543845765,
   "regime": {
     "net_gamma": -9718772.87097742,

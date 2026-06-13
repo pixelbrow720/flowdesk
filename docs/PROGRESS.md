@@ -45,13 +45,38 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ✅ DONE (commit pending) |
 | 6 | **Baseline lint/type cleanup** (gap #6) | light | ✅ DONE (commit pending) |
 | D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ✅ DONE (commit pending) |
-| P | **Proprietary metrics** (Volatility Trigger / Hedge Wall / Risk Pivot etc.) — reverse-engineered, labelled approximation | heavy | ⏳ NOT STARTED |
+| P | **Proprietary metrics** (Volatility Trigger / Hedge Wall / Risk Pivot etc.) — reverse-engineered, labelled approximation | heavy | ✅ DONE (commit pending) |
 
 Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point P DONE: proprietary-style levels (reverse-engineered) — ALL POINTS COMPLETE
+- `engine/proprietary.py` (NEW): reverse-engineered SpotGamma-NAMED levels on the
+  OI-gamma basis — volatility_trigger (cumulative net-OI-gamma zero-crossing),
+  abs_gamma_strike (max total OI-gamma), hedge_wall (max |net OI-gamma|). INFERRED
+  approximations (riset-spotgamma.md §C12/§444), NOT official; thin strikes skipped.
+- snapshot.py: gated by `with_proprietary` flag (no external data) -> new `proprietary`
+  field. NEW Proprietary model (3 nullable price levels). schema_version stays 1.
+- Mirror: schema.py Proprietary + snapshot.ts interface + ProprietarySchema (.nullish
+  fields) + SnapshotSchema entry + invariant. CONTRACT.md row+section. golden +null.
+- worker.py + gen_session_snapshots.py pass with_proprietary=True.
+- tests: test_proprietary.py (NEW, 7 tests: OI-gamma signs+skip, zero-crossing interp,
+  no-cross->None, argmax levels, thin-exclusion). _SNAPSHOT_KEYS + zod-compat updated.
+- HONEST: these live ALONGSIDE the locked VOL-based `levels` (which stay
+  authoritative) and will NOT match SpotGamma's published numbers — labelled
+  approximations everywhere.
+- VERIFIED: engine 199 pass, api 78 pass, contracts tsc exit 0 + validate ok,
+  ruff+mypy clean on the new module.
+- docs: 04-engine.md, 08-status #2 (proprietary built; all heavy items now built),
+  CONTRACT.md, PROGRESS.md.
+- ALL 8 POINTS (1/2/3/4/5/6/D/P) COMPLETE. Remaining open gap = forward-run
+  VALIDATION (#1, ~90-day manual pull) which turns "mechanism" into "evidence", and
+  the frontend dashboard (out of scope this build). Backstop TODO: re-run
+  contract-guardian + quant-greeks-auditor in a NEW session (opus 403 blocked them
+  this session; all audits were done inline).
 
 ### 2026-06-13 — Point D DONE: DDOI engine (synthetic Dealer Directional OI GEX)
 - `engine/ddoi.py` (NEW): `ddoi_time_weight(i,n)=1−2·(i/(n−1))` (early=open +1, late=

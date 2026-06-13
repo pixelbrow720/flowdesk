@@ -21,6 +21,7 @@ chain + forward + rate + session_state
    ├─ total_hedging.py optional #7 gamma+charm+vanna on the synthetic-OI Q base (EXPERIMENTAL)
    ├─ surface.py    optional SVI fit + expected-move surface summary (EXPERIMENTAL)
    ├─ ddoi.py       optional synthetic ΔOI GEX (open/close-classified basis) (EXPERIMENTAL)
+   ├─ proprietary.py optional reverse-engineered SpotGamma-style levels (EXPERIMENTAL)
    └─ snapshot.py   assembles + validates the canonical Snapshot
 ```
 
@@ -175,6 +176,21 @@ Emitted as the optional `ddoi` field. On the 8-day exploratory run it read **FLA
 VOL** (49.2% vs 50.8% sign-agreement) — the machine is sound, the edge is not
 proven. EXPERIMENTAL. See
 [`research/empirical/track-f-ddoi-exposure-vol.md`](research/empirical/track-f-ddoi-exposure-vol.md).
+
+### `proprietary.py` (optional output — EXPERIMENTAL)
+Reverse-engineered SpotGamma-style **named** key levels on the **OI-gamma** basis
+(carried-in OI × Black-76 gamma, locked dealer signs):
+- **Volatility Trigger** — the zero-crossing of *cumulative* net OI-gamma (the
+  OI/static analogue of the VOL-based gamma flip).
+- **Absolute Gamma strike** — the strike with the largest total OI-gamma.
+- **Hedge Wall** — the strike with the largest `|net OI-gamma|`.
+
+Emitted as the optional `proprietary` field, gated by `with_proprietary` (worker +
+session generator pass `True`). Thin strikes skipped. **INFERRED approximations —
+SpotGamma does not publish these formulas, so they will NOT match its numbers**
+(definitions from `research/archive/riset-spotgamma.md`). They live **alongside** the
+locked VOL-based `levels` (`levels.py`), which remain the authoritative key levels —
+`proprietary` does NOT replace them. EXPERIMENTAL.
 
 ### `snapshot.py`
 The assembler. `build_snapshot(...)` runs the pipeline and returns a validated

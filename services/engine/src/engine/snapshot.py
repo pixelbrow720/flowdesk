@@ -329,6 +329,7 @@ def build_snapshot(
     synthetic_oi_w: float = 1.0,
     with_exposure_ext: bool = False,
     with_surface: bool = False,
+    with_proprietary: bool = False,
 ) -> Snapshot:
     """Assemble ONE validated Snapshot for ``instrument`` at ``ts_utc``.
 
@@ -411,6 +412,16 @@ def build_snapshot(
         from engine.ddoi import build_ddoi
 
         ddoi = build_ddoi(rows, net_flow_ddoi, M, F)
+
+    # Proprietary-style levels (EXPERIMENTAL): reverse-engineered SpotGamma-named
+    # levels (Volatility Trigger / Absolute Gamma / Hedge Wall) on the OI-gamma basis.
+    # INFERRED approximations, NOT official. No external data; gated by an explicit
+    # flag. None unless requested. Lives ALONGSIDE the locked VOL-based levels.
+    proprietary = None
+    if with_proprietary:
+        from engine.proprietary import build_proprietary
+
+        proprietary = build_proprietary(rows)
 
     # Synthetic-OI #7 total-hedging (EXPERIMENTAL, optional/additive): gamma+charm+
     # vanna on the SAME synthetic position Q as #4. Computed only when the caller
@@ -506,6 +517,7 @@ def build_snapshot(
         "total_hedging": tot_hedge.to_dict() if tot_hedge is not None else None,
         "surface": surface.to_dict() if surface is not None else None,
         "ddoi": ddoi.to_dict() if ddoi is not None else None,
+        "proprietary": proprietary.to_dict() if proprietary is not None else None,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)

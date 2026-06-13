@@ -67,8 +67,13 @@ GEX, wired as the optional `ddoi` field. All live **alongside** VOL-GEX, do **no
 replace it, and are **not price-validated** (synthetic-OI structural on 4 days; DDOI
 read FLAT vs VOL on the 8-day exploratory run) — so they do **not** close gap #1.
 **Do not rip out VOL-GEX.** When the forward-run validation (#1) exists, all these
-become parallel, measurable layers to rank against VOL-GEX. The remaining unbuilt
-heavy item is the **proprietary metrics** (Volatility Trigger / Hedge Wall / etc.).
+become parallel, measurable layers to rank against VOL-GEX. The **proprietary
+metrics** (Volatility Trigger / Absolute Gamma / Hedge Wall) are **now also built**
+(`proprietary.py`, optional `proprietary` field) — but as **reverse-engineered
+approximations on the OI-gamma basis, NOT official SpotGamma values**, living
+alongside the locked VOL-based `levels`. With these, every heavy item on the
+original backlog is built (all EXPERIMENTAL); what remains is the forward-run
+**validation** that would move any of them from "mechanism" to "evidence".
 
 ### 3. Live feed is a stub 🔴
 `feed/live.py` raises `LiveFeedNotAvailable`. Today only historical replay works.

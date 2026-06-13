@@ -47,6 +47,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `total_hedging` | `TotalHedging \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #7 total-hedging map: gamma + charm + vanna on the synthetic position `Q` (not VOL). Absent/`null` when not captured; additive, no version bump. Three separate terms (units differ — never summed). Alongside the locked VOL-GEX, not price-validated. | FlowGreeks |
 | `surface` | `Surface \| null` | object (optional) | **EXPERIMENTAL** vol-surface summary: raw-SVI slice + ATM vol + expected move + skew. Absent/`null` when not captured (fewer than 5 non-thin strikes); additive, no version bump. Deterministic fit, not a price-validated signal. | FlowGreeks |
 | `ddoi` | `Ddoi \| null` | object (optional) | **EXPERIMENTAL** synthetic Dealer Directional OI GEX — an ALTERNATIVE basis to VOL (per-leg synthetic ΔOI from open/close trade classification, locked dealer-sign + gamma template). Absent/`null` when not captured; additive, no version bump. Read FLAT vs VOL on 8 days; not price-validated. | FlowGreeks |
+| `proprietary` | `Proprietary \| null` | object (optional) | **EXPERIMENTAL** reverse-engineered SpotGamma-style levels (Volatility Trigger / Absolute Gamma / Hedge Wall) on the OI-gamma basis. Absent/`null` when not captured; additive, no version bump. **INFERRED approximations — NOT official SpotGamma values.** | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -253,3 +254,25 @@ SIGN_P·γ_p·ddoi_p)·M·F²·0.01`. Optional/additive (mirrors `synthetic_oi`)
 | --- | --- | --- | --- | --- |
 | `gex` | `number` | USD per 1% move | Net synthetic-ΔOI GEX (open/close-classified basis). | FlowGreeks |
 | `sign` | `-1 \| 0 \| 1` | enum | Sign of `gex`. | FlowGreeks |
+
+## `proprietary` (Proprietary, optional) — **EXPERIMENTAL**
+
+Reverse-engineered SpotGamma-style key levels (`engine.proprietary`) on the
+**OI-gamma** basis (carried-in OI × Black-76 gamma, locked dealer signs). Each field
+is a price level in index points, `null` when not computable. Optional/additive
+(mirrors `ddoi`/`surface`): absent or `null` when not captured — does **not** bump
+`schema_version`. Thin strikes skipped.
+
+> **EXPERIMENTAL — INFERRED approximations, NOT official SpotGamma values.**
+> SpotGamma does **not** publish the exact formulas for these named levels; the
+> definitions here are inferred from public descriptions
+> (`docs/research/archive/riset-spotgamma.md` §C12/§444) and will **not** match
+> SpotGamma's numbers. They live **alongside** the locked VOL-based `levels`
+> (gamma flip / walls / largest GEX) and do **not** replace them. The locked
+> `levels` block remains the product's authoritative key levels.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `volatility_trigger` | `number \| null` | index points | Zero-crossing of cumulative net OI-gamma (OI/static analogue of the VOL gamma flip). | FlowGreeks |
+| `abs_gamma_strike` | `number \| null` | index points | Strike of the largest total OI-gamma concentration. | FlowGreeks |
+| `hedge_wall` | `number \| null` | index points | Strike of the largest \|net OI-gamma\| (dominant net dealer hedging node). | FlowGreeks |

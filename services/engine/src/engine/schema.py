@@ -293,6 +293,28 @@ class Ddoi(BaseModel):
     """Sign of ``gex``: -1 | 0 | 1."""
 
 
+class Proprietary(BaseModel):
+    """Reverse-engineered SpotGamma-style key levels (EXPERIMENTAL — NOT official).
+
+    Optional/additive (mirrors ``ddoi``/``surface``): ``None`` when not captured, no
+    ``schema_version`` bump. INFERRED approximations of SpotGamma's *named*
+    proprietary levels on the OI-gamma basis — SpotGamma does NOT publish their
+    formulas, so these will NOT match their numbers. Each field is a price level in
+    index points, ``None`` when not computable. They live ALONGSIDE the locked
+    VOL-based ``levels`` and do NOT replace them. Consumers MUST label these as
+    approximations. See ``engine.proprietary`` and
+    docs/research/archive/riset-spotgamma.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    volatility_trigger: float | None = None
+    """Zero-crossing of cumulative net OI-gamma (OI/static analogue of gamma flip)."""
+    abs_gamma_strike: float | None = None
+    """Strike of the largest total OI-gamma concentration."""
+    hedge_wall: float | None = None
+    """Strike of the largest |net OI-gamma| (dominant net dealer hedging node)."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -342,6 +364,8 @@ class Snapshot(BaseModel):
     """Vol-surface summary (SVI + expected move, EXPERIMENTAL). None when not captured."""
     ddoi: Ddoi | None = None
     """Synthetic Dealer Directional OI GEX (EXPERIMENTAL). None when not captured."""
+    proprietary: Proprietary | None = None
+    """Reverse-engineered SpotGamma-style levels (EXPERIMENTAL approximations). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

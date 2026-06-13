@@ -397,6 +397,7 @@ class MinuteWorker:
             net_flow_ddoi=self._net_flow_ddoi_for(trades),
             with_exposure_ext=True,
             with_surface=True,
+            with_proprietary=True,
         )
         # Publish to Redis FIRST so the live terminal/WS stay healthy even when
         # Timescale is down; the durable write is best-effort and must never undo

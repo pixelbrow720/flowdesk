@@ -245,6 +245,24 @@ export interface Ddoi {
   sign: RegimeSign;
 }
 
+/**
+ * Reverse-engineered SpotGamma-style key levels (EXPERIMENTAL — NOT official).
+ *
+ * Optional/additive (mirrors `ddoi`/`surface`): null when not captured, no
+ * schema_version bump. INFERRED approximations of SpotGamma's *named* proprietary
+ * levels on the OI-gamma basis — SpotGamma does NOT publish their formulas, so these
+ * will NOT match their numbers. Each field is a price level (index points), null when
+ * not computable. Live alongside the locked VOL-based `levels`, do NOT replace them.
+ */
+export interface Proprietary {
+  /** Zero-crossing of cumulative net OI-gamma (OI/static analogue of gamma flip). */
+  volatility_trigger?: number | null;
+  /** Strike of the largest total OI-gamma concentration. */
+  abs_gamma_strike?: number | null;
+  /** Strike of the largest |net OI-gamma| (dominant net dealer hedging node). */
+  hedge_wall?: number | null;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
@@ -295,6 +313,8 @@ export interface Snapshot {
   surface?: Surface | null;
   /** Synthetic Dealer Directional OI GEX (EXPERIMENTAL). null when not captured. */
   ddoi?: Ddoi | null;
+  /** Reverse-engineered SpotGamma-style levels (EXPERIMENTAL approximations). null when not captured. */
+  proprietary?: Proprietary | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -464,6 +484,15 @@ export const DdoiSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link Proprietary}. */
+export const ProprietarySchema = z
+  .object({
+    volatility_trigger: finiteNumber.nullish(),
+    abs_gamma_strike: finiteNumber.nullish(),
+    hedge_wall: finiteNumber.nullish(),
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -491,6 +520,7 @@ export const SnapshotSchema = z
     total_hedging: TotalHedgingSchema.nullish(),
     surface: SurfaceSchema.nullish(),
     ddoi: DdoiSchema.nullish(),
+    proprietary: ProprietarySchema.nullish(),
   })
   .strict();
 
@@ -537,6 +567,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof TotalHedgingSchema>, TotalHedging>>,
   Expect<Equals<z.infer<typeof SurfaceSchema>, Surface>>,
   Expect<Equals<z.infer<typeof DdoiSchema>, Ddoi>>,
+  Expect<Equals<z.infer<typeof ProprietarySchema>, Proprietary>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];
