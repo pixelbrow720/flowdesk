@@ -337,6 +337,33 @@ class MinuteWorker:
             flow[key] = flow.get(key, 0.0) + s * float(tr.size) * g
         return flow or None
 
+    def _net_flow_ddoi_for(self, trades: Any) -> Any:
+        """Per-leg synthetic ΔOI (open/close-classified) for the DDOI lens, or None.
+
+        Groups trades per (strike, is_call), orders them chronologically, and sums
+        ``ddoi_time_weight(i, n) * |size|`` — early trades treated as OPENING (+),
+        late as CLOSING (−). DIRECTION-AGNOSTIC (uses |size|, ignores aggressor sign)
+        so it cannot telescope back to VOL; non-circular (never reads ΔOI). Trades
+        with no timestamp are skipped (cannot order them). EXPERIMENTAL heuristic.
+        """
+        if trades is None:
+            return None
+        from engine.ddoi import ddoi_time_weight
+
+        per_leg: dict[tuple[float, bool], list] = {}
+        for tr in trades:
+            tr_ts = getattr(tr, "ts", None)
+            if tr_ts is None:
+                continue  # cannot time-order a trade with no timestamp
+            key = (float(tr.strike), bool(tr.is_call))
+            per_leg.setdefault(key, []).append((tr_ts, abs(float(tr.size))))
+        flow: dict[tuple[float, bool], float] = {}
+        for key, leg in per_leg.items():
+            leg.sort(key=lambda x: x[0])  # chronological for the time weight
+            n = len(leg)
+            flow[key] = sum(ddoi_time_weight(i, n) * sz for i, (_, sz) in enumerate(leg))
+        return flow or None
+
     async def _produce_live(self, instrument: str, now: datetime) -> bool:
         """Pull -> build -> store -> publish. Returns True if a snapshot shipped."""
         ts_utc = _utc_minute(now)
@@ -367,6 +394,7 @@ class MinuteWorker:
             net_flow=self._net_flow_for(trades),
             net_flow_tiered=self._net_flow_tiered_for(trades, instrument),
             net_flow_decay=self._net_flow_decay_for(trades, ts_utc),
+            net_flow_ddoi=self._net_flow_ddoi_for(trades),
             with_exposure_ext=True,
             with_surface=True,
         )

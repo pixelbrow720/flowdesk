@@ -20,6 +20,7 @@ chain + forward + rate + session_state
    ├─ exposure_ext.py  optional VEX/CHEX (vanna/charm) aggregation (EXPERIMENTAL)
    ├─ total_hedging.py optional #7 gamma+charm+vanna on the synthetic-OI Q base (EXPERIMENTAL)
    ├─ surface.py    optional SVI fit + expected-move surface summary (EXPERIMENTAL)
+   ├─ ddoi.py       optional synthetic ΔOI GEX (open/close-classified basis) (EXPERIMENTAL)
    └─ snapshot.py   assembles + validates the canonical Snapshot
 ```
 
@@ -159,6 +160,21 @@ whole smile). `None` when fewer than 5 non-thin strikes exist (no fabricated fit
 Gated by `with_surface` (worker + session generator pass `True`). Deterministic
 (stdlib Nelder-Mead) and tested, but **not** a price-validated signal —
 EXPERIMENTAL.
+
+### `ddoi.py` (optional output — EXPERIMENTAL)
+Synthetic **Dealer Directional OI** GEX — an ALTERNATIVE basis to the locked VOL.
+Each trade is classified OPEN vs CLOSE from its intraday time position
+(`ddoi_time_weight(i, n) = 1 − 2·(i/(n−1))`: early = opening +1, late = closing −1)
+and summed direction-agnostically (`Σ w·|size|`) per leg into a signed synthetic
+ΔOI, then driven through the SAME locked dealer-sign + gamma template:
+`Σ (SIGN_C·γ_c·ddoi_c + SIGN_P·γ_p·ddoi_p)·M·F²·0.01`. The per-leg open/close map is
+built worker-side from the timestamped tape (chronological); this module applies the
+greeks + scale, skipping thin strikes. **Non-circular** (never reads official ΔOI)
+and **orthogonal to VOL** (uses `|size|` + time weight, not the aggressor sign).
+Emitted as the optional `ddoi` field. On the 8-day exploratory run it read **FLAT vs
+VOL** (49.2% vs 50.8% sign-agreement) — the machine is sound, the edge is not
+proven. EXPERIMENTAL. See
+[`research/empirical/track-f-ddoi-exposure-vol.md`](research/empirical/track-f-ddoi-exposure-vol.md).
 
 ### `snapshot.py`
 The assembler. `build_snapshot(...)` runs the pipeline and returns a validated

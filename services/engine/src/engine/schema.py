@@ -272,6 +272,27 @@ class Surface(BaseModel):
     """Raw-SVI ``sigma`` (ATM curvature smoothness, > 0)."""
 
 
+class Ddoi(BaseModel):
+    """Synthetic Dealer Directional OI GEX (EXPERIMENTAL — NOT price-validated).
+
+    Optional/additive (mirrors ``synthetic_oi``/``exposure_ext``): ``None`` when not
+    captured, no ``schema_version`` bump. An ALTERNATIVE GEX basis to the locked VOL:
+    each trade is classified OPEN vs CLOSE from its intraday time position (early =
+    opening, late = closing) to estimate a signed per-leg synthetic ΔOI, then driven
+    through the SAME locked dealer-sign + gamma template. Non-circular (never reads
+    official ΔOI), orthogonal to VOL. On the 8-day exploratory run it read FLAT vs
+    VOL — the machine is sound, the edge is not proven. Lives ALONGSIDE the locked
+    VOL-GEX, does NOT replace it. See ``engine.ddoi`` and
+    docs/research/empirical/track-f-ddoi-exposure-vol.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gex: float
+    """Net synthetic-ΔOI GEX, USD per 1% move. EXPERIMENTAL."""
+    sign: RegimeSign
+    """Sign of ``gex``: -1 | 0 | 1."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -319,6 +340,8 @@ class Snapshot(BaseModel):
     """Synthetic-OI #7 total-hedging map (EXPERIMENTAL). None when not captured."""
     surface: Surface | None = None
     """Vol-surface summary (SVI + expected move, EXPERIMENTAL). None when not captured."""
+    ddoi: Ddoi | None = None
+    """Synthetic Dealer Directional OI GEX (EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

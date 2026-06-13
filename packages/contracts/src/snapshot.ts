@@ -227,6 +227,24 @@ export interface Surface {
   svi_sigma: number;
 }
 
+/**
+ * Synthetic Dealer Directional OI GEX (EXPERIMENTAL — NOT price-validated).
+ *
+ * Optional/additive (mirrors `synthetic_oi`/`exposure_ext`): null when not
+ * captured, no schema_version bump. An ALTERNATIVE GEX basis to the locked VOL:
+ * each trade is classified OPEN vs CLOSE from its intraday time position to estimate
+ * a signed per-leg synthetic ΔOI, then driven through the SAME locked dealer-sign +
+ * gamma template. Non-circular, orthogonal to VOL. Read FLAT vs VOL on the 8-day
+ * exploratory run — the machine is sound, the edge is not proven. Lives alongside
+ * the locked VOL-GEX, does NOT replace it.
+ */
+export interface Ddoi {
+  /** Net synthetic-ΔOI GEX, USD per 1% move. EXPERIMENTAL. */
+  gex: number;
+  /** Sign of `gex`: -1 | 0 | 1. */
+  sign: RegimeSign;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
@@ -275,6 +293,8 @@ export interface Snapshot {
   total_hedging?: TotalHedging | null;
   /** Vol-surface summary (SVI + expected move, EXPERIMENTAL). null when not captured. */
   surface?: Surface | null;
+  /** Synthetic Dealer Directional OI GEX (EXPERIMENTAL). null when not captured. */
+  ddoi?: Ddoi | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -436,6 +456,14 @@ export const SurfaceSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link Ddoi}. */
+export const DdoiSchema = z
+  .object({
+    gex: finiteNumber,
+    sign: RegimeSignSchema,
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -462,6 +490,7 @@ export const SnapshotSchema = z
     exposure_ext: ExposureExtSchema.nullish(),
     total_hedging: TotalHedgingSchema.nullish(),
     surface: SurfaceSchema.nullish(),
+    ddoi: DdoiSchema.nullish(),
   })
   .strict();
 
@@ -507,6 +536,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof ExposureExtSchema>, ExposureExt>>,
   Expect<Equals<z.infer<typeof TotalHedgingSchema>, TotalHedging>>,
   Expect<Equals<z.infer<typeof SurfaceSchema>, Surface>>,
+  Expect<Equals<z.infer<typeof DdoiSchema>, Ddoi>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];

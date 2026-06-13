@@ -46,6 +46,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `exposure_ext` | `ExposureExt \| null` | object (optional) | **EXPERIMENTAL** extended dealer exposure: VEX (vanna) + CHEX (charm), same VOL basis as GEX/DEX. Absent/`null` when not captured; additive, no version bump. Lives ALONGSIDE GEX/DEX, not price-validated. **Units differ from GEX** (see section). | FlowGreeks |
 | `total_hedging` | `TotalHedging \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #7 total-hedging map: gamma + charm + vanna on the synthetic position `Q` (not VOL). Absent/`null` when not captured; additive, no version bump. Three separate terms (units differ — never summed). Alongside the locked VOL-GEX, not price-validated. | FlowGreeks |
 | `surface` | `Surface \| null` | object (optional) | **EXPERIMENTAL** vol-surface summary: raw-SVI slice + ATM vol + expected move + skew. Absent/`null` when not captured (fewer than 5 non-thin strikes); additive, no version bump. Deterministic fit, not a price-validated signal. | FlowGreeks |
+| `ddoi` | `Ddoi \| null` | object (optional) | **EXPERIMENTAL** synthetic Dealer Directional OI GEX — an ALTERNATIVE basis to VOL (per-leg synthetic ΔOI from open/close trade classification, locked dealer-sign + gamma template). Absent/`null` when not captured; additive, no version bump. Read FLAT vs VOL on 8 days; not price-validated. | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -229,3 +230,26 @@ reconstruct the whole smile. See `docs/research/empirical/synthetic-oi-0dte.md`.
 | `svi_rho` | `number` | `(-1, 1)` | Raw-SVI `rho` (skew / rotation). | FlowGreeks |
 | `svi_m` | `number` | log-moneyness | Raw-SVI `m` (smile-minimum shift). | FlowGreeks |
 | `svi_sigma` | `number` | `> 0` | Raw-SVI `sigma` (ATM curvature smoothness). | FlowGreeks |
+
+## `ddoi` (Ddoi, optional) — **EXPERIMENTAL**
+
+Synthetic **Dealer Directional OI** GEX (`engine.ddoi`): an ALTERNATIVE GEX basis to
+the locked VOL. Each trade is classified OPEN vs CLOSE from its intraday TIME
+position (early = opening / builds OI, late = closing / squares up before the 0DTE
+16:00 ET expiry) to estimate a signed per-leg synthetic ΔOI, then driven through the
+SAME locked dealer-sign + gamma template: `gex = Σ (SIGN_C·γ_c·ddoi_c +
+SIGN_P·γ_p·ddoi_p)·M·F²·0.01`. Optional/additive (mirrors `synthetic_oi`): absent or
+`null` when not captured — does **not** bump `schema_version`. Thin strikes skipped.
+
+> **EXPERIMENTAL and NOT price-validated.** The open/close split is a **time-weight
+> heuristic** — the tape does not label open vs close. **Non-circular** (never reads
+> official ΔOI) and **orthogonal to VOL** (uses `|size|` + time weight, not the
+> aggressor sign). On the 8-day exploratory run it read **FLAT vs the VOL baseline**
+> (sign-agreement 49.2% vs 50.8%, within noise) — the *machine* is sound, the edge
+> is not proven. Lives **alongside** the locked VOL-GEX and does **not** replace it.
+> See `docs/research/empirical/track-f-ddoi-exposure-vol.md`.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `gex` | `number` | USD per 1% move | Net synthetic-ΔOI GEX (open/close-classified basis). | FlowGreeks |
+| `sign` | `-1 \| 0 \| 1` | enum | Sign of `gex`. | FlowGreeks |

@@ -115,7 +115,7 @@ _SNAPSHOT_KEYS = {
     "state", "stale", "expired", "forward", "rate", "axis", "regime",
     "profile", "field", "levels", "ohlc", "hiro", "synthetic_oi",
     "synthetic_oi_tiered", "synthetic_oi_decay", "exposure_ext",
-    "total_hedging", "surface",
+    "total_hedging", "surface", "ddoi",
 }
 
 
@@ -204,6 +204,11 @@ def _assert_zod_compatible(d: dict) -> None:
             "atm_vol", "expected_move", "skew", "rmse",
             "svi_a", "svi_b", "svi_rho", "svi_m", "svi_sigma",
         ))
+    dd = d["ddoi"]
+    assert dd is None or set(dd) == {"gex", "sign"}
+    if dd is not None:
+        assert dd["sign"] in (-1, 0, 1)
+        assert math.isfinite(dd["gex"])
 
 
 def test_serialized_passes_zod_contract() -> None:

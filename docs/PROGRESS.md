@@ -44,7 +44,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ✅ DONE (commit pending) |
 | 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ✅ DONE (commit pending) |
 | 6 | **Baseline lint/type cleanup** (gap #6) | light | ✅ DONE (commit pending) |
-| D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ⏳ NOT STARTED |
+| D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ✅ DONE (commit pending) |
 | P | **Proprietary metrics** (Volatility Trigger / Hedge Wall / Risk Pivot etc.) — reverse-engineered, labelled approximation | heavy | ⏳ NOT STARTED |
 
 Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
@@ -52,6 +52,28 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 ---
 
 ## Checkpoint log (append newest at top)
+
+### 2026-06-13 — Point D DONE: DDOI engine (synthetic Dealer Directional OI GEX)
+- `engine/ddoi.py` (NEW): `ddoi_time_weight(i,n)=1−2·(i/(n−1))` (early=open +1, late=
+  close −1) + `ddoi_gex`/`build_ddoi` — applies the LOCKED dealer-sign + gamma + scale
+  template to a per-leg synthetic-ΔOI basis instead of VOL. Non-circular, orthogonal
+  to VOL. Skips thin strikes. Reuses analysis/ddoi.py's validated open/close heuristic.
+- worker.py: `_net_flow_ddoi_for(trades)` groups per leg, sorts chronologically (uses
+  the point-5 HiroTrade.ts), sums `ddoi_time_weight·|size|` (direction-agnostic).
+  Passed as new `net_flow_ddoi` param.
+- snapshot.py: `net_flow_ddoi` -> build_ddoi -> new field `ddoi`. NEW Ddoi model
+  {gex, sign} (not a SyntheticOi reuse — different shape). schema_version stays 1.
+- Mirror: schema.py Ddoi + snapshot.ts Ddoi interface + DdoiSchema + SnapshotSchema
+  entry + invariant tuple. CONTRACT.md row+section. golden gains only "ddoi": null.
+- tests: test_ddoi.py (NEW, 6 tests: time-weight first=+1/last=−1/monotone, locked
+  signs+scale, thin-skip, sign). _SNAPSHOT_KEYS + zod-compat updated.
+- HONEST: on the 8-day exploratory run DDOI read FLAT vs VOL (49.2% vs 50.8%) — the
+  machine is sound, the edge is NOT proven. EXPERIMENTAL, alongside VOL-GEX. Cross-day
+  ΔOI reconciliation remains impossible on 0DTE (this is same-session open/close only).
+- VERIFIED: engine 192 pass, api 78 pass, contracts tsc exit 0 + validate ok, ruff +
+  mypy clean on new module.
+- docs: 04-engine.md, 08-status #2 (DDOI now built w/ approval), CONTRACT.md, PROGRESS.
+- Next: Point P (proprietary metrics — the last item; HEAVY workflow).
 
 ### 2026-06-13 — Point 6 DONE: scoped lint/type cleanup (gap #6)
 - Engine ruff: had exactly 1 finding (MINE — unused `ChainRow` import in

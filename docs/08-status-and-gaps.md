@@ -59,14 +59,16 @@ the weakest methodology:
 
 A first **synthetic-OI signed-flow-update lens now exists** — `synthetic_oi.py`,
 wired as the **optional, EXPERIMENTAL** `synthetic_oi` Snapshot field (OI-anchored
-position updated by native aggressor flow, weight `w∈[0,1]`). It lives **alongside**
-VOL-GEX, does **not** replace it, and is **not price-validated** (structural check
-on a 4-day sample only) — so it does **not** close gap #1. A full **DDOI** /
-ΔOI-reconciled reconstruction is still **not built** (no `ddoi` engine file); the
-methodology research marks DDOI as the "inti gap metodologi" and defers it to v3.
-**Do not rip out VOL-GEX; do not build DDOI without approval.** When validation
-(#1) exists, both synthetic-OI and DDOI become parallel, measurable layers to
-compare against VOL-GEX.
+position updated by native aggressor flow, weight `w∈[0,1]`), plus its successors
+`synthetic_oi_tiered` (#6 size-tiered), `synthetic_oi_decay` (#5 decay-weighted) and
+`total_hedging` (#7 gamma+charm+vanna). A **DDOI** lens (`ddoi.py`) is **now also
+built** (with explicit approval) — a non-circular open/close-classified synthetic ΔOI
+GEX, wired as the optional `ddoi` field. All live **alongside** VOL-GEX, do **not**
+replace it, and are **not price-validated** (synthetic-OI structural on 4 days; DDOI
+read FLAT vs VOL on the 8-day exploratory run) — so they do **not** close gap #1.
+**Do not rip out VOL-GEX.** When the forward-run validation (#1) exists, all these
+become parallel, measurable layers to rank against VOL-GEX. The remaining unbuilt
+heavy item is the **proprietary metrics** (Volatility Trigger / Hedge Wall / etc.).
 
 ### 3. Live feed is a stub 🔴
 `feed/live.py` raises `LiveFeedNotAvailable`. Today only historical replay works.

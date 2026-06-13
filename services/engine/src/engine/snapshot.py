@@ -325,6 +325,7 @@ def build_snapshot(
     net_flow: Optional["Mapping[tuple[float, bool], float]"] = None,
     net_flow_tiered: Optional["Mapping[tuple[float, bool], float]"] = None,
     net_flow_decay: Optional["Mapping[tuple[float, bool], float]"] = None,
+    net_flow_ddoi: Optional["Mapping[tuple[float, bool], float]"] = None,
     synthetic_oi_w: float = 1.0,
     with_exposure_ext: bool = False,
     with_surface: bool = False,
@@ -400,6 +401,16 @@ def build_snapshot(
         from engine.synthetic_oi import build_synthetic_oi
 
         syn_oi_decay = build_synthetic_oi(rows, net_flow_decay, M, F, w=synthetic_oi_w)
+
+    # DDOI (EXPERIMENTAL): ALTERNATIVE GEX basis to VOL — per-leg synthetic ΔOI from
+    # open/close trade classification, driven through the locked dealer-sign + gamma
+    # template. None unless the caller supplies the open/close-classified map. Read
+    # FLAT vs VOL on the 8-day sample. Does NOT touch the locked VOL-based GEX.
+    ddoi = None
+    if net_flow_ddoi is not None:
+        from engine.ddoi import build_ddoi
+
+        ddoi = build_ddoi(rows, net_flow_ddoi, M, F)
 
     # Synthetic-OI #7 total-hedging (EXPERIMENTAL, optional/additive): gamma+charm+
     # vanna on the SAME synthetic position Q as #4. Computed only when the caller
@@ -494,6 +505,7 @@ def build_snapshot(
         "exposure_ext": exp_ext.to_dict() if exp_ext is not None else None,
         "total_hedging": tot_hedge.to_dict() if tot_hedge is not None else None,
         "surface": surface.to_dict() if surface is not None else None,
+        "ddoi": ddoi.to_dict() if ddoi is not None else None,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)
