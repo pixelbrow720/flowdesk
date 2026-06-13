@@ -17,6 +17,9 @@ dependencies = [
   # Discord OAuth2 HTTP calls (PRD #6). Imported lazily in api/discord_client.py;
   # promoted from dev to runtime in release 1.5 because the auth flow needs it.
   "httpx==0.27.0",
+  # Authenticated encryption (Fernet) for the session cookie payload, so the
+  # Discord access_token is encrypted at rest, not merely HMAC-signed.
+  "cryptography==49.0.0",
   # Canonical Snapshot contract mirror (engine/schema.py). Resolved as an
   # editable workspace dependency in the monorepo (pip install -e services/engine).
   "flowdesk-engine>=0.1",

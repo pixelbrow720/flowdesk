@@ -136,6 +136,17 @@ def _secret_bytes(secret: str) -> bytes:
     return secret.encode("utf-8")
 
 
+def _fernet(secret: str) -> "Fernet":
+    """Build a Fernet from ``SESSION_SECRET`` (32-byte key = sha256(secret)).
+
+    Reuses :func:`_secret_bytes` so an empty ``SESSION_SECRET`` still fails closed.
+    """
+    from cryptography.fernet import Fernet
+
+    key = base64.urlsafe_b64encode(hashlib.sha256(_secret_bytes(secret)).digest())
+    return Fernet(key)
+
+
 def sign_value(payload: dict[str, Any], secret: str) -> str:
     """Return ``b64(payload).b64(hmac)`` for an arbitrary JSON-able payload."""
     body = _b64e(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
@@ -176,22 +187,49 @@ def verify_value(token: Optional[str], secret: str, *, now: Optional[datetime] =
 def serialize_session(
     session: Session, secret: str, *, now: Optional[datetime] = None, max_age_s: int = SESSION_MAX_AGE_S
 ) -> str:
-    """Sign a :class:`Session` into a cookie value with a 7-day expiry."""
+    """Encrypt a :class:`Session` into a cookie value with a 7-day expiry.
+
+    The payload is ENCRYPTED (Fernet, key derived from ``SESSION_SECRET``), not
+    merely signed, so the Discord ``access_token`` it carries is not readable from
+    the cookie. ``exp`` is embedded and enforced by :func:`deserialize_session`
+    (NOT delegated to Fernet's TTL, which keys off real wall-clock and would ignore
+    an injected ``now``).
+    """
     now = now or datetime.now(timezone.utc)
     payload = session.model_dump()
     payload["exp"] = now.timestamp() + max_age_s
-    return sign_value(payload, secret)
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return _fernet(secret).encrypt(raw).decode("ascii")
 
 
 def deserialize_session(
     token: Optional[str], secret: str, *, now: Optional[datetime] = None
 ) -> Optional[Session]:
-    """Verify + decode a session cookie. Returns ``None`` on any failure."""
-    try:
-        payload = verify_value(token, secret, now=now)
-    except SignatureError:
+    """Decrypt + decode a session cookie. Returns ``None`` on any failure.
+
+    Failure includes: missing/garbage token, a legacy HMAC-signed cookie (pre-
+    encryption deploy), tampering, wrong secret, expired ``exp``, or an invalid
+    Session shape. ``exp`` is checked explicitly against ``now`` here.
+    """
+    if not token:
         return None
-    payload.pop("exp", None)
+    from cryptography.fernet import InvalidToken
+
+    try:
+        raw = _fernet(secret).decrypt(token.encode("ascii"))
+        payload = json.loads(raw)
+    except (InvalidToken, ValueError, TypeError):
+        return None  # garbage, legacy-HMAC, tampered, or wrong-secret cookie
+    if not isinstance(payload, dict):
+        return None
+    exp = payload.pop("exp", None)
+    if exp is not None:
+        now = now or datetime.now(timezone.utc)
+        try:
+            if float(exp) < now.timestamp():
+                return None  # expired
+        except (ValueError, TypeError):
+            return None
     try:
         return Session.model_validate(payload)
     except ValidationError:

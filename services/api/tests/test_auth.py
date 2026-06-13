@@ -64,6 +64,41 @@ def test_signed_cookie_roundtrip_and_tamper() -> None:
     assert deserialize_session(expired, SECRET) is None
 
 
+def test_session_token_is_encrypted_not_readable() -> None:  # IMPORTANT #3 regression
+    # The Discord access_token must NOT be recoverable from the cookie without the
+    # secret. Before encryption it was base64-decodable from the HMAC-signed body.
+    import base64
+
+    sentinel = "DISCORD-BEARER-SENTINEL-9f3a"
+    s = Session(
+        discord_id="u1", has_desk=True, is_member=True, access_token=sentinel
+    )
+    token = serialize_session(s, SECRET)
+    # round-trips correctly with the secret
+    back = deserialize_session(token, SECRET)
+    assert back is not None and back.access_token == sentinel
+    # but the token is NOT present in plaintext, nor via a naive base64 decode
+    assert sentinel not in token
+    pad = "=" * (-len(token) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode(token + pad)
+    except Exception:
+        decoded = b""
+    assert sentinel.encode() not in decoded
+
+
+def test_legacy_signed_cookie_rejected() -> None:  # IMPORTANT #3 back-compat
+    # A pre-encryption HMAC-signed cookie must deserialize to None (force re-login),
+    # NOT crash. Builds the old format via the still-present sign_value.
+    from api.auth_session import sign_value
+
+    s = Session(discord_id="u1", has_desk=True, is_member=True)
+    payload = s.model_dump()
+    payload["exp"] = datetime.now(timezone.utc).timestamp() + 1000
+    legacy = sign_value(payload, SECRET)  # old body.sig format
+    assert deserialize_session(legacy, SECRET) is None
+
+
 def test_cookie_flags_exact() -> None:
     class _Resp:
         def __init__(self) -> None:
