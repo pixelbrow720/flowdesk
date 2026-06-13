@@ -324,6 +324,7 @@ def build_snapshot(
     hiro: Optional["HiroSnapshot"] = None,
     net_flow: Optional["Mapping[tuple[float, bool], float]"] = None,
     synthetic_oi_w: float = 1.0,
+    with_exposure_ext: bool = False,
 ) -> Snapshot:
     """Assemble ONE validated Snapshot for ``instrument`` at ``ts_utc``.
 
@@ -377,6 +378,18 @@ def build_snapshot(
 
         syn_oi = build_synthetic_oi(rows, net_flow, M, F, w=synthetic_oi_w)
 
+    # Extended exposure VEX/CHEX (EXPERIMENTAL, optional/additive): vanna/charm
+    # aggregated on the SAME VOL basis + locked dealer signs as GEX/DEX. Needs no
+    # external tape (re-evaluates greeks from the carried per-leg IV + t_expiry),
+    # so it is gated by an explicit flag rather than data availability. None unless
+    # requested, mirroring the ohlc/hiro/synthetic_oi precedent. Does NOT touch the
+    # locked VOL-based GEX/DEX.
+    exp_ext = None
+    if with_exposure_ext:
+        from engine.exposure_ext import build_exposure_ext
+
+        exp_ext = build_exposure_ext(rows, M, F, rate)
+
     field = build_field(
         rows, FieldAxis(smin, smax, step), F, M, rate, price_grid,
         smoothing_bw=smoothing_bw,
@@ -427,6 +440,7 @@ def build_snapshot(
             else None
         ),
         "synthetic_oi": syn_oi.to_dict() if syn_oi is not None else None,
+        "exposure_ext": exp_ext.to_dict() if exp_ext is not None else None,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)

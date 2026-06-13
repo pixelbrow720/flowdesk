@@ -64,10 +64,15 @@ Heatmap, profiles, levels, and auth exist as primitives. The full integrated
 TRACE-style dashboard (`1.png`), the intraday **HIRO line** render, and
 end-to-end live-WS wiring are the largest remaining FE work.
 
-### 5. Surface / vanna / charm isolated 🟡
-`surface.py` (SVI + expected move) and `black76` vanna/charm are implemented and
-tested but **not in the Snapshot** and consumed nowhere. No VEX/CHEX aggregation
-exists. Wiring them in is additive.
+### 5. Surface / vanna / charm — VEX/CHEX now wired; SVI still isolated 🟡
+`black76` vanna/charm are now **aggregated into the Snapshot** as the optional,
+**EXPERIMENTAL** `exposure_ext` field (VEX/CHEX, `engine.exposure_ext`) — same VOL
+basis + locked dealer signs as GEX/DEX, gated by `with_exposure_ext` (worker +
+session generator pass `True`). It is structurally built and FD-validated at the
+greek level, but **not price-validated** — it does **not** close gap #1. Still
+isolated: `surface.py` (SVI fit + expected move) remains **not in the Snapshot**
+and consumed nowhere — wiring it in (plus an expected-move field) is the remaining
+additive work here.
 
 ### 6. Baseline lint/type noise 🟡
 Pre-existing, not blocking, do not blind-fix:

@@ -312,6 +312,7 @@ class MinuteWorker:
             expired=False,
             hiro=self._hiro_for(instrument, ts_utc, forward, trades),
             net_flow=self._net_flow_for(trades),
+            with_exposure_ext=True,
         )
         # Publish to Redis FIRST so the live terminal/WS stay healthy even when
         # Timescale is down; the durable write is best-effort and must never undo

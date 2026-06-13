@@ -17,6 +17,7 @@ chain + forward + rate + session_state
    ├─ levels.py     call/put walls, gamma flip, largest GEX/DEX
    ├─ hiro.py       optional signed order-flow aggregate
    ├─ synthetic_oi.py  optional OI-anchored + flow-update GEX lens (EXPERIMENTAL)
+   ├─ exposure_ext.py  optional VEX/CHEX (vanna/charm) aggregation (EXPERIMENTAL)
    ├─ surface.py    SVI fit + expected move (ISOLATED — not yet in Snapshot)
    └─ snapshot.py   assembles + validates the canonical Snapshot
 ```
@@ -90,6 +91,27 @@ supplied. **This lives ALONGSIDE the locked VOL-GEX (`exposure.py`) and does NOT
 replace it.** It is **EXPERIMENTAL / not price-validated** — structurally checked
 on a 4-day sample only. See
 [`research/empirical/synthetic-oi-0dte.md`](research/empirical/synthetic-oi-0dte.md).
+
+### `exposure_ext.py` (optional output — EXPERIMENTAL)
+Aggregates the higher-order dealer greeks on the **same VOL basis + locked dealer
+signs** as `exposure.py`:
+
+```
+net_vex  = (sign_c·vanna_c·cvol + sign_p·vanna_p·pvol) · M · F · 0.01    (per 1% IV)
+net_chex = (sign_c·charm_c·cvol + sign_p·charm_p·pvol) · M · F · (1/365) (per day)
+```
+
+`M·F` dollarises each greek (one `F`, like DEX — vanna/charm differentiate delta
+w.r.t. vol/time, not `F`, so there is **no `F²`**). **The two `0.01`s are not the
+same physics:** VEX's `0.01` is a **vol-point** scale (per 1% IV), distinct from
+GEX's `GEX_PCT_SCALE` (per 1% *price* move) — so VEX is **not** directly
+comparable to GEX. CHEX is scaled to **per calendar day** (the 0DTE horizon).
+Greeks are re-evaluated from the carried per-leg IV + `t_expiry` (no external tape
+needed); **thin strikes are skipped**, never fabricated. Emitted as the optional
+`exposure_ext` Snapshot field (additive, no version bump), gated by
+`with_exposure_ext` (the worker + session generator pass `True`). **EXPERIMENTAL /
+not price-validated.** See
+[`research/empirical/track-f-ddoi-exposure-vol.md`](research/empirical/track-f-ddoi-exposure-vol.md).
 
 ### `surface.py` (ISOLATED — built, not wired)
 SVI volatility-surface fit + expected-move calculation. Complete and tested but

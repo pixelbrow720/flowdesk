@@ -41,6 +41,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `ohlc` | `OHLC \| null` | object (optional) | Underlying futures OHLC for this minute (candle view). Absent/`null` when not captured; additive, no version bump. | PRD #4 |
 | `hiro` | `Hiro \| null` | object (optional) | Cumulative dealer hedging flow (HIRO). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
 | `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `hiro`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
+| `exposure_ext` | `ExposureExt \| null` | object (optional) | **EXPERIMENTAL** extended dealer exposure: VEX (vanna) + CHEX (charm), same VOL basis as GEX/DEX. Absent/`null` when not captured; additive, no version bump. Lives ALONGSIDE GEX/DEX, not price-validated. **Units differ from GEX** (see section). | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -140,3 +141,26 @@ are **skipped, not fabricated**.
 | `sign` | `-1 \| 0 \| 1` | enum | Sign of `gex`. | FlowGreeks |
 | `gex_static` | `number` | USD per 1% move | `w=0` pure-OI GEX baseline (SpotGamma-classic). | FlowGreeks |
 | `w` | `number` | `[0, 1]` | Open/close flow weight used for `gex` (`0` = pure OI, `1` = full flow update). | FlowGreeks |
+
+## `exposure_ext` (ExposureExt, optional) — **EXPERIMENTAL**
+
+Extended dealer exposure: **VEX** (vanna) and **CHEX** (charm), aggregated on the
+SAME VOL basis and locked dealer signs (`+1` call / `-1` put) as the product
+GEX/DEX (`engine.exposure_ext`). Optional/additive (mirrors `hiro`/`synthetic_oi`):
+absent or `null` when not captured — does **not** bump `schema_version`. The
+underlying greeks are finite-difference-validated in `engine.black76`, but the
+aggregate has **never been checked against price**.
+
+> **EXPERIMENTAL and NOT price-validated.** Lives **alongside** the locked GEX/DEX
+> profile and does **not** replace it. **Units differ from GEX — do not compare
+> directly:** `net_vex` is per **1% IV (a vol-point scale)**, NOT per 1% price
+> move; `net_chex` is per **calendar day**. `M·F` dollarises each (one `F`, like
+> DEX — vanna/charm differentiate delta w.r.t. vol/time, not `F`, so there is no
+> `F²`). See `docs/research/empirical/track-f-ddoi-exposure-vol.md`.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `net_vex` | `number` | USD δ-notional per 1% IV | Net vanna exposure = `Σ sign·vanna·VOL·M·F·0.01`. EXPERIMENTAL. | FlowGreeks |
+| `vex_sign` | `-1 \| 0 \| 1` | enum | Sign of `net_vex`. | FlowGreeks |
+| `net_chex` | `number` | USD δ-notional per day | Net charm exposure = `Σ sign·charm·VOL·M·F·(1/365)`. EXPERIMENTAL. | FlowGreeks |
+| `chex_sign` | `-1 \| 0 \| 1` | enum | Sign of `net_chex`. | FlowGreeks |

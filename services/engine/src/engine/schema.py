@@ -189,6 +189,30 @@ class SyntheticOi(BaseModel):
     """Open/close flow weight in [0, 1] used for ``gex``."""
 
 
+class ExposureExt(BaseModel):
+    """Extended dealer exposure — VEX (vanna) + CHEX (charm) (EXPERIMENTAL).
+
+    Optional/additive (mirrors ``hiro``/``synthetic_oi``): ``None`` when not
+    captured, no ``schema_version`` bump. Same VOL basis + locked dealer signs as
+    the product GEX/DEX; lives ALONGSIDE them and does NOT replace them. The
+    higher-order greeks are FD-validated, but the aggregate has never been checked
+    against price — consumers MUST treat this as experimental, not authoritative.
+    NOTE the units differ from GEX: ``net_vex`` is per **1% IV** (a vol-point
+    scale), NOT per 1% price move; ``net_chex`` is per **calendar day**. See
+    ``engine.exposure_ext`` and docs/research/empirical/track-f-ddoi-exposure-vol.md."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    net_vex: float
+    """Net vanna exposure, USD dealer dollar-delta per 1% IV move. EXPERIMENTAL."""
+    vex_sign: RegimeSign
+    """Sign of ``net_vex``: -1 | 0 | 1."""
+    net_chex: float
+    """Net charm exposure, USD dealer dollar-delta per calendar day. EXPERIMENTAL."""
+    chex_sign: RegimeSign
+    """Sign of ``net_chex``: -1 | 0 | 1."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -226,6 +250,8 @@ class Snapshot(BaseModel):
     """Cumulative dealer hedging flow (HIRO). None when not captured. PRD FlowGreeks."""
     synthetic_oi: SyntheticOi | None = None
     """Synthetic-OI #4 positioning lens (EXPERIMENTAL). None when not captured."""
+    exposure_ext: ExposureExt | None = None
+    """Extended dealer exposure VEX/CHEX (EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

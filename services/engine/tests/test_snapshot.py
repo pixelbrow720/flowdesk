@@ -114,6 +114,7 @@ _SNAPSHOT_KEYS = {
     "schema_version", "instrument", "session_date", "ts", "minute_index",
     "state", "stale", "expired", "forward", "rate", "axis", "regime",
     "profile", "field", "levels", "ohlc", "hiro", "synthetic_oi",
+    "exposure_ext",
 }
 
 
@@ -169,6 +170,11 @@ def _assert_zod_compatible(d: dict) -> None:
         assert so["sign"] in (-1, 0, 1)
         assert 0.0 <= so["w"] <= 1.0
         assert all(math.isfinite(so[k]) for k in ("gex", "gex_static"))
+    ee = d["exposure_ext"]
+    assert ee is None or set(ee) == {"net_vex", "vex_sign", "net_chex", "chex_sign"}
+    if ee is not None:
+        assert ee["vex_sign"] in (-1, 0, 1) and ee["chex_sign"] in (-1, 0, 1)
+        assert all(math.isfinite(ee[k]) for k in ("net_vex", "net_chex"))
 
 
 def test_serialized_passes_zod_contract() -> None:

@@ -152,6 +152,27 @@ export interface SyntheticOi {
   w: number;
 }
 
+/**
+ * Extended dealer exposure — VEX (vanna) + CHEX (charm). EXPERIMENTAL.
+ *
+ * Optional/additive (mirrors `hiro`/`synthetic_oi`): null when not captured, no
+ * schema_version bump. Same VOL basis + locked dealer signs as the product
+ * GEX/DEX; lives alongside them, does NOT replace them. FD-validated greeks, but
+ * the aggregate is NOT price-validated — treat as experimental, not authoritative.
+ * NOTE units differ from GEX: `net_vex` is per 1% IV (a vol-point scale), NOT per
+ * 1% price move; `net_chex` is per calendar day.
+ */
+export interface ExposureExt {
+  /** Net vanna exposure, USD dealer dollar-delta per 1% IV move. EXPERIMENTAL. */
+  net_vex: number;
+  /** Sign of `net_vex`: -1 | 0 | 1. */
+  vex_sign: RegimeSign;
+  /** Net charm exposure, USD dealer dollar-delta per calendar day. EXPERIMENTAL. */
+  net_chex: number;
+  /** Sign of `net_chex`: -1 | 0 | 1. */
+  chex_sign: RegimeSign;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
@@ -190,6 +211,8 @@ export interface Snapshot {
   hiro?: Hiro | null;
   /** Synthetic-OI #4 positioning lens (EXPERIMENTAL). null when not captured. */
   synthetic_oi?: SyntheticOi | null;
+  /** Extended dealer exposure VEX/CHEX (EXPERIMENTAL). null when not captured. */
+  exposure_ext?: ExposureExt | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -315,6 +338,16 @@ export const SyntheticOiSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link ExposureExt}. */
+export const ExposureExtSchema = z
+  .object({
+    net_vex: finiteNumber,
+    vex_sign: RegimeSignSchema,
+    net_chex: finiteNumber,
+    chex_sign: RegimeSignSchema,
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -336,6 +369,7 @@ export const SnapshotSchema = z
     ohlc: OHLCSchema.nullish(),
     hiro: HiroSchema.nullish(),
     synthetic_oi: SyntheticOiSchema.nullish(),
+    exposure_ext: ExposureExtSchema.nullish(),
   })
   .strict();
 
@@ -378,6 +412,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof OHLCSchema>, OHLC>>,
   Expect<Equals<z.infer<typeof HiroSchema>, Hiro>>,
   Expect<Equals<z.infer<typeof SyntheticOiSchema>, SyntheticOi>>,
+  Expect<Equals<z.infer<typeof ExposureExtSchema>, ExposureExt>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];
