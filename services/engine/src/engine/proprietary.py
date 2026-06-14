@@ -18,7 +18,13 @@ Levels (all INFERRED):
   * **Volatility Trigger** — the price where the *cumulative* net OI-gamma crosses
     zero (ascending by strike), linearly interpolated. Below it dealers are net short
     gamma (vol-amplifying), above it net long (vol-suppressing). The OI/static analogue
-    of the VOL-based ``gamma_flip``. ``None`` if it never crosses.
+    of the VOL-based ``gamma_flip``. ``None`` if it never crosses. CAVEAT: this
+    zero-crossing METHOD (a simple net-OI-gamma crossover) CONTRADICTS the cited source —
+    docs/research/archive/riset-spotgamma.md:266 states SpotGamma's Volatility Trigger is
+    "[PROPRIETARY] … from the actual distribution of dealer gamma across strikes, NOT a
+    simple OI crossover". So this is a tractable PROXY, not a faithful reverse-engineering
+    of the named level. A field rename is a PENDING human decision — do NOT rename
+    ``volatility_trigger`` here.
   * **Absolute Gamma strike** — the strike with the largest TOTAL OI-gamma
     concentration ``call_gamma·call_oi + put_gamma·put_oi`` (both sides add; the single
     biggest hedging node by raw magnitude). ``None`` for an empty/thin chain.

@@ -7,7 +7,11 @@
 > 9–16-day contracts as T≈0.14 days, so the IV / vanna / charm here are artefacts —
 > the **140–290% ATM vol is the tell**, not a real crash signal. VEX/CHEX and the
 > SVI surface findings are therefore **WITHDRAWN pending a correct 0DTE re-pull.**
-> The DDOI section (flow-vs-ΔOI, no greeks) is unaffected and still valid.
+> The DDOI section (flow-vs-ΔOI) is **greek-independent**, but its cross-day ΔOI
+> comparison is **likewise invalid on true 0DTE**: the 49.2/50.8 head-to-head was
+> also computed on this quarterly pull, and cross-day ΔOI reconciliation is
+> structurally impossible on true 0DTE (zero cross-day option-root overlap). So DDOI
+> was **never validly evaluated on 0DTE — its edge is OPEN, not "flat-proven".**
 >
 > ✅ **UPDATE 2026-06-13: correct 0DTE data NOW EXISTS** for Jun 5/8/9/10 (`data/raw/zerodte/`,
 > IV verified sane ~26.7%, proper put skew). VEX/CHEX and SVI remain WITHDRAWN until
@@ -80,6 +84,10 @@ then scores against ΔOI on the *same* G.4.4 metric core as Lapis 1.
   mean sign-agreement:  VOL=50.8%   DDOI=49.2%   (baseline random=50%)
   => NO MEANINGFUL DIFFERENCE (Δ=-1.6 pts on 8-day sample)
 ```
+
+> ⚠️ Archival record only — this figure is **quarterly-data, NOT 0DTE** (see
+> CONTAMINATION NOTICE at top). Cross-day ΔOI is impossible on true 0DTE, so DDOI
+> was never validly evaluated there; the edge is OPEN.
 
 **Honest read — this did NOT beat the baseline, and I'm reporting it straight.**
 But the numbers reveal *why*, which is itself useful: the Spearman rho is

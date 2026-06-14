@@ -245,10 +245,16 @@ SIGN_P·γ_p·ddoi_p)·M·F²·0.01`. Optional/additive (mirrors `synthetic_oi`)
 > **EXPERIMENTAL and NOT price-validated.** The open/close split is a **time-weight
 > heuristic** — the tape does not label open vs close. **Non-circular** (never reads
 > official ΔOI) and **orthogonal to VOL** (uses `|size|` + time weight, not the
-> aggressor sign). On the 8-day exploratory run it read **FLAT vs the VOL baseline**
-> (sign-agreement 49.2% vs 50.8%, within noise) — the *machine* is sound, the edge
-> is not proven. Lives **alongside** the locked VOL-GEX and does **not** replace it.
-> See `docs/research/empirical/track-f-ddoi-exposure-vol.md`.
+> aggressor sign). The "FLAT vs VOL" 49.2%/50.8% figure is **NOT a 0DTE result** — it
+> was computed on the **quarterly** `ES.OPT`/`NQ.OPT` pull (multi-expiry), not 0DTE;
+> DDOI's cross-day ΔOI form is **structurally impossible on true 0DTE** (zero
+> cross-day symbol overlap). The open/close label is also **snapshot-relative** (the
+> worker grows the eval window each minute, so the −1/"close" trade shifts) — harmless
+> while flat, but it would matter if DDOI is ever promoted. Lives **alongside** the
+> locked VOL-GEX and does **not** replace it. See
+> `docs/research/empirical/track-f-ddoi-exposure-vol.md`,
+> `docs/research/empirical/symbology-0dte-findings.md`, and
+> `docs/08-status-and-gaps.md` gap #2.
 
 | Field | Type | Unit / domain | Meaning | Source |
 | --- | --- | --- | --- | --- |
@@ -267,9 +273,15 @@ is a price level in index points, `null` when not computable. Optional/additive
 > SpotGamma does **not** publish the exact formulas for these named levels; the
 > definitions here are inferred from public descriptions
 > (`docs/research/archive/riset-spotgamma.md` §C12/§444) and will **not** match
-> SpotGamma's numbers. They live **alongside** the locked VOL-based `levels`
-> (gamma flip / walls / largest GEX) and do **not** replace them. The locked
-> `levels` block remains the product's authoritative key levels.
+> SpotGamma's numbers. **`volatility_trigger`'s method CONTRADICTS the cited source:**
+> the code computes a cumulative-net-OI-gamma zero-crossing (a **simple OI
+> crossover**), but `riset-spotgamma.md:266` states SpotGamma's Volatility Trigger is
+> **[PROPRIETARY] … from the actual distribution of dealer gamma across strikes, NOT
+> a simple OI crossover** — so it is a tractable PROXY, not a faithful reverse-
+> engineering (a field rename is a pending human decision). They live **alongside**
+> the locked VOL-based `levels` (gamma flip / walls / largest GEX) and do **not**
+> replace them. The locked `levels` block remains the product's authoritative key
+> levels.
 
 | Field | Type | Unit / domain | Meaning | Source |
 | --- | --- | --- | --- | --- |

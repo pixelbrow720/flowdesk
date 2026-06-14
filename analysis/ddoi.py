@@ -22,6 +22,9 @@ OPEN/CLOSE CLASSIFIER (non-circular — never peeks at ΔOI):
 
 Reuses lapis1.pair_metrics (shipped, positive-control-passed) for the head-to-head.
 Touches ZERO locked schema/golden. 8-day EXPLORATORY sample — NOT validated.
+CONTAMINATION CAVEAT: the 49.2/50.8 head-to-head ran on QUARTERLY (ES.OPT/NQ.OPT) data,
+NOT valid 0DTE — cross-day ΔOI reconciliation is structurally impossible on true 0DTE
+(zero cross-day symbol overlap). See docs/research/empirical/symbology-0dte-findings.md.
 """
 from __future__ import annotations
 

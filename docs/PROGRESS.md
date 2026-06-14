@@ -53,6 +53,40 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — DOC HONESTY PASS: DDOI provenance + VT method contradiction (docs only)
+Role: doc-scribe (markdown only; **no non-markdown files touched**). Turned three
+already-verified research findings into honest docs.
+
+**A — Shakedown: PASS.** Re-opened every cited file read-only; all line numbers
+confirmed (`proprietary.py:87-107`/`123-130`, `ddoi.py:58-69`, `worker.py:340-365`,
+`exposure.py:91-92`, `feed/base.py:54-55,87-98`, `snapshot.py:373/374/467`,
+`track-f-ddoi-exposure-vol.md:80`, `symbology-0dte-findings.md:29-41`,
+`riset-spotgamma.md:266`).
+
+**B — Verification results:**
+- DDOI "49.2% vs 50.8% FLAT vs VOL" is **contaminated provenance** — computed on the
+  **quarterly** `ES.OPT`/`NQ.OPT` pull (9–16 days out), **not 0DTE**. On true 0DTE
+  the cross-day ΔOI reconciliation is **structurally impossible** (zero cross-day
+  symbol overlap on disk). DDOI has **never** been validly evaluated on 0DTE; edge is
+  OPEN, not flat-proven.
+- DDOI open/close label is **snapshot-relative** (worker grows the eval window each
+  minute → the −1/"close" anchor shifts). Conscious heuristic; harmless while flat,
+  matters if promoted. Principled fix needs intraday OI data (gap #1, NOT built).
+- `volatility_trigger` METHOD (cumulative-net-OI-gamma zero-crossing = simple OI
+  crossover) **contradicts** its cited source, which says SpotGamma's VT is NOT a
+  simple OI crossover. It is a PROXY, not a faithful reverse-engineering.
+- Experimental-lens isolation is a **frozen-immutability invariant** (`ChainRow`
+  frozen; `levels`-after-lenses is safe only because rows can't be mutated, not
+  because of line order).
+
+**C — Decision: document-as-conscious-limitation for all three.** No code/field
+rename (a VT rename is a **pending human decision**). VERIFIED: every claim traces to
+file:line above. DEFERRED: gap #1 forward validation (0DTE-valid intraday DDOI eval),
+which needs a data source/ENV → human approval. Files changed (markdown only):
+`docs/08-status-and-gaps.md` (gaps #1, #2), `docs/04-engine.md` (ddoi/proprietary/
+snapshot sections), `packages/contracts/CONTRACT.md` (ddoi + proprietary notes), this
+checkpoint. Next step: gap #1 forward run; resolve the VT rename question with a human.
+
 ### 2026-06-13 — INDEPENDENT AUDIT RE-RUN (role-separation enforced)
 User mandated: Claude = orchestrator + rule-enforcer ONLY; coder writes code only
 (no research/no audit); research+audit go to dedicated subagents; no bias. Added 2

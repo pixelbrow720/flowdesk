@@ -172,10 +172,32 @@ and summed direction-agnostically (`Σ w·|size|`) per leg into a signed synthet
 built worker-side from the timestamped tape (chronological); this module applies the
 greeks + scale, skipping thin strikes. **Non-circular** (never reads official ΔOI)
 and **orthogonal to VOL** (uses `|size|` + time weight, not the aggressor sign).
-Emitted as the optional `ddoi` field. On the 8-day exploratory run it read **FLAT vs
-VOL** (49.2% vs 50.8% sign-agreement) — the machine is sound, the edge is not
-proven. EXPERIMENTAL. See
+Emitted as the optional `ddoi` field. The machine is sound but the edge is **OPEN /
+unproven**: the only head-to-head number (49.2% vs 50.8% sign-agreement) is **NOT a
+0DTE result** — it was computed on the quarterly `ES.OPT`/`NQ.OPT` pull, and DDOI's
+cross-day ΔOI reconciliation is structurally impossible on true 0DTE (zero cross-day
+symbol overlap), so DDOI has never been validly evaluated on 0DTE (see Provenance
+caveat below). EXPERIMENTAL. See
 [`research/empirical/track-f-ddoi-exposure-vol.md`](research/empirical/track-f-ddoi-exposure-vol.md).
+
+> **Disclosed limitation — the open/close label is SNAPSHOT-RELATIVE, not anchored.**
+> `ddoi_time_weight(i, n) = 1 − 2·(i/(n−1))` (`ddoi.py:58-69`) forces the
+> **earliest** trade on a leg to ≈ +1 (open) and the **most-recent** to −1 (close).
+> But the worker (`services/api/src/api/worker.py:340-365`) grows the evaluation
+> window each minute, so the trade that is "most-recent" (and thus labelled −1/close)
+> **shifts every minute** — the label is relative to the current snapshot, not pinned
+> to a true cross-day OI anchor (none exists on 0DTE — each day is its own daily
+> expiry). This is **harmless while DDOI is EXPERIMENTAL and reads flat vs VOL**, but
+> it **would matter if DDOI is ever promoted**. The principled replacement (the
+> volume–OI accounting identity, or an empirically-calibrated intraday open-rate
+> curve) needs **intraday OI data** and is part of the forward-validation roadmap
+> (gap #1) — **NOT built**; a new data source / ENV would need human approval.
+
+> **Provenance caveat — the "FLAT vs VOL" number is NOT a 0DTE result.** It was
+> computed on the **quarterly** `ES.OPT`/`NQ.OPT` pull, not 0DTE
+> (`research/empirical/symbology-0dte-findings.md:29-41`); DDOI's cross-day form is
+> structurally impossible on true 0DTE (zero cross-day symbol overlap). See
+> `docs/08-status-and-gaps.md` gap #2.
 
 ### `proprietary.py` (optional output — EXPERIMENTAL)
 Reverse-engineered SpotGamma-style **named** key levels on the **OI-gamma** basis
@@ -184,6 +206,18 @@ Reverse-engineered SpotGamma-style **named** key levels on the **OI-gamma** basi
   OI/static analogue of the VOL-based gamma flip).
 - **Absolute Gamma strike** — the strike with the largest total OI-gamma.
 - **Hedge Wall** — the strike with the largest `|net OI-gamma|`.
+
+> **Honesty caveat — `volatility_trigger`'s method CONTRADICTS its cited source.**
+> The code (`proprietary.py:87-107`) implements VT as the cumulative net-OI-gamma
+> zero-crossing — a **simple OI crossover**. The cited research
+> (`research/archive/riset-spotgamma.md:266`, also :444) explicitly states
+> SpotGamma's Volatility Trigger is **[PROPRIETARY] … from the actual distribution
+> of dealer gamma across strikes, NOT a simple OI crossover.** So this is a tractable
+> **PROXY**, not a faithful reverse-engineering of the named level. `hedge_wall`
+> (`proprietary.py:123-130`) also diverges from the doc's argmax `|total gamma|`
+> near-spot hypothesis (`mega-riset2.md:157`); `abs_gamma_strike` DOES match the
+> doc's [FAKTA] argmax-total-gamma definition. Whether to **rename** `volatility_
+> trigger` is a pending human decision — recorded here, not changed.
 
 Emitted as the optional `proprietary` field, gated by `with_proprietary` (worker +
 session generator pass `True`). Thin strikes skipped. **INFERRED approximations —
@@ -197,6 +231,19 @@ The assembler. `build_snapshot(...)` runs the pipeline and returns a validated
 `Snapshot`. **Pure and calendar-free** — it receives the resolved
 `session_state` and `t_expiry`; it never reads the clock itself. This is what
 makes the golden fixture possible: identical inputs → identical Snapshot.
+
+**Experimental-lens isolation invariant (frozen-immutability, not ordering).** In
+the pipeline, `profile` (`snapshot.py:373`) and `regime` (`:374`) are computed
+**before** any experimental lens (`:380-458`), while `levels` (`:467`) is computed
+**after** them. `levels` is protected from the lenses **not** by that ordering but by
+the **frozen-immutability of the chain rows**: `ChainRow` is
+`@dataclass(frozen=True)` (`exposure.py:91-92`, also `feed/base.py:54-55`), and
+`OptionChainMinute` is frozen with `rows: tuple[...]` (`feed/base.py:87-98`). No
+experimental module mutates a shared input (verified: zero `row.<attr> =` sites; the
+only `.sort` is on a **local** per-leg list in the worker, `worker.py:362`). A future
+refactor that moves lens computation relative to `levels` is therefore safe **only as
+long as the rows stay frozen** — that immutability, not the line order, is the
+load-bearing invariant.
 
 ## Determinism & the golden fixture
 

@@ -47,7 +47,10 @@ still unproven**. A first offline harness now EXISTS (`analysis/harness/`,
 So this stays the #1 gap until the forward run exists — but the *machine* to run it
 is now built and adversarially hardened (a look-ahead bug and a distance-baseline
 bias were caught and fixed in review). **DDOI / wall validation needs an OI-aware
-pass and is deferred** (settle-OI at the open would be look-ahead).
+pass and is deferred** (settle-OI at the open would be look-ahead). Note that DDOI's
+**cross-day** ΔOI-reconciliation form is not merely deferred but **structurally
+impossible on 0DTE** (zero cross-day symbol overlap; see Gap #2) — only a 0DTE-valid
+**intraday, same-session** evaluation is even definable, and it does not yet exist.
 
 ### 2. The GEX core is the naive version 🔴 (decided, but know its limits)
 `exposure.py` uses **cumulative VOL × a hardcoded static dealer sign**
@@ -64,14 +67,45 @@ position updated by native aggressor flow, weight `w∈[0,1]`), plus its success
 `total_hedging` (#7 gamma+charm+vanna). A **DDOI** lens (`ddoi.py`) is **now also
 built** (with explicit approval) — a non-circular open/close-classified synthetic ΔOI
 GEX, wired as the optional `ddoi` field. All live **alongside** VOL-GEX, do **not**
-replace it, and are **not price-validated** (synthetic-OI structural on 4 days; DDOI
-read FLAT vs VOL on the 8-day exploratory run) — so they do **not** close gap #1.
+replace it, and are **not price-validated** (synthetic-OI structural on 4 days) — so
+they do **not** close gap #1.
+
+> **HONESTY FIX — the DDOI "49.2% vs 50.8% FLAT vs VOL" number is contaminated
+> provenance and must NOT be cited as a 0DTE result.** That figure
+> (`research/empirical/track-f-ddoi-exposure-vol.md:80`, self-labelled "8-day
+> EXPLORATORY — descriptive, NOT validated") was computed on the **quarterly**
+> `ES.OPT`/`NQ.OPT` parent pull (multi-expiry, 9–16 days out), **not 0DTE** — see
+> `research/empirical/symbology-0dte-findings.md:29-41`. On **true 0DTE**, the
+> cross-day ΔOI reconciliation DDOI relies on is **structurally impossible**: every
+> consecutive day pair has **zero** overlapping option roots (each day is its own
+> daily expiry — verified on disk from `data/raw/zerodte/symbols_by_day.json`). So
+> **DDOI has never been evaluated on valid 0DTE data, and its cross-day ΔOI-
+> reconciliation form cannot be on 0DTE.** Whether DDOI carries a measurable edge
+> under a **0DTE-valid (intraday, same-session)** evaluation is **OPEN and
+> unanswered** — part of the gap #1 forward-validation roadmap, not a closed result.
 **Do not rip out VOL-GEX.** When the forward-run validation (#1) exists, all these
 become parallel, measurable layers to rank against VOL-GEX. The **proprietary
 metrics** (Volatility Trigger / Absolute Gamma / Hedge Wall) are **now also built**
 (`proprietary.py`, optional `proprietary` field) — but as **reverse-engineered
 approximations on the OI-gamma basis, NOT official SpotGamma values**, living
-alongside the locked VOL-based `levels`. With these, every heavy item on the
+alongside the locked VOL-based `levels`.
+
+> **HONESTY FIX — `volatility_trigger`'s METHOD contradicts its cited source.** The
+> code (`proprietary.py:87-107`) computes the Volatility Trigger as the **cumulative
+> net-OI-gamma zero-crossing — a simple OI crossover**. The cited research
+> (`research/archive/riset-spotgamma.md:266`, also :444) states SpotGamma's
+> Volatility Trigger is **[PROPRIETARY] … from the actual distribution of dealer
+> gamma across strikes, NOT a simple OI crossover.** So the implemented method
+> **directly contradicts** the documented description of the real metric: it is a
+> tractable **PROXY**, not a faithful reverse-engineering. (`hedge_wall`,
+> `proprietary.py:123-130`, argmax `|net OI-gamma|`, likewise diverges from the
+> doc's argmax `|total gamma|` near-spot hypothesis, `mega-riset2.md:157`;
+> `abs_gamma_strike` DOES match the doc's [FAKTA] argmax-total-gamma definition.)
+> The existing EXPERIMENTAL/INFERRED labels are honest; the new caveat is only that
+> VT's OI-crossover method is the wrong *mechanism* for the named level. **Whether to
+> rename the field is a pending HUMAN decision — no code/field rename here.**
+
+With these, every heavy item on the
 original backlog is built (all EXPERIMENTAL); what remains is the forward-run
 **validation** that would move any of them from "mechanism" to "evidence".
 

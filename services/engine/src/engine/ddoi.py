@@ -2,9 +2,15 @@
 
 EXPERIMENTAL / NOT PRICE-VALIDATED. Additive research lens that lives ALONGSIDE the
 locked VOL-based product GEX (it does NOT replace or modify ``engine.exposure``).
-On the validated 8-day exploratory run this read FLAT vs the VOL baseline
-(sign-agreement 49.2% vs 50.8%, Δ within noise) — the *machine* is sound, the edge
-is not proven. Consumers/FE MUST treat ``ddoi`` as experimental, not authoritative.
+The *machine* is sound, but the edge is UNPROVEN — and the only head-to-head figure
+that exists must NOT be read as a 0DTE result. The "49.2% vs 50.8%" sign-agreement
+(DDOI vs VOL baseline) was computed on the QUARTERLY ``ES.OPT``/``NQ.OPT`` parent pull
+(multi-expiry, ~9–16 days out), NOT on true 0DTE
+(docs/research/empirical/symbology-0dte-findings.md). On true 0DTE the cross-day ΔOI
+reconciliation that comparison relies on is STRUCTURALLY IMPOSSIBLE: each day is its own
+daily expiry with ZERO cross-day option-root overlap, so there is no carry-in OI to diff
+against. DDOI has therefore NEVER been validly evaluated on 0DTE — the edge is OPEN, not
+flat-proven. Consumers/FE MUST treat ``ddoi`` as experimental, not authoritative.
 
 The idea (docs/research/empirical/track-f-ddoi-exposure-vol.md, TRACK D.6)
 =========================================================================
