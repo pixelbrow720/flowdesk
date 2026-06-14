@@ -60,6 +60,7 @@ from analysis.harness.synthetic_oi_eval import (  # noqa: E402
     DEFAULT_SHUFFLE_SEEDS,
     FlowTrade,
     eval_flow_term,
+    eval_tiered_term,
 )
 # Reuse run_validation's data-loading machinery verbatim (no duplication, no edits there).
 from analysis.harness.run_validation import (  # noqa: E402
@@ -291,9 +292,16 @@ def run_day(instr: str, day: str, defs: dict) -> dict | None:
         return {"day": day, "instr": instr, "status": "degenerate-profile",
                 "n_shared": panel["n"]}
 
+    # ---- #6 size-TIERED arm (additive; engine tier_weight + constants, reference = #4 plain).
+    # Reuses the SAME rows/trades/M/fwd/seeds; the headline asks whether size-tiering adds
+    # per-strike STRUCTURE OVER the plain #4 flow profile (not over pure OI). The engine
+    # default retail_weight=0.0 DELETES retail — the panel carries the surviving-leg counts.
+    tiered = eval_tiered_term(rows, trades, instr, M, fwd, w=W_OPERATING,
+                              seeds=DEFAULT_SHUFFLE_SEEDS)
+
     return {
         "day": day, "instr": instr, "status": "ok", "fwd": fwd, "ref_et": ref_label,
-        "n_legs": len(legs), "n_trades": len(trades), "panel": panel,
+        "n_legs": len(legs), "n_trades": len(trades), "panel": panel, "tiered": tiered,
     }
 
 
@@ -315,19 +323,39 @@ def _fmt_panel(m: dict) -> str:
             f"n={m['n']}")
 
 
+def _fmt_tiered(m: dict) -> str:
+    """One-line #6 tiered rendering. Reference is the PLAIN #4 flow profile (does tiering add
+    structure OVER plain flow), so resid_r2/flow_norm_ratio/argmaxΔ are tiered-vs-PLAIN. Leads
+    with the retail-deletion survivor count (the degeneracy headline) + tiered-vs-OI magnitude."""
+    return (f"survive={m['n_surviving_trades']}/{m['n_trades']} trades "
+            f"({m['n_deleted_trades']} retail-deleted) legs={m['n_surviving_legs']}/{m['n_plain_legs']}  "
+            f"tiered-vs-OI ratio={_f(m['vs_static_norm_ratio'])}  ||  "
+            f"NORMratio_GAP(real-shuf)={_f(m['norm_ratio_gap'])}  "
+            f"argmaxΔ_GAP={_f(m['argmax_gap'], 2)}  ||  "
+            f"tiered-vs-PLAIN: flow_norm_ratio={_f(m['flow_norm_ratio'])} "
+            f"shuf={_f(m['shuffle_norm_mean'])}"
+            f"[{_f(m['shuffle_norm_min'], 2)},{_f(m['shuffle_norm_max'], 2)}]  "
+            f"resid_r2={_f(m['residual_r2'])} c={_f(m['best_fit_scalar_c'], 2)}  "
+            f"argmaxΔ={m['argmax_distance']} sign_agr={_f(m['sign_agreement'], 2)} "
+            f"n={m['n']}")
+
+
 def main() -> int:
     if not os.path.exists(DEF):
         print(f"ERROR: definition file missing: {DEF}\n"
               f"This harness needs the gitignored data/raw/ pull on disk.")
         return 2
 
-    print("==== SYNTHETIC-OI #4 FLOW-TERM — EOD STRUCTURAL eval (gex[w=1] vs gex_static[w=0]) ====")
+    print("==== SYNTHETIC-OI #4 FLOW-TERM + #6 TIERED — EOD STRUCTURAL eval ====")
     print("*** EXPLORATORY, n=4 correlated days, EOD STRUCTURAL (no predictive arm — OI is")
     print("    EOD-settle; intraday OI would be look-ahead). THERE IS NO HIT-RATE / NO 55%")
     print("    for this structural arm. The control-gap is the headline. ***")
-    print("Question: does the native-aggressor FLOW term (−flow)·w add per-strike STRUCTURE")
-    print("over pure OI-GEX, or is w=1 just a scalar rescale / a same-magnitude random-sign null?")
-    print("profile_static (w=0) is PURE OI-GEX (flow vanishes), the fixed reference for both arms.")
+    print("#4: does the native-aggressor FLOW term (−flow)·w add per-strike STRUCTURE over pure")
+    print("    OI-GEX, or is w=1 just a scalar rescale / a same-magnitude random-sign null?")
+    print("#6: does SIZE-TIERING the flow (engine tier_weight: retail<=5 -> 0 DELETED, block -> 1.5)")
+    print("    add structure OVER the plain #4 flow profile? Reference is the #4 flow profile,")
+    print("    NOT pure OI. retail_weight=0 DELETES retail — surviving-leg counts are reported.")
+    print("profile_static (w=0) is PURE OI-GEX (flow vanishes), the fixed reference for the #4 arm.")
     print("SHUFFLE-FLOW control permutes per-trade aggressor SIGN (kills direction, keeps")
     print(f"magnitude); real must beat it. Shuffle seeds: {list(DEFAULT_SHUFFLE_SEEDS)}.")
     print("Flows + OI are WHOLE-DAY/EOD; gamma is read at the latest late-session minute that")
@@ -348,7 +376,8 @@ def main() -> int:
             m = res["panel"]
             print(f"  {day} {instr}  F={res['fwd']:.0f}  strikes={m['n']} "
                   f"legs={res['n_legs']} trades={res['n_trades']}  gamma@{res['ref_et']}ET")
-            print(f"      {_fmt_panel(m)}")
+            print(f"      #4 flow:   {_fmt_panel(m)}")
+            print(f"      #6 tiered: {_fmt_tiered(res['tiered'])}")
 
     ok = [r for r in rows if r["status"] == "ok"]
     if not ok:
@@ -381,18 +410,21 @@ def main() -> int:
           f"NEVER YES.")
 
     agg: dict = {}
-    for instr in INSTRS:
-        rows_i = [r for r in ok if r["instr"] == instr]
-        if not rows_i:
-            print(f"\n    [{instr}] no usable rows.")
-            continue
-        ps = [r["panel"] for r in rows_i]
+    agg_tiered: dict = {}
+
+    def _build_agg(rows_i: list, key: str) -> dict:
+        """Per-instrument aggregate of one arm's panels (key='panel' #4, or 'tiered' #6).
+
+        Both arms expose the SAME gap/metric keys (eval_tiered_term mirrors eval_flow_term),
+        so the EXISTING sign-consistency + single-day-domination tally applies UNCHANGED.
+        """
+        ps = [r[key] for r in rows_i]
         # PER-DAY norm_ratio_gap list (with day labels) — the basis for the sign tally and
         # the single-day-domination check. A POSITIVE MEAN gap is meaningless if the per-day
         # gaps flip sign (coin-flip) or one day dominates the signed sum (single-day artefact).
-        day_gaps = [(r["day"], r["panel"]["norm_ratio_gap"]) for r in rows_i]
+        day_gaps = [(r["day"], r[key]["norm_ratio_gap"]) for r in rows_i]
         tally = _gap_sign_tally(day_gaps)
-        a = {
+        return {
             "n_days": len(ps),
             "flow_norm_ratio": _mean([p["flow_norm_ratio"] for p in ps]),
             "residual_r2": _mean([p["residual_r2"] for p in ps]),
@@ -411,8 +443,11 @@ def main() -> int:
             "dom_frac": tally["dom_frac"], "sign_flip": tally["sign_flip"],
             "dominated": tally["dominated"],
         }
-        agg[instr] = a
-        print(f"\n    [{instr}] {a['n_days']} day(s)")
+
+    def _print_agg(instr: str, a: dict, ref_label: str) -> None:
+        """Print one arm's aggregate block. ``ref_label`` names the comparison reference
+        ('pure OI-GEX' for #4, 'plain #4 flow' for #6)."""
+        print(f"\n    [{instr}] {a['n_days']} day(s)  [reference: {ref_label}]")
         print(f"      mean flow_norm_ratio={_f(a['flow_norm_ratio'])} "
               f"(shuffle={_f(a['shuffle_norm_mean'])})  "
               f"mean NORMratio_GAP={_f(a['norm_ratio_gap'])}")
@@ -433,6 +468,38 @@ def main() -> int:
                    else f"its |gap| is {a['dom_frac'] * 100:.0f}% of the |signed sum|")
             print(f"      [SINGLE-DAY-DOMINATION] {a['dom_day']} ({_f(a['dom_gap'])}) "
                   f"dominates the mean: {why} => the positive mean is a single-day artefact.")
+
+    for instr in INSTRS:
+        rows_i = [r for r in ok if r["instr"] == instr]
+        if not rows_i:
+            print(f"\n    [{instr}] no usable rows.")
+            continue
+        # ---- #4 FLOW arm (reference = pure OI-GEX) -----------------------------------
+        a = _build_agg(rows_i, "panel")
+        agg[instr] = a
+        print(f"\n    === [{instr}] #4 FLOW arm (does flow add structure OVER pure OI) ===")
+        _print_agg(instr, a, "pure OI-GEX (w=0)")
+
+        # ---- #6 TIERED arm (reference = plain #4 flow profile) -----------------------
+        at = _build_agg(rows_i, "tiered")
+        agg_tiered[instr] = at
+        # Retail-deletion survivor accounting (the degeneracy headline): mean across days +
+        # per-day so a near-total retail wipeout is VISIBLE, not hidden behind the metrics.
+        ts = [r["tiered"] for r in rows_i]
+        surv_mean = _mean([t["n_surviving_trades"] / t["n_trades"]
+                           for t in ts if t["n_trades"] > 0])
+        per_day_surv = "  ".join(
+            f"{r['day']}={r['tiered']['n_surviving_trades']}/{r['tiered']['n_trades']}t"
+            f",{r['tiered']['n_surviving_legs']}/{r['tiered']['n_plain_legs']}L"
+            for r in rows_i
+        )
+        print(f"\n    === [{instr}] #6 TIERED arm (does size-tiering add structure OVER "
+              f"plain #4 flow) ===")
+        print(f"      RETAIL-DELETION survival: mean {surv_mean * 100:.0f}% of trades survive; "
+              f"per-day surviving trades/legs: {per_day_surv}")
+        print(f"      mean tiered-vs-OI flow_norm_ratio="
+              f"{_f(_mean([t['vs_static_norm_ratio'] for t in ts]))} (magnitude context)")
+        _print_agg(instr, at, "plain #4 flow profile (w=1)")
 
     # ---- DERIVED HONEST VERDICT (per instrument, from the numbers above) --------------
     def _verdict(a: dict) -> str:
@@ -504,9 +571,14 @@ def main() -> int:
                 "direction not separable from random at n=4.")
 
     print("\n  -------- DERIVED VERDICT (per instrument, from the numbers + thresholds above) --------")
+    print("    The SAME gate (sign-consistency + single-day-domination + n_days >= "
+          f"{MIN_DAYS_FOR_EDGE}) is applied to BOTH arms; at n=4 a YES is unreachable by "
+          "construction.")
     for instr in INSTRS:
         if instr in agg:
-            print(f"    [{instr}] {_verdict(agg[instr])}")
+            print(f"    [{instr}] #4 FLOW  (vs pure OI):    {_verdict(agg[instr])}")
+        if instr in agg_tiered:
+            print(f"    [{instr}] #6 TIERED (vs plain flow): {_verdict(agg_tiered[instr])}")
 
     print("\n  READ: these are the numbers the code produced and a verdict DERIVED from the")
     print("  printed thresholds — NOT a validated finding. 4 correlated days is far too small;")

@@ -33,15 +33,22 @@ import pytest
 from analysis.harness.synthetic_oi_eval import (
     FlowTrade,
     eval_flow_term,
+    eval_tiered_term,
     flow_term_metrics,
     net_flow_from_trades,
     shuffle_flow_signs,
     synthetic_gex_by_strike,
+    tiered_net_flow_from_trades,
 )
 
 # synthetic_oi_eval's import added the engine src to sys.path; these now resolve.
 from engine.exposure import DEALER_SIGN_PUT, GEX_PCT_SCALE, ChainRow  # noqa: E402
-from engine.synthetic_oi import q_per_leg, synthetic_gex  # noqa: E402
+from engine.synthetic_oi import (  # noqa: E402
+    BLOCK_MIN_SIZE,
+    RETAIL_MAX_SIZE,
+    q_per_leg,
+    synthetic_gex,
+)
 
 # Instrument multiplier (/ES = 50) and a representative forward. The exact values
 # never matter to the identity tests — only that the SAME M/F feed both the engine
@@ -387,3 +394,159 @@ def test_eval_flow_term_matches_its_parts() -> None:
     assert res["best_fit_scalar_c"] == pytest.approx(expected["best_fit_scalar_c"], abs=1e-12)
     assert res["residual_r2"] == pytest.approx(expected["residual_r2"], abs=1e-12)
     assert res["flow_norm_ratio"] == pytest.approx(expected["flow_norm_ratio"], abs=1e-12)
+
+
+# --------------------------------------------------------------------------- #
+# 7. tiered_net_flow_from_trades — the synthetic-OI #6 size-TIERED flow map.
+#
+# THE CORRECTNESS ANCHOR for the tiered constructor (the advisor-required lock):
+# with retail_weight == block_weight == 1.0 EVERY tier_weight is 1.0, so the tiered
+# map must reduce EXACTLY (math.isclose per leg, identical key set) to the plain
+# net_flow_from_trades. If this ever drifts, the tiered constructor is unfaithful and
+# the whole #6 arm is meaningless. Sizes deliberately span all three tiers (retail
+# <=5, mid, block >=50 for /ES) AND multiple trades share a leg, so the reduction
+# exercises summation, not just a single-trade pass-through.
+# --------------------------------------------------------------------------- #
+def test_tiered_reduces_to_plain_when_all_weights_one() -> None:
+    trades = [
+        FlowTrade(strike=5000.0, is_call=True, size=3.0, sign=+1),    # retail
+        FlowTrade(strike=5000.0, is_call=True, size=60.0, sign=-1),   # block (/ES)
+        FlowTrade(strike=5000.0, is_call=False, size=10.0, sign=+1),  # mid
+        FlowTrade(strike=5010.0, is_call=True, size=2.0, sign=+1),    # retail
+        FlowTrade(strike=5010.0, is_call=False, size=55.0, sign=-1),  # block (/ES)
+    ]
+    plain = net_flow_from_trades(trades)
+    # all tiers weight 1.0 -> tier_weight is the identity -> EXACT reduction to #4.
+    tiered = tiered_net_flow_from_trades(
+        trades, "ES", retail_weight=1.0, block_weight=1.0
+    )
+    assert set(tiered.keys()) == set(plain.keys())
+    for leg in plain:
+        assert math.isclose(tiered[leg], plain[leg], rel_tol=1e-12, abs_tol=1e-12), leg
+
+
+def test_tiered_map_sums_to_engine_scalar_anchor() -> None:
+    # The sign-free aggregator anchor must hold for ANY flow map, including a TIERED one:
+    # sum(synthetic_gex_by_strike(rows, tiered, ...)) == engine synthetic_gex(rows, tiered, ...).
+    # Build a real tiered map from trades on the fixture strikes, then assert the identity at
+    # every w (same load-bearing identity as test_aggregator_sums_to_engine_scalar).
+    trades = [
+        FlowTrade(strike=5000.0, is_call=True, size=60.0, sign=+1),   # block
+        FlowTrade(strike=5000.0, is_call=False, size=3.0, sign=-1),   # retail -> deleted
+        FlowTrade(strike=5010.0, is_call=False, size=80.0, sign=-1),  # block
+        FlowTrade(strike=5020.0, is_call=True, size=10.0, sign=+1),   # mid
+        FlowTrade(strike=5030.0, is_call=True, size=100.0, sign=+1),  # thin -> skipped
+    ]
+    tiered = tiered_net_flow_from_trades(trades, "ES")  # engine defaults (retail deleted)
+    for w in (0.0, 0.5, 1.0):
+        by_strike = synthetic_gex_by_strike(ROWS, tiered, M, F, w)
+        engine_scalar = synthetic_gex(ROWS, tiered, M, F, w)
+        assert math.isclose(
+            sum(by_strike.values()), engine_scalar, rel_tol=1e-12, abs_tol=1e-6
+        ), f"tiered aggregator != engine scalar at w={w}"
+        assert 5030.0 not in by_strike  # thin strike still skipped under a tiered map
+
+
+def test_tiered_default_deletes_retail_and_upweights_block() -> None:
+    # Engine defaults: retail_weight=0.0 (DELETES retail), block_weight=1.5, /ES block_min=50.
+    # One leg, three trades spanning all tiers, hand-computed.
+    trades = [
+        FlowTrade(strike=5000.0, is_call=True, size=3.0, sign=+1),    # retail -> 3·0.0   = 0
+        FlowTrade(strike=5000.0, is_call=True, size=10.0, sign=+1),   # mid    -> 10·1.0  = +10
+        FlowTrade(strike=5000.0, is_call=True, size=60.0, sign=-1),   # block  -> -60·1.5 = -90
+    ]
+    plain = net_flow_from_trades(trades)
+    assert plain[(5000.0, True)] == pytest.approx(3.0 + 10.0 - 60.0, abs=1e-12)  # = -47
+    tiered = tiered_net_flow_from_trades(trades, "ES")  # defaults
+    # retail DELETED (not reweighted): +10 (mid) − 90 (block·1.5) = −80.
+    assert tiered[(5000.0, True)] == pytest.approx(10.0 - 90.0, abs=1e-12)
+
+
+def test_tiered_block_min_is_per_instrument() -> None:
+    # size=30 is MID for /ES (block_min=50 -> weight 1.0) but BLOCK for /NQ
+    # (block_min=25 -> weight 1.5). Proves the per-instrument block_min default is
+    # sourced from engine.synthetic_oi.BLOCK_MIN_SIZE, not hardcoded.
+    assert BLOCK_MIN_SIZE["ES"] == 50.0 and BLOCK_MIN_SIZE["NQ"] == 25.0
+    trades = [FlowTrade(strike=5000.0, is_call=True, size=30.0, sign=+1)]
+    es = tiered_net_flow_from_trades(trades, "ES")
+    nq = tiered_net_flow_from_trades(trades, "NQ")
+    assert es[(5000.0, True)] == pytest.approx(30.0 * 1.0, abs=1e-12)   # mid for /ES
+    assert nq[(5000.0, True)] == pytest.approx(30.0 * 1.5, abs=1e-12)   # block for /NQ
+
+
+def test_tiered_all_retail_collapses_to_empty_flow() -> None:
+    # The documented DEGENERACY: an all-retail tape (every size <= RETAIL_MAX_SIZE) is
+    # DELETED by the default retail_weight=0.0, so every leg's tiered net flow is 0.0
+    # while the plain net flow is materially nonzero. This is the collapse the runner
+    # reports as the finding (tiered flow term -> 0 -> profile_tiered -> pure OI).
+    assert RETAIL_MAX_SIZE == 5.0
+    trades = [
+        FlowTrade(strike=5000.0, is_call=True, size=2.0, sign=+1),
+        FlowTrade(strike=5010.0, is_call=False, size=5.0, sign=-1),
+        FlowTrade(strike=5020.0, is_call=True, size=1.0, sign=+1),
+    ]
+    plain = net_flow_from_trades(trades)
+    assert any(v != 0.0 for v in plain.values())  # plain flow is real
+    tiered = tiered_net_flow_from_trades(trades, "ES")  # defaults -> all deleted
+    assert all(v == 0.0 for v in tiered.values())  # every retail leg zeroed
+
+
+# --------------------------------------------------------------------------- #
+# 8. eval_tiered_term — the #6 integration wiring lock.
+#
+# The tiered arm's REFERENCE is the PLAIN #4 flow profile (NOT pure OI): the #6 question
+# is whether size-tiering adds structure OVER the plain flow term. Lock that the "real"
+# arm is EXACTLY flow_term_metrics(profile_tiered, profile_plain) built from the parts,
+# and that the degeneracy bookkeeping (deleted/surviving counts) is correct.
+# --------------------------------------------------------------------------- #
+def test_eval_tiered_term_matches_its_parts_and_counts() -> None:
+    trades = [
+        FlowTrade(strike=5000.0, is_call=True, size=60.0, sign=+1),   # block
+        FlowTrade(strike=5000.0, is_call=False, size=3.0, sign=-1),   # retail -> deleted
+        FlowTrade(strike=5010.0, is_call=True, size=10.0, sign=+1),   # mid
+        FlowTrade(strike=5010.0, is_call=False, size=80.0, sign=-1),  # block
+        FlowTrade(strike=5020.0, is_call=True, size=2.0, sign=+1),    # retail -> deleted
+        FlowTrade(strike=5030.0, is_call=True, size=100.0, sign=+1),  # thin strike (block)
+    ]
+    net_plain = net_flow_from_trades(trades)
+    net_tiered = tiered_net_flow_from_trades(trades, "ES")  # defaults
+    profile_plain = synthetic_gex_by_strike(ROWS, net_plain, M, F, 1.0)
+    profile_tiered = synthetic_gex_by_strike(ROWS, net_tiered, M, F, 1.0)
+    expected = flow_term_metrics(profile_tiered, profile_plain)
+
+    res = eval_tiered_term(ROWS, trades, "ES", M, F)
+
+    assert res["w"] == 1.0
+    assert res["n"] == 3  # three non-thin shared strikes (5030 thin -> excluded)
+    assert res["n"] == expected["n"]
+    assert res["best_fit_scalar_c"] == pytest.approx(expected["best_fit_scalar_c"], abs=1e-12)
+    assert res["residual_r2"] == pytest.approx(expected["residual_r2"], abs=1e-12)
+    assert res["flow_norm_ratio"] == pytest.approx(expected["flow_norm_ratio"], abs=1e-12)
+
+    # degeneracy bookkeeping: two retail trades (size 3, 2) are DELETED.
+    assert res["n_trades"] == 6
+    assert res["n_deleted_trades"] == 2
+    assert res["n_surviving_trades"] == 4
+    assert res["n_plain_legs"] == 6  # all six legs carry plain flow
+    # surviving tiered legs = nonzero tiered values: 5000c, 5010c, 5010p, 5030c (4).
+    assert res["n_surviving_legs"] == 4
+
+
+def test_eval_tiered_term_reduces_to_plain_arm_when_weights_one() -> None:
+    # With all tier weights 1.0 the tiered profile EQUALS the plain flow profile, so the
+    # tiered arm's "real" comparison is profile vs ITSELF: residual_r2 == 1.0, the flow
+    # term vs its own reference is zero magnitude, argmax does not move. This propagates
+    # the constructor reduction (test 7) through the full integrator.
+    trades = [
+        FlowTrade(strike=5000.0, is_call=True, size=60.0, sign=+1),
+        FlowTrade(strike=5010.0, is_call=False, size=10.0, sign=-1),
+        FlowTrade(strike=5020.0, is_call=True, size=3.0, sign=+1),
+    ]
+    res = eval_tiered_term(
+        ROWS, trades, "ES", M, F, retail_weight=1.0, block_weight=1.0
+    )
+    assert res["n"] == 3
+    assert res["flow_norm_ratio"] == pytest.approx(0.0, abs=1e-12)  # tiered == plain
+    assert res["residual_r2"] == pytest.approx(1.0, abs=1e-12)
+    assert res["argmax_distance"] == pytest.approx(0.0, abs=1e-12)
+    assert res["n_deleted_trades"] == 0  # nothing deleted at weight 1.0

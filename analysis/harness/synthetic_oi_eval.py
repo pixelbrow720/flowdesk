@@ -80,17 +80,26 @@ if _ENGINE_SRC not in sys.path:
     sys.path.insert(0, _ENGINE_SRC)
 
 from engine.exposure import GEX_PCT_SCALE  # noqa: E402  (locked GEX scale, not hardcoded)
-from engine.synthetic_oi import q_per_leg  # noqa: E402  (locked #4 per-leg Q; sign baked in)
+from engine.synthetic_oi import (  # noqa: E402  (locked #4 per-leg Q + #6 size-tiering)
+    BLOCK_MIN_SIZE,
+    BLOCK_TIER_WEIGHT,
+    RETAIL_MAX_SIZE,
+    RETAIL_TIER_WEIGHT,
+    q_per_leg,
+    tier_weight,
+)
 
 __all__ = [
     "FlowKey",
     "FlowTrade",
     "DEFAULT_SHUFFLE_SEEDS",
     "net_flow_from_trades",
+    "tiered_net_flow_from_trades",
     "synthetic_gex_by_strike",
     "flow_term_metrics",
     "shuffle_flow_signs",
     "eval_flow_term",
+    "eval_tiered_term",
 ]
 
 #: Per-leg key for the net-aggressor-flow map: (strike, is_call). Matches
@@ -133,6 +142,55 @@ def net_flow_from_trades(trades: Sequence[FlowTrade]) -> dict:
     for t in trades:
         key = (float(t.strike), bool(t.is_call))
         out[key] = out.get(key, 0.0) + float(t.sign) * float(t.size)
+    return out
+
+
+def _resolve_block_min(instrument: str, block_min: Optional[float]) -> float:
+    """Per-instrument block-size floor: explicit ``block_min`` wins, else the locked
+    engine default ``engine.synthetic_oi.BLOCK_MIN_SIZE[instrument]`` (/ES 50, /NQ 25)."""
+    if block_min is not None:
+        return float(block_min)
+    return float(BLOCK_MIN_SIZE[instrument])
+
+
+def tiered_net_flow_from_trades(
+    trades: Sequence[FlowTrade],
+    instrument: str,
+    *,
+    retail_max: float = RETAIL_MAX_SIZE,
+    block_min: Optional[float] = None,
+    retail_weight: float = RETAIL_TIER_WEIGHT,
+    block_weight: float = BLOCK_TIER_WEIGHT,
+) -> dict:
+    """Σ ``sign·size·tier_weight(size)`` per leg — the synthetic-OI #6 size-TIERED flow map.
+
+    The size-tier multiplier is the LOCKED ``engine.synthetic_oi.tier_weight`` (imported,
+    NOT reimplemented): ``size <= retail_max`` -> ``retail_weight``; ``size >= block_min``
+    -> ``block_weight``; else ``1.0``. ``block_min`` defaults per-instrument from the engine
+    ``BLOCK_MIN_SIZE`` (/ES 50, /NQ 25); the weight defaults are the engine constants.
+
+    DEGENERACY WARNING (the engine's actual default behaviour): ``retail_weight == 0.0``
+    DELETES every retail trade (size <= retail_max) outright — it is NOT a reweight. On a
+    0DTE tape dominated by small lots this can erase most of the flow, collapsing the tiered
+    flow term toward zero (so ``gex_tiered`` -> ``gex_static`` pure OI). The runner reports the
+    surviving-leg/trade count per day so this collapse is VISIBLE, not hidden.
+
+    With ``retail_weight == block_weight == 1.0`` every ``tier_weight`` is 1.0, so this reduces
+    EXACTLY to :func:`net_flow_from_trades` (locked by the reduction-property test). Keys are
+    ``(float(strike), is_call)`` to match ``q_per_leg``'s lookup.
+    """
+    bmin = _resolve_block_min(instrument, block_min)
+    out: dict = {}
+    for t in trades:
+        tw = tier_weight(
+            float(t.size),
+            retail_max=retail_max,
+            block_min=bmin,
+            retail_weight=retail_weight,
+            block_weight=block_weight,
+        )
+        key = (float(t.strike), bool(t.is_call))
+        out[key] = out.get(key, 0.0) + float(t.sign) * float(t.size) * tw
     return out
 
 
@@ -416,4 +474,158 @@ def eval_flow_term(
         "norm_ratio_gap": norm_ratio_gap,
         "argmax_gap": argmax_gap,
         "n_seeds": len(seeds),
+    }
+
+
+def _shuffle_trades(trades: Sequence[FlowTrade], seed: int) -> List[FlowTrade]:
+    """Permute the aggressor SIGN across trades (keep strike/is_call/size), return new trades.
+
+    The SAME seeded permutation as :func:`shuffle_flow_signs` (identical
+    ``random.Random(seed).shuffle`` call), but returns the re-signed :class:`FlowTrade`
+    list so a PER-TRADE size weighting (tier_weight) can be re-applied AFTER the shuffle —
+    :func:`shuffle_flow_signs` nets immediately and so cannot feed the tiered constructor.
+    For a given seed both produce the same sign assignment, so the #4 and #6 shuffle nulls
+    are the SAME directional null, just with vs without the size tier.
+    """
+    signs = [int(t.sign) for t in trades]
+    perm = list(signs)
+    random.Random(seed).shuffle(perm)
+    return [
+        FlowTrade(strike=t.strike, is_call=t.is_call, size=t.size, sign=sgn)
+        for t, sgn in zip(trades, perm)
+    ]
+
+
+def eval_tiered_term(
+    rows: Sequence,
+    trades: Sequence[FlowTrade],
+    instrument: str,
+    M: float,
+    F: float,
+    *,
+    w: float = 1.0,
+    seeds: Sequence[int] = DEFAULT_SHUFFLE_SEEDS,
+    retail_max: float = RETAIL_MAX_SIZE,
+    block_min: Optional[float] = None,
+    retail_weight: float = RETAIL_TIER_WEIGHT,
+    block_weight: float = BLOCK_TIER_WEIGHT,
+) -> dict:
+    """Synthetic-OI #6 size-TIERED arm: does size-tiering add STRUCTURE OVER the plain #4 flow?
+
+    Builds, on the SAME solved gammas + same ``s_static·OI`` anchor as :func:`eval_flow_term`:
+      * ``profile_static`` — synthetic #4 GEX at ``w=0`` (PURE OI-GEX), context reference.
+      * ``profile_plain``  — synthetic #4 GEX at ``w`` from the PLAIN net flow. THIS is the
+                             tiered arm's fixed reference: the #6 headline asks whether tiering
+                             moves the profile OVER (beyond) the plain flow term, not over OI.
+      * ``profile_tiered`` — synthetic #6 GEX at ``w`` from the size-TIERED net flow
+                             (:func:`tiered_net_flow_from_trades`; ``tier_weight`` imported).
+
+    HEADLINE (``real``) = :func:`flow_term_metrics`\\(profile_tiered, profile_plain): does the
+    tiered profile add per-strike structure OVER the plain flow profile?
+      * ``residual_r2`` ≈ 1 ⇒ tiered ≈ c·plain ⇒ tiering is just a rescale of plain flow (a
+        null — adds NO new shape).
+      * ``flow_norm_ratio`` = ‖tiered − plain‖₂ / ‖plain‖₂ — how far tiering moves the profile
+        relative to the plain flow profile.
+      * ``argmax_distance`` — does tiering MOVE the dominant strike off where plain put it.
+
+    SHUFFLE-SIGN control: for each seed, permute the per-trade aggressor sign
+    (:func:`_shuffle_trades`), rebuild the TIERED flow + its profile, and compare to the SAME
+    fixed ``profile_plain``. The real tiered profile must beat this same-magnitude random-sign
+    tiered null on ``flow_norm_ratio`` / ``argmax_distance`` to carry directional structure
+    that the plain flow term does not already have.
+
+    DEGENERACY (reported, never hidden): with ``retail_weight == 0.0`` (the engine default) the
+    tiered constructor DELETES every retail trade. On a small-lot 0DTE tape this can erase most
+    of the flow, collapsing ``profile_tiered`` toward ``profile_static`` (pure OI). The returned
+    ``n_surviving_trades`` / ``n_surviving_legs`` / ``n_deleted_trades`` expose that collapse so
+    a near-zero tiered flow term is visible as the finding, not mistaken for "adds structure".
+    ``vs_static_norm_ratio`` (tiered vs pure-OI) gives the magnitude context.
+
+    Returns a flat dict whose gap/shuffle/metric keys MIRROR :func:`eval_flow_term` so the
+    runner's sign-consistency + single-day-domination + MIN_DAYS gate applies UNCHANGED, plus
+    the tiered-specific degeneracy fields.
+    """
+    bmin = _resolve_block_min(instrument, block_min)
+    tier_kw = dict(
+        retail_max=retail_max,
+        block_min=bmin,
+        retail_weight=retail_weight,
+        block_weight=block_weight,
+    )
+
+    net_plain = net_flow_from_trades(trades)
+    net_tiered = tiered_net_flow_from_trades(trades, instrument, **tier_kw)
+
+    profile_static = synthetic_gex_by_strike(rows, net_plain, M, F, 0.0)
+    profile_plain = synthetic_gex_by_strike(rows, net_plain, M, F, w)
+    profile_tiered = synthetic_gex_by_strike(rows, net_tiered, M, F, w)
+
+    real = flow_term_metrics(profile_tiered, profile_plain)
+    vs_static = flow_term_metrics(profile_tiered, profile_static)
+
+    shuf_norm: List[float] = []
+    shuf_argmax: List[float] = []
+    for sd in seeds:
+        shuf_tr = _shuffle_trades(trades, sd)
+        shuf_tiered = tiered_net_flow_from_trades(shuf_tr, instrument, **tier_kw)
+        shuf_gex = synthetic_gex_by_strike(rows, shuf_tiered, M, F, w)
+        sm = flow_term_metrics(shuf_gex, profile_plain)
+        shuf_norm.append(sm["flow_norm_ratio"])
+        if sm["argmax_distance"] is not None:
+            shuf_argmax.append(float(sm["argmax_distance"]))
+
+    valid_norm = [x for x in shuf_norm if not (isinstance(x, float) and math.isnan(x))]
+    shuffle_norm_mean = _mean(valid_norm)
+    shuffle_norm_min = min(valid_norm) if valid_norm else float("nan")
+    shuffle_norm_max = max(valid_norm) if valid_norm else float("nan")
+    shuffle_argmax_mean = _mean(shuf_argmax) if shuf_argmax else float("nan")
+
+    real_norm = real["flow_norm_ratio"]
+    norm_ratio_gap = (
+        real_norm - shuffle_norm_mean
+        if not (
+            (isinstance(real_norm, float) and math.isnan(real_norm))
+            or math.isnan(shuffle_norm_mean)
+        )
+        else float("nan")
+    )
+    real_argmax = real["argmax_distance"]
+    argmax_gap = (
+        float(real_argmax) - shuffle_argmax_mean
+        if (real_argmax is not None and not math.isnan(shuffle_argmax_mean))
+        else float("nan")
+    )
+
+    # ---- DEGENERACY bookkeeping: how much survives the retail rule (the STOP-check) -------
+    n_deleted = sum(
+        1 for t in trades if tier_weight(float(t.size), **tier_kw) == 0.0
+    )
+    n_surviving_trades = len(trades) - n_deleted
+    n_surviving_legs = sum(1 for v in net_tiered.values() if v != 0.0)
+    n_plain_legs = sum(1 for v in net_plain.values() if v != 0.0)
+
+    return {
+        "w": w,
+        "n": real["n"],
+        "best_fit_scalar_c": real["best_fit_scalar_c"],
+        "residual_r2": real["residual_r2"],
+        "flow_norm_ratio": real_norm,
+        "argmax_distance": real_argmax,
+        "sign_agreement": real["sign_agreement"],
+        "gex_argmax_strike": real["gex_argmax_strike"],
+        "static_argmax_strike": real["static_argmax_strike"],
+        "shuffle_norm_mean": shuffle_norm_mean,
+        "shuffle_norm_min": shuffle_norm_min,
+        "shuffle_norm_max": shuffle_norm_max,
+        "shuffle_argmax_mean": shuffle_argmax_mean,
+        "norm_ratio_gap": norm_ratio_gap,
+        "argmax_gap": argmax_gap,
+        "n_seeds": len(seeds),
+        # ---- tiered-specific (the reference is the PLAIN flow profile, not OI) ----
+        "vs_static_norm_ratio": vs_static["flow_norm_ratio"],
+        "n_trades": len(trades),
+        "n_deleted_trades": n_deleted,
+        "n_surviving_trades": n_surviving_trades,
+        "n_surviving_legs": n_surviving_legs,
+        "n_plain_legs": n_plain_legs,
     }
