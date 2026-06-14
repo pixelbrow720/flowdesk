@@ -83,6 +83,22 @@ they do **not** close gap #1.
 > reconciliation form cannot be on 0DTE.** Whether DDOI carries a measurable edge
 > under a **0DTE-valid (intraday, same-session)** evaluation is **OPEN and
 > unanswered** — part of the gap #1 forward-validation roadmap, not a closed result.
+
+> **UPDATE — a 0DTE-valid SAME-SESSION structural eval now exists; first result is
+> INCONCLUSIVE-leaning-redundant.** `analysis/harness/ddoi_divergence.py` (+ runner +
+> 14 tests, run through the tenor-provenance guard) compares the DDOI-GEX vs VOL-GEX
+> per-strike profiles at end-of-session on the 4 real 0DTE days. It is a
+> **structural-divergence check, NOT predictive** (the time weight `w(i)=1−2·i/(n−1)`
+> is whole-day-normalized, so per-minute predictive use would be look-ahead — out of
+> scope). Key mechanism: `Σ w(i) = 0`, so `ddoi_leg = Σ w(i)·|size|` is a **de-meaned
+> volume timing-skew** statistic, not a contracts-outstanding ΔOI; back-loaded
+> dominant legs make DDOI-GEX ≈ **−c·VOL-GEX** (same strikes, flipped sign). On n=4
+> (descriptive, incl. a crash arc) the signed correlation (≈ −0.34) is **mostly that
+> mechanical sign-flip + noise** — bimodal (2/8 rows textbook sign-flip-redundant,
+> the rest low-magnitude). **Verdict: INCONCLUSIVE-leaning-redundant — DDOI is NOT
+> shown to add information over VOL-GEX**, and the auditors advised NOT funding the
+> ~90-day predictive run on it. Still EXPERIMENTAL, still not price-validated; see
+> [`research/empirical/ddoi-structural-eval.md`](research/empirical/ddoi-structural-eval.md).
 **Do not rip out VOL-GEX.** When the forward-run validation (#1) exists, all these
 become parallel, measurable layers to rank against VOL-GEX. The **proprietary
 metrics** (Volatility Trigger / Absolute Gamma / Hedge Wall) are **now also built**

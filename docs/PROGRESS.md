@@ -53,6 +53,51 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — Fase 1: DDOI same-session structural eval (0DTE) — INCONCLUSIVE-leaning-redundant
+Mechanism / structural result, **NOT signal validation**. The first 0DTE-valid
+evaluation of DDOI (the WITHDRAWN cross-day "49.2/50.8" was quarterly contamination;
+cross-day ΔOI is impossible on 0DTE). It asks ONE contemporaneous, look-ahead-free
+question — *is DDOI-GEX structurally different from VOL-GEX, or does it collapse to
+~±VOL?* — and answers **INCONCLUSIVE-leaning-redundant** at n=4.
+
+**Built:**
+- `analysis/harness/ddoi_divergence.py` (NEW, pure core) + `run_ddoi_divergence.py`
+  (NEW, dbn runner, runs THROUGH the fail-closed tenor-provenance guard) +
+  `test_ddoi_divergence.py` (NEW, 14 tests). Full harness suite = **50 tests pass**
+  (16 provenance + 20 metrics + 14 divergence).
+- EOD / whole-session profiles only, no outcome scored ⇒ look-ahead-free by
+  construction. **NOT predictive**: the time weight `w(i)=1−2·i/(n−1)` is
+  whole-day-normalized (needs `n`=full-day trade count), so per-minute predictive use
+  is look-ahead-contaminated — explicitly out of scope.
+
+**Role-separated flow (anti-bias):** creative + expert designed → coder built →
+red-team + quant-greeks-auditor caught the **sign-flip artefact** (numeric derivation
++ read-only 4-day diagnostic) → coder upgraded the discriminator
+(`magnitude_pearson` / `best_fit_scalar_c` + `residual_r2` / `leg_timing_diagnostic`)
+→ test-author locked it (14 tests) → engine `ddoi.py` docstring corrected
+(docstring-only; engine 199 tests still pass).
+
+**VERIFIED facts:**
+- `Σ w(i) = 0` (n≥2) ⇒ `ddoi_leg = Σ w(i)·|size|` is a **de-meaned volume
+  timing-skew** statistic, NOT a contracts-outstanding ΔOI. Back-loaded dominant
+  legs ⇒ DDOI-GEX ≈ **−c·VOL-GEX** (same strikes, flipped sign).
+- Real data (n=4, descriptive, incl. crash arc): signed pearson ≈ **−0.34**,
+  aggregate `magnitude_pearson` ≈ **0.285**, **BIMODAL** (2/8 rows NQ 06-08 / NQ
+  06-10 textbook sign-flip-redundant, `|mag r|`≈0.93–0.98, `residual_r2`≈0.86–0.95;
+  rest low-magnitude/noise); `mean_late_share` ≈ **0.34** (back-loading NOT uniform).
+- **Verdict (do NOT strengthen): INCONCLUSIVE-leaning-redundant at n=4.** The −0.34
+  is mostly the mechanical sign-flip + noise, NOT new positioning info. Auditors
+  advise **NOT** funding the ~90-day predictive run on this; any 90-day run should
+  FIRST be a structural disambiguation, not predictive scoring.
+
+**DEFERRED:** a properly-powered structural disambiguation on the ~90-day forward
+pull (requires the user's manual anti-lock Databento pull).
+
+**Honest framing:** mechanism / structural, NOT signal validation. DDOI stays
+EXPERIMENTAL, alongside VOL-GEX, not price-validated. Docs:
+`research/empirical/ddoi-structural-eval.md` (NEW), `08-status-and-gaps.md` gap #2,
+this checkpoint. **Next:** Fase 2 — `volatility_trigger` dissection.
+
 ### 2026-06-14 — Fase 0: anti-forget tenor-provenance guard (infrastructure, NOT signal)
 This phase builds a fail-closed GUARD against the documented quarterly-as-0DTE
 contamination — it is **anti-forget infrastructure**, NOT validation of any signal.

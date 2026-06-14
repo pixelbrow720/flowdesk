@@ -27,7 +27,30 @@ SAME locked dealer-sign + gamma GEX template with that basis instead of VOL:
 where ``ddoi_leg = Σ_i w(i)·|size_i|`` with the intraday time weight
 ``w(i) = 1 − 2·(i/(n−1))`` (+1 for the first trade of the day on that leg, linearly
 to −1 for the last). ``ddoi_leg > 0`` ⇒ net OPENING (synthetic OI rose), ``< 0`` ⇒
-net CLOSING. This is:
+net CLOSING.
+
+CAVEAT — what ``ddoi_leg`` mathematically IS (read this before trusting the
+open/close labels). The time weight sums to EXACTLY zero over a leg's trades:
+``Σ_i w(i) = 0`` for ``n ≥ 2`` (numerically confirmed to machine epsilon for
+n=2..1000; the lone non-zero-sum case is the ``n == 1`` special case, w=+1).
+Because the weights are de-meaned, ``ddoi_leg = Σ w(i)·|size_i|`` is NOT a
+volume total and NOT a literal contracts-outstanding ΔOI — it is a DE-MEANED
+quantity equal to the (un-normalized) COVARIANCE of trade ``|size|`` with
+chronological trade position, i.e. a "volume timing-skew" statistic. So
+``ddoi_leg > 0`` means volume is FRONT-loaded (bigger trades early), ``< 0``
+means BACK-loaded (bigger trades late), ``≈ 0`` means uniform-in-time. The
+"net OPENING / net CLOSING" reading above is therefore an INTERPRETIVE heuristic
+LABELING layered on that timing skew (front-loaded → read as net-opening,
+back-loaded → read as net-closing), NOT a measured open-interest change.
+
+EMPIRICAL HONESTY NOTE — on the 4 real 0DTE days an EOD structural check
+(analysis/harness/ddoi_divergence.py) found DDOI-GEX is largely a sign-flipped /
+scalar image of VOL-GEX (DDOI ≈ −c·VOL on the dominant back-loaded legs: |magnitude|
+profile ~identical, r_abs ≈ 0.93–0.98, with the sign merely flipped), a MECHANICAL
+artefact of the back-loaded 0DTE tape plus noise elsewhere — INCONCLUSIVE and
+leaning REDUNDANT-with-VOL at n=4, and NOT price-validated.
+
+This is:
   * **non-circular** — never reads official ΔOI;
   * **orthogonal to VOL** — uses ``|size|`` + a time weight, NOT the aggressor sign,
     so it cannot telescope back to ±VOL (the bug in an earlier net-position version);
