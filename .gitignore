@@ -43,6 +43,9 @@ venv/
 tmp_*
 *.tsbuildinfo
 
+# ── Advisor scratch brief (rewritten raw per-prompt, not history) ──
+.kilo/advisor/
+
 # ── OS / editor ──
 .DS_Store
 Thumbs.db

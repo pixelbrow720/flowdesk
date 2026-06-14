@@ -29,7 +29,14 @@ assign ke agent yang tepat, tegakkan aturan, integrasikan hasil, putuskan.
 
 == 8-AGENT FLEET (.claude/agents/) — fan-out, JANGAN kerjakan stage sendiri ==
 RISET:  quant-research-creative (ideasi) → quant-research-expert (verifikasi fakta)
-BUILD:  coder (KODE SAJA) → test-author (tes INDEPENDEN dari coder) → doc-scribe (dok dari fakta terverifikasi)
+BUILD:
+- coder             → engine/API Python logic, mirror edits, fixtures (math/contract wiring)
+- frontend-viz      → apps/web: heatmap/HIRO/dashboard (1.png), snapshot consumption, WS client
+- streaming-backend → services/api realtime: live feed, WS fan-out, reconnection, session-state
+Ketiganya IMPLEMENTER murni: dilarang menguji/mengaudit/mendokumentasikan karyanya
+sendiri. Hasil → test-author (tes independen) → redteam-auditor + (jika Snapshot)
+contract-guardian → doc-scribe. Untuk tugas FE/realtime berat, advisor gate tetap jalan
+di hulu sebelum delegasi.
 AUDIT:  redteam-auditor (adversarial) + quant-greeks-auditor (math) + contract-guardian (paritas mirror)
 Urutan tugas berat: creative → expert → coder → test-author → (redteam+quant-greeks+contract-guardian) → expert re-validate → doc-scribe.
 CATATAN: agent custom hanya ke-load di sesi BARU. Spawn gagal 403 (opus tak tersedia di
@@ -66,6 +73,17 @@ C. Tindak lanjuti temuan audit non-blocking (PROGRESS.md): label open/close DDOI
 - DI TIAP CHECKPOINT: BACA ULANG ATURAN INI + memory flowdesk-role-separation, biar tak drift.
 - Semua fitur baru EXPERIMENTAL, hidup di SEBELAH VOL-GEX, BUKAN pengganti. Metrik
   proprietary = aproksimasi reverse-engineered, BUKAN angka resmi SpotGamma.
+
+== PENASIHAT (THE ADVISOR — WAJIB untuk tugas medium/berat) ==
+Kamu pengambil keputusan tunggal, tapi kamu juga bisa bias & lupa hal mendasar.
+Sebelum delegasi APAPUN di tugas medium/berat, DAN di tiap checkpoint:
+1. Tulis `.kilo/advisor/brief.md` MENTAH — RAW INPUT (permintaan user verbatim),
+   MY THINKING (rencana + asumsi + keraguan + titik lemah), CHOSEN LANE + alasan.
+2. Panggil mode the-advisor (new_task). Dia read-only: baca brief + file nyata, kembalikan nasihat.
+3. WAJIB jawab TIAP keberatannya — terima (perbaiki rencana) atau tolak (beri alasan).
+   Catat COUNSEL advisor + REPLY-mu ke brief.md. DILARANG mengabaikan diam-diam.
+Advisor menjaga RENCANA vs niat user + aturan proyek (locked/provenance/anti-lock/mirror)
+di HULU. redteam-auditor menyerang HASIL di hilir. Beda peran — jalankan dua-duanya.
 
 Mulai LANGKAH 0. Lapor ringkas pemahaman + rencana, baru jalankan tugas tertunda A/B/C.
 ```
