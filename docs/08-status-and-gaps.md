@@ -222,6 +222,30 @@ end-to-end live-WS wiring are the largest remaining FE work.
 > both-paths-equal with an independent test. Before that fix, grep the golden
 > fixture + worker tests for pinned HIRO values (a worker change will legitimately
 > move `.final` on every minute after the first). Stays DEFERRED, not fixed.
+>
+> **UPDATE (2026-06-14) — HIRO now HAS a 0DTE-valid, look-ahead-free PREDICTIVE
+> eval; result is exploratory null / underpowered-hint, NOT an edge.**
+> `analysis/harness/hiro_eval.py` (+ runner + 8 tests; full harness suite = 58
+> pass) scores `sign(delta_hiro_t)` against `sign(F_{t+k}−F_t)`. Unlike DDOI, this
+> is **legitimately predictive**: HIRO is strictly t-causal
+> (`Σ_{trades≤t} sign·δ·size·M·F`), so the predictor (`≤t`) and outcome (`>t`)
+> information sets never overlap — no whole-day normalization to contaminate it.
+> The headline is the CONTROL GAP `real − mean(shuffled-aggressor-sign)`, never the
+> raw hit-rate. **HARNESS PROVEN ALIVE** (planted positive control → hit_rate 1.0;
+> anti-correlated → 0.0), so the near-0.5 real result is a genuine "no strong edge",
+> not a dead metric. **Per-instrument three-state result** (after a red-team
+> aggregation fix — pooling ES+NQ had masked the signal): **k=15/30 = NULL** on
+> adequate-coverage ES (sign inconsistent across days, n-wtd gap ~+0.01/~0); **k=5
+> ES = SUGGESTIVE-POSITIVE but AT-THRESHOLD + UNDERPOWERED** (4/4 ES days positive,
+> n-wtd gap ~+0.047, band ~[+0.03,+0.06], fwd_cov 0.99, but n_days=4 < 5 → NOT an
+> edge); **k=5 NQ = UNDETERMINED** (forward coverage as low as 0.43, too low to
+> resolve). **Verdict: NOT a demonstrated edge, NOT a demonstrated absence.** The
+> forward is an OPTION-DERIVED parity forward (NOT a futures price); only
+> k∈{5,15,30}min tested; the ~90-day forward run was dropped by the user, so this
+> stays exploratory. The live-worker HIRO accumulation fix above is **still
+> DEFERRED** (separate backend chore — this eval runs on the offline/generator path,
+> not the worker). See
+> [`research/empirical/hiro-predictive-eval.md`](research/empirical/hiro-predictive-eval.md).
 
 ### 5. Surface / vanna / charm — WIRED ✅ (EXPERIMENTAL)
 `black76` vanna/charm and `surface.py` are no longer isolated — all are now

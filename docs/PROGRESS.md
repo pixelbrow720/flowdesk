@@ -53,6 +53,63 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — HIRO t→t+k PREDICTIVE eval built (controlled, look-ahead-free) — exploratory NULL / underpowered-hint, validated NOTHING
+The first *predictive* eval of any FlowDesk lens. HIRO earns it (DDOI did not):
+HIRO is strictly t-causal (`Σ_{trades≤t} sign·δ·size·M·F`), so a `delta_hiro_t →
+sign(F_{t+k}−F_t)` test is **legitimately look-ahead-free** (predictor uses `≤t`,
+outcome `>t`) — unlike DDOI, whose whole-day-normalized `Σw=0` weight is look-ahead-
+contaminated per-minute. **This validated NOTHING** — it is an honest exploratory
+null / underpowered-hint; only a properly-powered forward run (dropped by the user)
+could validate.
+
+**Built (markdown-adjacent code, NOT touched by doc-scribe — built earlier this
+session by the coder):**
+- `analysis/harness/hiro_eval.py` (pure core) + `run_hiro_eval.py` (dbn runner,
+  through the fail-closed tenor-provenance guard) + `test_hiro_eval.py` (8 tests).
+  Full harness suite = **58 tests pass** (16 provenance + 20 metrics + 14 divergence
+  + 8 hiro_eval).
+- THE CONTROL GAP IS THE HEADLINE, never the raw hit-rate: `real − mean(shuffled-
+  aggressor-sign)` + signed-volume / contemporaneous / persistence controls. Verdict
+  line DERIVED from computed gaps, never hardcoded.
+
+**Role-separated flow (anti-bias):** creative + expert designed (t-causal ⇒
+predictive-legitimate; control-gap-is-headline) → coder built → **test-author**
+positive-control (planted perfect lead ⇒ hit_rate 1.0; anti-correlated ⇒ 0.0 ⇒
+harness ALIVE, not stuck at 0.5) + **red-team** caught that pooling ES+NQ masked the
+signal → coder aggregation fix (per-instrument, n-weighted gap, coverage-gated
+three-state classifier; "underpowered" NEVER collapsed into "null") → 58 tests pass.
+
+**VERIFIED facts (do NOT soften):**
+- HARNESS ALIVE: `test_positive_control_metric_is_alive` (`test_hiro_eval.py:95-134`)
+  — metric reaches the full `[0,1]` on planted data ⇒ the real near-0.5 is a genuine
+  "no strong edge", not a dead-metric artefact.
+- Per-instrument three-state result (descriptive, n=4 correlated days, OPTION-DERIVED
+  parity forward — NOT a futures price): **k=15/30 = NULL** (adequate-coverage ES,
+  sign inconsistent, n-wtd gap ~+0.01/~0); **k=5 ES = SUGGESTIVE-POSITIVE but
+  AT-THRESHOLD + UNDERPOWERED** (4/4 ES days positive, n-wtd gap ~+0.047, band
+  ~[+0.03,+0.06], fwd_cov 0.99, but n_days=4 < 5 ⇒ NOT an edge); **k=5 NQ =
+  UNDETERMINED** (fwd coverage as low as 0.43).
+- **HEADLINE: NOT a demonstrated edge, NOT a demonstrated absence.** A raw 55% would
+  be meaningless without the shuffle gap; the eval was REPORTED not chased
+  (thresholds fixed in code, printed at runtime).
+
+**LIMITS (red-team NEEDS-VERIFICATION):** n=4 correlated; parity forward not futures;
+NQ coverage-underpowered; only k∈{5,15,30}min tested (sub-minute / >30min unmeasured).
+
+**DEFERRED / NOT validated:** the ~90-day forward run was **dropped by the user** ⇒
+the ES k=5 hint stays a flag, not a finding. The **live-worker HIRO accumulation fix
+remains DEFERRED** (separate backend chore; this eval runs on the offline/generator-
+correct path, not the worker). Nothing was price-validated.
+
+**Docs changed (markdown only):** `docs/research/empirical/hiro-predictive-eval.md`
+(NEW), `docs/08-status-and-gaps.md` gap #4 (predictive-eval UPDATE), this checkpoint.
+**NO non-markdown touched.**
+
+**NEXT:** synthetic-OI eval (same controlled pattern — pure core + dbn runner +
+positive-control + shuffle/contemporaneous controls + three-state per-instrument
+verdict); the DEFERRED live-worker HIRO fix + synthetic-OI FE-wiring chores (both
+couple to the not-yet-built Gap #4 dashboard).
+
 ### 2026-06-14 — Audit follow-ups: surface honesty fix DONE; #4 residual RESOLVED; HIRO #2 + synthetic-OI #3 DEFERRED (advisor-revised plan)
 Resolution of the 4 open follow-ups from the prior audit checkpoint. **the-advisor's
 SECOND gate run materially revised the plan** — it showed the naive HIRO
