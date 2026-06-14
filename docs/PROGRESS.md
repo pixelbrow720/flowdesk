@@ -53,6 +53,66 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — Audit follow-ups: surface honesty fix DONE; #4 residual RESOLVED; HIRO #2 + synthetic-OI #3 DEFERRED (advisor-revised plan)
+Resolution of the 4 open follow-ups from the prior audit checkpoint. **the-advisor's
+SECOND gate run materially revised the plan** — it showed the naive HIRO
+"make-persistent" fix would trade a cosmetic parity bug for a restart-correctness
+bug, and that follow-up #4 was already answerable from the code — so the orchestrator
+REVERSED course: deferred #2 rather than rushing a live-worker rewrite for a
+not-yet-built consumer. **This turn improved HONESTY (surface) + closed a residual,
+but validated NOTHING — only the ~90-day forward run validates any lens.**
+
+**The 4 follow-ups, resolved:**
+1. **surface `arb_free` overclaim — DONE.** Renamed `arb_free -> variance_nonneg`
+   across the mirror; the flag now honestly tests only `w(k) >= 0` (non-negative
+   implied variance), NOT butterfly/density `g(k) >= 0`; the false docstring promise
+   of a separate `g(k)` check was removed (Durrleman `g(k) >= 0` deliberately NOT
+   implemented — lens unvalidated). Commit **`d4f24e8`**. NON-BREAKING (required
+   sub-key in the optional EXPERIMENTAL Surface block; `schema_version` stays **1**;
+   no committed fixture carried `arb_free` => zero regen / zero data pull).
+   contract-guardian: **MIRROR CONSISTENT** (10/10 Surface fields). engine 199 pass,
+   tsc + validate clean.
+2. **HIRO worker/generator divergence — DEFERRED with design direction.** FACT +
+   the-advisor: NOT an accumulation-method bug — both paths accumulate the same trade
+   set `[open, ts]`. The real gap is the FORWARD per trade: the live worker
+   (`worker.py:264`) re-prices the whole day's tape at the single current-minute
+   forward `F_t`; the generator (`gen_session_snapshots.py:75-112`) freezes each
+   trade's increment at its arrival-minute forward via a persistent `HiroState`
+   (the economically-correct semantics). DEFER: HIRO's only consumer is the FE render
+   (Gap #4, not being built now); and the naive fix would trade the parity bug for a
+   RESTART-correctness bug — the current stateless rebuild-from-`[open, ts]` is
+   restart/gap/STALE-safe (`worker.py:203-208`), a persistent `HiroState` is not
+   without explicit reset/recovery/gap handling. DESIGN DIRECTION recorded: keep the
+   accumulator in the api-layer worker (NEVER push `HiroState` into `build_snapshot`
+   — engine purity locked); feed only NEW trades at each minute's forward; design
+   reset/restart/gap explicitly; lock both-paths-equal with an independent test;
+   grep golden + worker tests for pinned HIRO values first.
+3. **synthetic-OI absent from FE JSON — DEFERRED.** FACT: #4/#5/#6/#7 are wired in
+   the live worker (`worker.py:394-397`) but NOT in `gen_session_snapshots.py`
+   (`:113-118` passes only `ohlc`/`hiro`), so they are absent from committed FE
+   session JSON. SAME worker/generator parity class as #2. DEFER: couples to the Gap
+   #4 dashboard decision — no point generating data the FE does not render. When Gap
+   #4 is built, wire the generator to pass `net_flow`/`net_flow_tiered`/
+   `net_flow_decay` for whichever lenses the dashboard shows.
+4. **`_fetch_signed_trades` window — RESOLVED.** FACT: the window IS
+   cumulative-since-RTH-open, NOT per-minute. `_fetch_signed_trades` ->
+   `feed.get_hiro_trades`; `historical.py:229-260` window = `[rth_open, ts+1min)`
+   with filter `if event < rth_open or event >= end: continue`, docstring "over the
+   RTH window `[open, ts]`". So the #5 decay-age math and HIRO accumulation rest on
+   the documented cumulative-since-open basis. Residual closed (confirmed, not a bug).
+
+**VERIFIED this session:** surface rename (commit `d4f24e8`, code grep +
+contract-guardian CONSISTENT); follow-up #4 (read-only, `historical.py:229-260`);
+the-advisor read-only gate + coder + contract-guardian. **DEFERRED / NOT validated:**
+HIRO #2 + synthetic-OI #3 (both couple to the not-yet-built Gap #4 FE); nothing was
+price-validated — only the ~90-day forward run (Gap #1) validates any lens.
+
+**Docs changed (markdown only):** `docs/08-status-and-gaps.md` (gap #2 residual
+RESOLVED + synthetic-OI FE-wiring DEFERRED; gap #4 HIRO DEFERRED-with-design-direction;
+gap #5 surface `variance_nonneg` DONE), this checkpoint. **NO non-markdown touched.**
+
+**NEXT:** await user decision on Gap #1 forward-run / Gap #4 frontend.
+
 ### 2026-06-14 — Audit of the 6 remaining EXPERIMENTAL lenses + `oi_gamma_flip` rename + advisor first-run
 Role-separated audit pass (NO build beyond the already-committed rename). The 6
 remaining un-dissected EXPERIMENTAL lenses were audited read-only by

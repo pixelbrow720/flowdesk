@@ -84,8 +84,26 @@ they do **not** close gap #1.
 > **ABSENT from the committed FE session JSON** — the FE renders these only off a
 > live worker, never off the checked-in sessions. **#7 `gamma_hedge` == #4 `gex`
 > bit-for-bit** (documented; only `charm_hedge`/`vanna_hedge` are novel).
-> **RESIDUAL (could not verify):** whether the worker's `_fetch_signed_trades`
-> window is cumulative-since-RTH-open or per-minute — flag for confirmation.
+> **RESIDUAL RESOLVED (2026-06-14) — the window IS cumulative-since-RTH-open,
+> NOT per-minute.** FACT (read-only, the-advisor + coder): the worker's
+> `_fetch_signed_trades` delegates to `feed.get_hiro_trades`, whose window is
+> `[rth_open, ts+1min)` — `historical.py:229-260` filters every tape event with
+> `if event < rth_open or event >= end: continue` and the docstring states "over
+> the RTH window `[open, ts]`". So the synthetic-OI flow maps (and HIRO, and the
+> #5 decay-age math) all accumulate over the same cumulative-since-open basis the
+> docs already describe. The residual is **closed** (confirmed behaviour, not a
+> bug).
+>
+> **SECOND PARITY GAP — synthetic-OI absent from FE JSON is DEFERRED (couples to
+> Gap #4).** The FACT above (worker computes `net_flow*`, the offline generator at
+> `gen_session_snapshots.py:113-118` passes only `ohlc`/`hiro`) is the **same
+> worker/generator divergence class** as the HIRO defect in Gap #4 — a second,
+> knowingly-left parity gap. **DEFER rationale:** wiring `gen_session_snapshots`
+> to emit `net_flow`/`net_flow_tiered`/`net_flow_decay` only matters once the
+> dashboard renders these lenses, which is the Gap #4 decision — no point
+> generating data the FE does not yet draw. **When Gap #4 is built:** wire the
+> generator to pass the `net_flow*` maps for whichever lenses the dashboard shows.
+> Stays DEFERRED, not done.
 
 > **HONESTY FIX — the DDOI "49.2% vs 50.8% FLAT vs VOL" number is contaminated
 > provenance and must NOT be cited as a 0DTE result.** That figure
@@ -181,6 +199,29 @@ end-to-end live-WS wiring are the largest remaining FE work.
 > accumulation — the worker should also use a persistent `HiroState` fed only NEW
 > trades at each trade's arrival forward, so the line is stable + identical across
 > both paths. This is a prerequisite before the FE renders HIRO.
+>
+> **STATUS (2026-06-14) — DEFERRED with design direction (advisor-revised).** FACT
+> + the-advisor reasoning: the divergence is **NOT an accumulation-method bug** —
+> both paths accumulate the same trade set `[open, ts]` (residual confirmed in Gap
+> #2). The real gap is the **forward used per trade**: the live worker
+> (`worker.py:264`) re-prices the entire day's tape at the single current-minute
+> forward `F_t`, while the generator (`gen_session_snapshots.py:75-112`) freezes
+> each trade's increment at its arrival-minute forward via a persistent
+> `HiroState`. The generator's **frozen-increment** semantics is the
+> economically-correct one (hedging happens at the price prevailing then). **DEFER
+> rationale:** HIRO's only consumer is the FE render, which is **not** being built
+> now (this gap); and the naive "make the worker persistent" fix would TRADE a
+> cosmetic numeric-parity bug for a **restart-correctness bug** — the current
+> stateless rebuild-from-`[open, ts]` is restart-safe and gap/STALE-safe by
+> construction (`worker.py:203-208`), whereas a persistent `HiroState` needs
+> explicit reset-at-RTH-open, mid-session-restart recovery, and feed-gap handling
+> the worker does not have today. **DESIGN DIRECTION (record for when this gap is
+> built):** keep the accumulator in the api-layer worker (NEVER push `HiroState`
+> into `build_snapshot` — engine purity is locked); feed only NEW trades at each
+> minute's forward; design the reset/restart/gap behaviour explicitly; lock
+> both-paths-equal with an independent test. Before that fix, grep the golden
+> fixture + worker tests for pinned HIRO values (a worker change will legitimately
+> move `.final` on every minute after the first). Stays DEFERRED, not fixed.
 
 ### 5. Surface / vanna / charm — WIRED ✅ (EXPERIMENTAL)
 `black76` vanna/charm and `surface.py` are no longer isolated — all are now
@@ -222,6 +263,19 @@ no contract change).
 > implement the Durrleman `g(k) >= 0` density check, OR rename the flag to
 > `variance_nonneg` and downgrade the docstring/schema wording. Until then treat
 > `arb_free` as "implied variance is non-negative," not "no butterfly arbitrage."
+>
+> **RESOLVED (2026-06-14) — renamed `arb_free` -> `variance_nonneg`; false g(k)
+> promise removed. Commit `d4f24e8`.** FACT (coder + contract-guardian): the flag
+> is renamed across the mirror (`surface.py`, `schema.py`, `snapshot.ts`,
+> `CONTRACT.md`, tests) and now honestly scopes to `w(k) >= 0` only; the docstring
+> promise of a separate `g(k) >= 0` density check was deleted (Durrleman
+> `g(k) >= 0` deliberately **NOT** implemented — the lens is unvalidated, do not
+> gold-plate). **NON-BREAKING:** required sub-key inside the optional EXPERIMENTAL
+> Surface block, `schema_version` stays **1**; no committed fixture carried
+> `arb_free`, so zero regen / zero data pull. contract-guardian: **MIRROR
+> CONSISTENT** (10/10 Surface fields parity); engine 199 pass, tsc + validate
+> clean. This closes the honesty defect — it did **not** add a butterfly
+> certificate (none is claimed now).
 
 ### 6. Baseline lint/type noise 🟡
 Pre-existing, not blocking, do not blind-fix:
