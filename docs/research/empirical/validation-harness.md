@@ -109,3 +109,61 @@ This is the **mechanism**, not the verdict. To turn it into evidence:
   test (the product's actual wall) would need the prior session's per-leg gamma, not
   just settle-OI — deferred until the forward pull carries it.
 - Only then promote any finding toward [`../verified/`](../verified/).
+
+## 7. Tenor-provenance guard (fail-closed; guards data, not signal)
+
+> This is **infrastructure to prevent a known contamination class**, not a
+> validation of any signal. It makes the harness refuse to compute on data that
+> is not the tenor it claims.
+
+The harness prices everything as 0DTE. If the underlying legs are not actually
+0DTE, every downstream metric is silently wrong — which is exactly what happened
+when a **quarterly** `ES.OPT`/`NQ.OPT` pull (9–16 days out) was computed as if
+0DTE and produced the DDOI "49.2/50.8" artefact (see
+[`symbology-0dte-findings.md`](symbology-0dte-findings.md)). Nothing asserted the
+tenor at the data-load chokepoint, so nothing caught it.
+
+`analysis/harness/provenance.py` is the guard. The 0DTE signature it asserts
+(fail-closed — raises `TenorContaminationError`):
+
+- the leg set is non-empty (an empty chain is never a valid session);
+- every `instrument_class` is `C`/`P` (no futures/other legs contaminate the chain);
+- the ET expiry date equals the session date;
+- exactly **one** unique expiry is present;
+- max days-to-expiry relative to the session 16:00 ET close is `< 1`;
+- (via `assert_session_iids_0dte`) every raw traded/settled `instrument_id`
+  **resolves** in the definition map — an unresolved id is itself a lineage signal
+  and fails closed.
+
+**Where it sits.** `run_validation.run_day` builds a **combined all-instrument,
+all-expiry** flat definition map, enumerates the **raw** traded+settled
+instrument ids from the day's trades+statistics streams (NO pre-filter to the
+expected 0DTE legs), and calls `assert_session_iids_0dte` **before** the empty
+short-circuit and **before** any metric/snapshot. An empty raw population logs a
+loud WARN and skips the day; a non-empty population with any non-session or
+unresolved id raises. Resolving raw ids against the full universe is what makes
+the check **non-tautological**: a per-expiry-bucketed leg set can never fail the
+`expiry == session` test (the bucket key already *is* the expiry), whereas a
+contaminated id whose true expiry is 9–16 days out resolves to a non-session leg
+and trips the check.
+
+**ET-vs-UTC subtlety.** Expiries are stamped at 16:00 America/New_York as epoch
+nanoseconds (UTC). The session-date compare is done in ET, not UTC — a 16:00 ET
+expiry in June (EDT, UTC−4) lands on the *next* UTC calendar day, so a naive UTC
+compare would false-reject by one day. A load-bearing test
+(`test_et_date_used_not_utc_date_load_bearing`) locks this.
+
+**Provenance stamp.** On success the guard returns a frozen `DataProvenance`
+(`source_label`, `session_date`, `expiry_set`, `n_legs`, `instruments`,
+`realized_tenor_days`, and a `sha256` `fingerprint` over the canonical
+leg serialization). The fingerprint is order-independent and changes the moment
+any leg's id/expiry/strike/class changes — i.e. it detects a silently-swapped
+definition file across an otherwise-clean re-pull.
+
+**KNOWN RESIDUAL (the guard is NOT yet universal).** Only `run_validation.py` is
+wired through it. The other duplicated `instrument_id → expiry` loaders
+(`lapis1.build_iid_map`, `rerun_zerodte`, `synthetic_oi_v2/v3/v4`, and `ddoi` via
+`lapis1`) are **not** yet routed (an explicit TODO list in `provenance.py`).
+`analysis/ddoi.py` carries its own minimal inline expiry-vs-trade-day check, but
+the remaining loaders do not. Until they are wired, a metric computed through
+those paths can still skip the guard.

@@ -44,6 +44,16 @@ app renders the heatmap + exposure profiles. Everything revolves around the
    re-open them. The two heavy items (DDOI engine, proprietary metrics) are
    explicitly **not built** — do not build them without approval.
 6. **Don't claim done with red tests.** Always run the verification suite (§4).
+7. **Assert data tenor/provenance before any offline analysis number.** Every
+   `analysis/`-harness computation MUST call `assert_0dte` / `assert_session_iids_0dte`
+   (from `analysis.harness.provenance`) at the data-load chokepoint, BEFORE
+   computing any metric or snapshot. A number produced without a stamped
+   `DataProvenance` is INVALID and must not be reported. This guards against the
+   documented quarterly-as-0DTE contamination (the DDOI "49.2/50.8" artefact, which
+   slipped through because no tenor assertion existed at load). RESIDUAL: only
+   `run_validation.py` is wired through the guard today; routing the other duplicated
+   loaders (`lapis1`, `rerun_zerodte`, `synthetic_oi_v2/v3/v4`, `ddoi` via `lapis1`)
+   is an open TODO in `provenance.py`.
 
 ## 3. Repo map (where things live)
 

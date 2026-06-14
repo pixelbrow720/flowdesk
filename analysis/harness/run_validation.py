@@ -43,6 +43,10 @@ from analysis.harness.metrics import (  # noqa: E402
     oi_walls,
     pin_rate,
 )
+from analysis.harness.provenance import (  # noqa: E402
+    DefLeg,
+    assert_session_iids_0dte,
+)
 from engine.snapshot import ChainQuote, build_snapshot, t_expiry_from_clock  # noqa: E402
 
 try:
@@ -174,6 +178,65 @@ def oi_settle(path: str, iidset: set) -> dict:
     return {iid: max(v)[1] for iid, v in rows.items()}
 
 
+def _flat_def_map_all(defs: dict) -> dict:
+    """Flatten ``defs`` across ALL instruments and ALL expiry buckets -> {iid: DefLeg}.
+
+    ``load_defs`` buckets legs by instrument then expiry-date
+    (``defs[instr][expiry_str][iid]``), so an iid only resolves within its own
+    instrument+expiry bucket. The raw traded/settled population enumerated for a
+    day is MIXED (ES+NQ on the same tape), so the provenance guard MUST resolve
+    those ids against a map covering EVERY instrument present in ``defs`` — a
+    per-instrument map would flag every other instrument's ids as "unresolved"
+    (false positive). Each ``DefLeg.instrument`` keeps that leg's REAL instrument
+    (the key it came from) so provenance still records which instruments were
+    seen; resolving against the full universe also lets a contaminated non-0DTE
+    id (e.g. 9 days out) resolve to its real expiry and trip the session-expiry
+    check.
+    """
+    flat: dict = {}
+    for instr, by_expiry in defs.items():
+        for _expiry_str, legs in by_expiry.items():
+            for iid, (otype, k, ed) in legs.items():
+                flat[int(iid)] = DefLeg(
+                    expiration_ns=int(round(ed.timestamp() * 1e9)),
+                    strike=float(k),
+                    instrument_class=("C" if otype == "call" else "P"),
+                    instrument=instr,
+                )
+    return flat
+
+
+def _raw_traded_iids(path: str) -> set:
+    """DISTINCT instrument_ids present in a trades stream — NO iidset filter.
+
+    Returns the RAW traded population so the provenance guard sees every id that
+    actually printed in the session, not a set already filtered to the expected
+    0DTE legs. Only collects ids (no metric work). A MISSING file is treated as
+    "data absent" -> empty set (the empty-data path warns + skips upstream)."""
+    if not os.path.exists(path):
+        return set()
+    ids: set = set()
+    for r in db.DBNStore.from_file(path):
+        ids.add(int(r.instrument_id))
+    return ids
+
+
+def _raw_settled_iids(path: str) -> set:
+    """DISTINCT instrument_ids in a statistics stream (stat_type 9) — NO filter.
+
+    Returns the RAW settled population (final-OI rows) so the guard validates the
+    ids that actually settled, not a pre-bucketed expected set. A MISSING file is
+    treated as "data absent" -> empty set."""
+    if not os.path.exists(path):
+        return set()
+    ids: set = set()
+    for r in db.DBNStore.from_file(path):
+        if int(getattr(r, "stat_type", -1)) != STAT_OI:
+            continue
+        ids.add(int(r.instrument_id))
+    return ids
+
+
 def _build_at(instr, ts, legs, mids, cv, s, t_exp):
     """build_snapshot at one sample second; returns (snap, forward) or (None, None)."""
     bystrike: dict = defaultdict(dict)
@@ -212,11 +275,44 @@ def _build_at(instr, ts, legs, mids, cv, s, t_exp):
 
 
 def run_day(instr: str, day: str, defs: dict) -> dict | None:
+    d = datetime.strptime(day, "%Y-%m-%d")
+
+    # ---- TENOR PROVENANCE GUARD (fail-closed, BEFORE the empty short-circuit
+    #      and BEFORE any metric/snapshot) -------------------------------------
+    # NON-TAUTOLOGICAL by construction: we resolve the RAW ids actually traded
+    # and settled in the day's streams (no `iid in iidset` filter) against a
+    # COMBINED definition map spanning ALL instruments + ALL expiries. The day
+    # tape is MIXED (ES+NQ), so the map MUST cover every instrument in `defs`;
+    # a per-instrument map would flag the other instrument's ids as unresolved
+    # (false positive). A contaminated id whose true expiry is 9-16 days out
+    # still resolves to a non-session DefLeg and trips assert_0dte's expiry
+    # check — which the old per-expiry-bucket guard could never do.
+    #
+    # This validates the day's WHOLE ES+NQ population is 0DTE; it is idempotent
+    # across the two (ES, NQ) calls for a day (intended — the session population
+    # is the same regardless of the current instrument).
+    #
+    # Empty-vs-contaminated split (DECIDED): a genuinely EMPTY raw population
+    # ("data absent for this day") logs a LOUD warning and skips the day; a
+    # NON-EMPTY population with any non-session/unresolved id MUST raise.
+    flat_def_map = _flat_def_map_all(defs)
+    traded_settled_iids = (
+        _raw_traded_iids(f"{ZERO}/trades/{day}.dbn.zst")
+        | _raw_settled_iids(f"{ZERO}/statistics/{day}.dbn.zst")
+    )
+    if not traded_settled_iids:
+        print(f"  [provenance] WARN no traded/settled iids for {day} — skipping")
+        return None
+    prov = assert_session_iids_0dte(
+        traded_settled_iids, flat_def_map, d.date(), source_label=f"zerodte/{day}",
+    )
+    print(f"  [provenance] {prov.summary()}")
+
     legs = defs[instr].get(day, {})
     if not legs:
         return None
     iidset = set(legs)
-    d = datetime.strptime(day, "%Y-%m-%d")
+
     rth_open = int(datetime(d.year, d.month, d.day, 9, 30, tzinfo=NY).timestamp())
     sample_secs = [int(datetime(d.year, d.month, d.day, h, mi, tzinfo=NY).timestamp())
                    for h, mi in SAMPLE_ET]

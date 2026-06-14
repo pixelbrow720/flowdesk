@@ -53,6 +53,49 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — Fase 0: anti-forget tenor-provenance guard (infrastructure, NOT signal)
+This phase builds a fail-closed GUARD against the documented quarterly-as-0DTE
+contamination — it is **anti-forget infrastructure**, NOT validation of any signal.
+
+**Built:**
+- `analysis/harness/provenance.py` (NEW) — fail-closed 0DTE tenor guard.
+  `assert_0dte(legs, session_date)` raises `TenorContaminationError` on: empty set,
+  non-`C`/`P` class, ET-expiry != session, >1 unique expiry, or days-to-expiry >= 1.
+  `assert_session_iids_0dte(traded_iids, def_map, session_date)` resolves RAW traded
+  ids against the FULL all-instrument def map (unresolved id raises) then asserts
+  0DTE — the NON-TAUTOLOGICAL entry point. Returns a frozen `DataProvenance`
+  (source_label, session_date, expiry_set, n_legs, instruments, sha256 fingerprint,
+  realized_tenor_days). Date compare done in ET (16:00 America/New_York), not UTC.
+- WIRED into `run_validation.run_day`: builds a COMBINED all-instrument flat def map,
+  enumerates RAW traded+settled ids from the day's trades+statistics streams (NO
+  pre-filter), and calls the guard BEFORE the empty short-circuit and BEFORE any
+  metric/snapshot. Empty raw set => loud WARN + skip; non-empty with any
+  non-session/unresolved id => RAISE.
+- `analysis/ddoi.py` got a minimal inline expiry-vs-trade-day guard (future-proofing
+  only — its quarterly input dirs no longer exist on disk, so it cannot run now).
+
+**Role-separated flow (anti-bias):** creative + expert design → coder (code only) →
+test-author + red-team (independent) → 2 correction rounds — (1) a TAUTOLOGY fix (the
+first wiring validated an already-bucketed set where `expiry==session` can never
+fire), then (2) a MAP-SCOPING fix (an ES-only map false-raised on clean days because
+NQ ids were unresolved) — → re-verified. The guard taking two correction rounds is
+the anti-bias process working, recorded honestly, not hidden.
+
+**VERIFIED:** 36 harness tests pass (16 in `test_provenance.py` — incl. locks that an
+unresolved id raises and that a combined map passes where a single-instrument map
+raises; + 20 metrics). Coder's decoded real-day probe: 8/8 real-day decoded PASS on
+the combined map.
+
+**KNOWN RESIDUAL (do not soften):** only `run_validation.py` is wired through the
+guard. The other duplicated loaders (`lapis1.build_iid_map`, `rerun_zerodte`,
+`synthetic_oi_v2/v3/v4`, and `ddoi` via `lapis1`) are NOT yet routed (TODO list in
+`provenance.py`). `ddoi.py` has its own inline check; the rest do not. The guard is
+NOT yet universal.
+
+**Honest framing:** Fase 0 is infrastructure (anti-forget), NOT signal validation.
+**Next:** Fase 1 — DDOI evaluated on real 0DTE data with a same-session metric;
+Fase 2 — `volatility_trigger` dissection.
+
 ### 2026-06-14 — DOC HONESTY PASS: DDOI provenance + VT method contradiction (docs only)
 Role: doc-scribe (markdown only; **no non-markdown files touched**). Turned three
 already-verified research findings into honest docs.

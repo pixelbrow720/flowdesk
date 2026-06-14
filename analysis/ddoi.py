@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 import databento as db
 
 sys.path.insert(0, "services/engine/src")
+sys.path.insert(0, ".")  # so `analysis.harness.provenance` imports when run as a script
 
 # reuse the SHIPPED, positive-control-passed metric core + helpers from lapis1
 from lapis1 import (  # noqa: E402
@@ -49,6 +50,9 @@ from lapis1 import (  # noqa: E402
     key_of,
     pair_metrics,
 )
+
+# Fail-closed tenor guard (future-proofing; see vol_and_ddoi_flow).
+from analysis.harness.provenance import TenorContaminationError  # noqa: E402
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -97,6 +101,26 @@ def vol_and_ddoi_flow(iidmap):
             meta = iidmap.get(r.instrument_id)
             if meta is None:
                 continue
+            # FUTURE-PROOFING (fail-closed tenor guard) — MINIMAL/ADDITIVE.
+            # This module's own CONTAMINATION CAVEAT notes it historically ran on
+            # QUARTERLY (non-0DTE) data; those input dirs no longer exist on disk,
+            # so this path is NOT runnable/testable now. We still assert the leg
+            # this record processes expires ON the trade day. ``meta[3]`` (exp_iso)
+            # and ``d`` are both YYYY-MM-DD date strings (lapis1.day_of), so this is
+            # an exact 0DTE check — a non-session expiry fails closed instead of
+            # silently producing a contaminated DDOI number. (An inline check is
+            # used rather than assert_session_iids_0dte because the lapis1 iid map
+            # carries only the expiry DATE, not the 16:00-ET timestamp the ns-based
+            # helper needs.)
+            meta_exp = meta[3]
+            if meta_exp != d:
+                raise TenorContaminationError(
+                    f"ddoi/vol_and_ddoi_flow: trade on {d} resolves to "
+                    f"instrument_id {r.instrument_id} with expiry {meta_exp} != "
+                    f"trade day (NOT 0DTE). This module requires a clean 0DTE "
+                    f"pull; the matched population is contaminated (see module "
+                    f"CONTAMINATION CAVEAT)."
+                )
             s = aggressor_sign(getattr(r, "side", "N"))
             if s == 0:
                 continue
