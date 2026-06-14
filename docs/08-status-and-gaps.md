@@ -204,6 +204,52 @@ alongside the locked VOL-based `levels`.
 > a key-string change with **no wire/shape change**, contract-guardian verdict
 > **CONSISTENT**, so `schema_version` stays **1** (non-breaking). The τ-concentration
 > "faithful VT" stays declined/deferred to the gap-#1 harness as above.
+>
+> **UPDATE (2026-06-14) — the "is VT more than an OI crossover?" question is now
+> CLOSED with a data-backed NEGATIVE; no gamma-concentration level is built.** A
+> role-separated investigation (creative + research-expert design → ONE parameter-free
+> candidate → a research-expert read-only DISTINCTNESS GATE on the 4 on-disk 0DTE days
+> × ES/NQ = 8 cells, decoded through the `assert_session_iids_0dte` tenor guard) asked
+> whether a faithful, *local-positive-gamma-distribution* VT — the real SpotGamma
+> description — is worth building as a new EXPERIMENTAL field.
+> - **FACT — the user's intuition was correct.** SpotGamma's VT is a LOCAL
+>   positive-gamma-*distribution* object ("konsentrasi gamma positif … last major level
+>   of positive gamma support", explicitly NOT a simple crossover;
+>   `mega-riset2.md:114-116`), and FlowDesk's five existing levels — `oi_gamma_flip`,
+>   `abs_gamma_strike`, `hedge_wall`, call/put wall — all MISS that shape (they are
+>   global argmax or cumulative zero-cross). So "`oi_gamma_flip` is just an OI
+>   crossover, not VT" is a FAIR criticism: the OI-crossover genuinely is NOT the VT
+>   shape.
+> - **FACT — a faithful VT is still not buildable honestly.** VT's defining
+>   "major/last" qualifier is a threshold τ that can ONLY be set by matching
+>   SpotGamma's published SPX numbers (`mega-riset2.md:130`, H-B2 conf 55%, "τ perlu
+>   kalibrasi"), which FlowDesk's /ES-GLBX universe cannot obtain. Calibrating τ to
+>   vendor numbers is inference-dressed-as-reproduction — the documented catastrophic
+>   failure mode (`reference/methodology-decisions.md`). A faithful VT stays declined.
+> - **The ONE parameter-free, archive-grounded candidate (C-5):**
+>   `VT_exp = argmax over K<F with net_oi_gamma(K)>0 of net_oi_gamma(K)` — the strongest
+>   dealer-long-gamma strike below the forward. It needs no τ, so it is the only
+>   honestly-buildable approximation worth gating.
+> - **GATE RESULT: FAIL (read-only, session-verified on the 4 days).** C-5 is
+>   **UNDEFINED (None) on 6 of 8 cells** — there is usually NO positive-net-gamma strike
+>   below the forward. On the 2 computable cells it is degenerate: **06-08 NQ (29600)
+>   collapses onto BOTH `hedge_wall` AND `abs_gamma_strike` simultaneously** (a relabel,
+>   not a new level); **06-05 ES (7380) is ordinally broken** — it sits BELOW its own
+>   `put_wall` (7400), violating the expected `put_wall <= VT <= oi_gamma_flip < F`
+>   ordering. Zero cells are ordinally sane; placement is jumpy (F−C5 distance 1.3 vs
+>   5.8 strike-steps across the two cells). It is not a stable level.
+> - **INFERENCE (high) — structural reason.** Black-76 gamma is ~symmetric per strike,
+>   so `net_oi_gamma(K) ~ g(K)·(OI_call − OI_put)`; a positive value strictly below F
+>   requires call-OI > put-OI below the forward, which is rare (the downside is
+>   put-OI-dominated). So C-5 fires only on a stray call-heavy strike — an artefact, not
+>   a level.
+> - **DECISION: DO NOT BUILD any gamma-concentration / VT-like level (option a,
+>   data-backed).** C-5 is WORSE than the `oi_gamma_flip` relabel (mostly nonexistent +
+>   jumpy + collapses/ordinally-broken where it exists), not better. `oi_gamma_flip`
+>   keeps its honest name. No code was written. No predictive arm was even reachable
+>   (OI is EOD-settle, look-ahead-blocked like synthetic-OI; the ~90-day validation run
+>   is dropped), so even a passing gate could never have been price-validated. The VT
+>   investigation is CLOSED with a NOT-VALIDATED, data-backed negative.
 
 With these, every heavy item on the
 original backlog is built (all EXPERIMENTAL); what remains is the forward-run

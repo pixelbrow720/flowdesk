@@ -53,6 +53,63 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — VT gamma-concentration DISTINCTNESS GATE → FAIL → DO-NOT-BUILD (option a, data-backed)
+The third agreed step (VT concentration-gamma research). Investigated — read-only,
+no code — whether a faithful *local-positive-gamma-distribution* VT (the real
+SpotGamma description, which `oi_gamma_flip` is NOT) is worth building HONESTLY as a
+new EXPERIMENTAL field. **The gate FAILED. Decision: DO NOT BUILD. Nothing was built,
+nothing was validated.** This CLOSES the VT question with a data-backed negative.
+
+**Role-separated flow (anti-bias):** creative + research-expert designed the framing
+and surfaced the ONE parameter-free candidate worth gating (C-5) → research-expert ran
+a read-only DISTINCTNESS GATE on the 4 on-disk 0DTE days × ES/NQ = 8 cells, decoded
+THROUGH the `assert_session_iids_0dte` tenor-provenance guard. No coder stage (nothing
+built). Orchestrator decided under the human's standing "go to c only if good".
+
+**VERIFIED facts (do NOT soften):**
+- **THE USER'S INTUITION WAS CORRECT.** SpotGamma's VT is a LOCAL positive-gamma-
+  *distribution* object ("konsentrasi gamma positif … last major level of positive
+  gamma support", explicitly NOT a simple crossover; `mega-riset2.md:114-116`), and
+  FlowDesk's five existing levels (`oi_gamma_flip`, `abs_gamma_strike`, `hedge_wall`,
+  call/put wall) all MISS that shape (global argmax or cumulative zero-cross). So
+  "`oi_gamma_flip` is just an OI crossover, not VT" was a FAIR criticism.
+- **BUT a faithful VT is not buildable honestly.** Its "major/last" qualifier is a
+  threshold τ settable ONLY by matching SpotGamma's published SPX numbers
+  (`mega-riset2.md:130`, H-B2 conf 55%, "τ perlu kalibrasi"), which the /ES-GLBX
+  universe cannot obtain — calibrating τ to vendor numbers is
+  inference-dressed-as-reproduction (the documented catastrophic failure mode,
+  `reference/methodology-decisions.md`). Faithful VT declined (already on record).
+- **The ONE parameter-free candidate, C-5:** `VT_exp = argmax over K<F with
+  net_oi_gamma(K)>0 of net_oi_gamma(K)` — strongest dealer-long-gamma strike below F.
+- **GATE RESULT: FAIL.** C-5 is **UNDEFINED (None) on 6 of 8 cells** (usually no
+  positive-net-gamma strike below F). On the 2 computable cells: **06-08 NQ (29600)
+  collapses onto BOTH `hedge_wall` AND `abs_gamma_strike`** (a relabel); **06-05 ES
+  (7380) is ordinally broken** — sits BELOW its own `put_wall` (7400), violating the
+  expected `put_wall <= VT <= oi_gamma_flip < F`. Zero cells ordinally sane; placement
+  jumpy (F−C5 distance 1.3 vs 5.8 strike-steps). Not a stable level.
+- **STRUCTURAL REASON (INFERENCE, high):** Black-76 gamma ~symmetric per strike ⇒
+  `net_oi_gamma(K) ~ g(K)·(OI_call − OI_put)`; a positive value strictly below F needs
+  call-OI > put-OI below the forward, rare (downside is put-OI-dominated). C-5 fires
+  only on a stray call-heavy strike — an artefact, not a level.
+- **HEADLINE:** C-5 is WORSE than the `oi_gamma_flip` relabel, not better.
+
+**DECISION (orchestrator, with the human's "go to c only if good"):** DO NOT BUILD any
+gamma-concentration / VT-like level. `oi_gamma_flip` keeps its honest name. No
+predictive arm was even reachable (OI is EOD-settle, look-ahead-blocked like
+synthetic-OI; the ~90-day validation run is dropped), so even a passing gate could
+never have been price-validated. VT investigation CLOSED — data-backed NOT-VALIDATED
+negative.
+
+**Docs changed (markdown only):** `docs/08-status-and-gaps.md` (gap #2 proprietary /
+`oi_gamma_flip` section — added the distinctness-gate UPDATE), this checkpoint. **NO
+non-markdown touched.**
+
+**NEXT:** the three agreed steps (HIRO predictive eval, synthetic-OI #4 flow-term eval,
+VT gamma-concentration) are now ALL DONE/closed. Remaining OPEN items are the DEFERRED
+backend chores — the live-worker HIRO accumulation unify (Gap #4) and synthetic-OI
+#5/#6/#7 evals + FE-wiring (couples to Gap #4) — which are separate and AWAIT USER
+DIRECTION. Nothing here was built; nothing was validated.
+
 ### 2026-06-14 — Synthetic-OI #4 FLOW-TERM eval built (controlled, EOD STRUCTURAL) — BOTH /ES + /NQ UNDETERMINED, validated NOTHING, no 55%
 A STRUCTURAL (NOT predictive) eval of the ONE thing synthetic-OI #4 uniquely claims
 over a classic OI-GEX vendor: does the native-aggressor FLOW term `(−flow)·w` add
