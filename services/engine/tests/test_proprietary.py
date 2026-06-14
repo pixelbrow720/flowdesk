@@ -15,7 +15,7 @@ from engine.proprietary import (
     build_proprietary,
     hedge_wall,
     net_oi_gamma_profile,
-    volatility_trigger,
+    oi_gamma_flip,
 )
 
 
@@ -39,25 +39,25 @@ def test_net_oi_gamma_profile_signs_and_skip() -> None:
     assert math.isclose(prof[1][1], 20.0, rel_tol=1e-12)
 
 
-def test_volatility_trigger_zero_crossing_interpolated() -> None:
+def test_oi_gamma_flip_zero_crossing_interpolated() -> None:
     # cumulative net OI-gamma: put-heavy low strikes (negative) -> call-heavy high.
     rows = [
         _row(100.0, cg=0.0, pg=0.01, coi=0.0, poi=1000.0),   # net -10, cum -10
         _row(110.0, cg=0.01, pg=0.0, coi=2000.0, poi=0.0),   # net +20, cum +10
     ]
     # crossing between 100 (cum -10) and 110 (cum +10): frac = 10/20 = 0.5 -> 105
-    vt = volatility_trigger(rows)
+    vt = oi_gamma_flip(rows)
     assert vt is not None and math.isclose(vt, 105.0, rel_tol=1e-9)
 
 
-def test_volatility_trigger_none_when_no_cross() -> None:
+def test_oi_gamma_flip_none_when_no_cross() -> None:
     # all net positive -> cumulative never crosses zero.
     rows = [
         _row(100.0, cg=0.01, pg=0.0, coi=1000.0, poi=0.0),
         _row(105.0, cg=0.01, pg=0.0, coi=2000.0, poi=0.0),
     ]
-    assert volatility_trigger(rows) is None
-    assert volatility_trigger([rows[0]]) is None  # <2 points
+    assert oi_gamma_flip(rows) is None
+    assert oi_gamma_flip([rows[0]]) is None  # <2 points
 
 
 def test_absolute_gamma_strike_max_total() -> None:
@@ -81,7 +81,7 @@ def test_hedge_wall_max_abs_net() -> None:
 def test_thin_strikes_excluded_everywhere() -> None:
     rows = [_row(100.0, cg=0.9, pg=0.9, coi=1e6, poi=1e6, thin=True)]
     assert net_oi_gamma_profile(rows) == []
-    assert volatility_trigger(rows) is None
+    assert oi_gamma_flip(rows) is None
     assert absolute_gamma_strike(rows) is None
     assert hedge_wall(rows) is None
 
@@ -92,5 +92,5 @@ def test_build_proprietary_keys() -> None:
         _row(110.0, cg=0.01, pg=0.0, coi=2000.0, poi=0.0),
     ]
     snap = build_proprietary(rows)
-    assert set(snap.to_dict()) == {"volatility_trigger", "abs_gamma_strike", "hedge_wall"}
-    assert snap.volatility_trigger is not None
+    assert set(snap.to_dict()) == {"oi_gamma_flip", "abs_gamma_strike", "hedge_wall"}
+    assert snap.oi_gamma_flip is not None

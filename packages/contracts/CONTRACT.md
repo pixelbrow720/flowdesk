@@ -273,18 +273,20 @@ is a price level in index points, `null` when not computable. Optional/additive
 > SpotGamma does **not** publish the exact formulas for these named levels; the
 > definitions here are inferred from public descriptions
 > (`docs/research/archive/riset-spotgamma.md` §C12/§444) and will **not** match
-> SpotGamma's numbers. **`volatility_trigger`'s method CONTRADICTS the cited source:**
-> the code computes a cumulative-net-OI-gamma zero-crossing (a **simple OI
-> crossover**), but `riset-spotgamma.md:266` states SpotGamma's Volatility Trigger is
-> **[PROPRIETARY] … from the actual distribution of dealer gamma across strikes, NOT
-> a simple OI crossover** — so it is a tractable PROXY, not a faithful reverse-
-> engineering (a field rename is a pending human decision). They live **alongside**
+> SpotGamma's numbers. **`oi_gamma_flip` was renamed from `volatility_trigger` for
+> method honesty:** the code computes a cumulative-net-OI-gamma zero-crossing (a
+> **simple OI crossover**) — i.e. the gamma flip on the OI basis, the OI/static
+> analogue of the locked VOL `levels.gamma_flip`. That method CONTRADICTS SpotGamma's
+> Volatility Trigger, which `riset-spotgamma.md:266` states is **[PROPRIETARY] … from
+> the actual distribution of dealer gamma across strikes, NOT a simple OI crossover** —
+> so the old name was inaccurate and the field is named for what it actually computes.
+> They live **alongside**
 > the locked VOL-based `levels` (gamma flip / walls / largest GEX) and do **not**
 > replace them. The locked `levels` block remains the product's authoritative key
 > levels.
 
 | Field | Type | Unit / domain | Meaning | Source |
 | --- | --- | --- | --- | --- |
-| `volatility_trigger` | `number \| null` | index points | Zero-crossing of cumulative net OI-gamma (OI/static analogue of the VOL gamma flip). | FlowGreeks |
+| `oi_gamma_flip` | `number \| null` | index points | Zero-crossing of cumulative net OI-gamma (OI/static analogue of the VOL gamma flip). | FlowGreeks |
 | `abs_gamma_strike` | `number \| null` | index points | Strike of the largest total OI-gamma concentration. | FlowGreeks |
 | `hedge_wall` | `number \| null` | index points | Strike of the largest \|net OI-gamma\| (dominant net dealer hedging node). | FlowGreeks |

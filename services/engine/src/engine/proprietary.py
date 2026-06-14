@@ -15,16 +15,17 @@ engine's dynamic VOL-based ``gamma_flip``/``largest_gex``. Locked dealer signs r
 so it does not change any argmax or zero-crossing and is omitted here.
 
 Levels (all INFERRED):
-  * **Volatility Trigger** — the price where the *cumulative* net OI-gamma crosses
-    zero (ascending by strike), linearly interpolated. Below it dealers are net short
-    gamma (vol-amplifying), above it net long (vol-suppressing). The OI/static analogue
-    of the VOL-based ``gamma_flip``. ``None`` if it never crosses. CAVEAT: this
-    zero-crossing METHOD (a simple net-OI-gamma crossover) CONTRADICTS the cited source —
-    docs/research/archive/riset-spotgamma.md:266 states SpotGamma's Volatility Trigger is
-    "[PROPRIETARY] … from the actual distribution of dealer gamma across strikes, NOT a
-    simple OI crossover". So this is a tractable PROXY, not a faithful reverse-engineering
-    of the named level. A field rename is a PENDING human decision — do NOT rename
-    ``volatility_trigger`` here.
+  * **OI gamma flip** (``oi_gamma_flip``) — the price where the *cumulative* net
+    OI-gamma crosses zero (ascending by strike), linearly interpolated. Below it dealers
+    are net short gamma (vol-amplifying), above it net long (vol-suppressing). This is the
+    OI/static analogue of the locked VOL-based ``levels.gamma_flip``. ``None`` if it never
+    crosses. HONESTY NOTE: this field was previously named ``volatility_trigger``, which
+    claimed SpotGamma's "Volatility Trigger". Its zero-crossing METHOD (a simple
+    net-OI-gamma crossover) CONTRADICTS that level — docs/research/archive/riset-spotgamma.md:266
+    states SpotGamma's Volatility Trigger is "[PROPRIETARY] … from the actual distribution
+    of dealer gamma across strikes, NOT a simple OI crossover". It was renamed to
+    ``oi_gamma_flip`` to be honest about the method: it is a gamma flip on the OI basis,
+    NOT SpotGamma's VT.
   * **Absolute Gamma strike** — the strike with the largest TOTAL OI-gamma
     concentration ``call_gamma·call_oi + put_gamma·put_oi`` (both sides add; the single
     biggest hedging node by raw magnitude). ``None`` for an empty/thin chain.
@@ -44,7 +45,7 @@ from engine.exposure import DEALER_SIGN_CALL, DEALER_SIGN_PUT, ChainRow
 __all__ = [
     "ProprietaryLevels",
     "net_oi_gamma_profile",
-    "volatility_trigger",
+    "oi_gamma_flip",
     "absolute_gamma_strike",
     "hedge_wall",
     "build_proprietary",
@@ -59,13 +60,13 @@ class ProprietaryLevels:
     INFERRED approximations on the OI-gamma basis, NOT SpotGamma's published values.
     """
 
-    volatility_trigger: Optional[float]
+    oi_gamma_flip: Optional[float]
     abs_gamma_strike: Optional[float]
     hedge_wall: Optional[float]
 
     def to_dict(self) -> dict[str, Optional[float]]:
         return {
-            "volatility_trigger": self.volatility_trigger,
+            "oi_gamma_flip": self.oi_gamma_flip,
             "abs_gamma_strike": self.abs_gamma_strike,
             "hedge_wall": self.hedge_wall,
         }
@@ -90,11 +91,11 @@ def net_oi_gamma_profile(rows: Sequence[ChainRow]) -> List[Tuple[float, float]]:
     return out
 
 
-def volatility_trigger(rows: Sequence[ChainRow]) -> Optional[float]:
+def oi_gamma_flip(rows: Sequence[ChainRow]) -> Optional[float]:
     """Zero-crossing of the cumulative net OI-gamma (linear-interpolated), or ``None``.
 
-    The OI/static analogue of the VOL-based gamma flip: scanning strikes ascending,
-    the price where the running sum of net OI-gamma crosses zero.
+    The OI/static analogue of the locked VOL-based ``levels.gamma_flip``: scanning
+    strikes ascending, the price where the running sum of net OI-gamma crosses zero.
     """
     prof = net_oi_gamma_profile(rows)
     if len(prof) < 2:
@@ -139,7 +140,7 @@ def hedge_wall(rows: Sequence[ChainRow]) -> Optional[float]:
 def build_proprietary(rows: Sequence[ChainRow]) -> ProprietaryLevels:
     """Build the reverse-engineered proprietary levels (EXPERIMENTAL approximations)."""
     return ProprietaryLevels(
-        volatility_trigger=volatility_trigger(rows),
+        oi_gamma_flip=oi_gamma_flip(rows),
         abs_gamma_strike=absolute_gamma_strike(rows),
         hedge_wall=hedge_wall(rows),
     )

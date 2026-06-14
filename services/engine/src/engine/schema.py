@@ -307,8 +307,8 @@ class Proprietary(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    volatility_trigger: float | None = None
-    """Zero-crossing of cumulative net OI-gamma (OI/static analogue of gamma flip)."""
+    oi_gamma_flip: float | None = None
+    """Zero-crossing of cumulative net OI-gamma (OI/static analogue of levels.gamma_flip)."""
     abs_gamma_strike: float | None = None
     """Strike of the largest total OI-gamma concentration."""
     hedge_wall: float | None = None

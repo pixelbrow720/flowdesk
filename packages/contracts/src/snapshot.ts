@@ -256,7 +256,7 @@ export interface Ddoi {
  */
 export interface Proprietary {
   /** Zero-crossing of cumulative net OI-gamma (OI/static analogue of gamma flip). */
-  volatility_trigger?: number | null;
+  oi_gamma_flip?: number | null;
   /** Strike of the largest total OI-gamma concentration. */
   abs_gamma_strike?: number | null;
   /** Strike of the largest |net OI-gamma| (dominant net dealer hedging node). */
@@ -487,7 +487,7 @@ export const DdoiSchema = z
 /** Runtime schema for {@link Proprietary}. */
 export const ProprietarySchema = z
   .object({
-    volatility_trigger: finiteNumber.nullish(),
+    oi_gamma_flip: finiteNumber.nullish(),
     abs_gamma_strike: finiteNumber.nullish(),
     hedge_wall: finiteNumber.nullish(),
   })
