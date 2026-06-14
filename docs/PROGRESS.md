@@ -53,6 +53,89 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — Audit of the 6 remaining EXPERIMENTAL lenses + `oi_gamma_flip` rename + advisor first-run
+Role-separated audit pass (NO build beyond the already-committed rename). The 6
+remaining un-dissected EXPERIMENTAL lenses were audited read-only by
+**quant-greeks-auditor**, gated upstream by **the-advisor** (its FIRST gate run).
+These are honest verdicts; two are DOWNGRADES and must NOT be softened. **This audit
+found defects to FIX but validated NOTHING — only the ~90-day forward run validates.**
+
+**the-advisor first-run (anti-bias gate):**
+- Caught a **PHANTOM `schema_version` HOLD** on the `volatility_trigger -> oi_gamma_flip`
+  rename: it is a key-string change with no wire/shape change, so it is non-breaking
+  and `schema_version` stays **1**. (contract-guardian: **CONSISTENT**.)
+- Caught **HIRO missing from the audit scope** — added it; HIRO then surfaced a real
+  DOWNGRADE (below).
+- Moved `total_hedging` into the synthetic-OI group (it is #7 on the Q base, not a
+  standalone lens).
+- The orchestrator replied to **every** counsel point (no silent drops).
+
+**The 4 audit verdicts (each by quant-greeks-auditor, file:line):**
+1. **VEX/CHEX (`exposure_ext.py`) — SOUND.** Dimensions correct (vanna/charm get ONE
+   `F`; VEX `0.01` = vol-point scale, not GEX's price-move `0.01`; CHEX `1/365`
+   per-day). Signs match `black76` (vanna call==put, charm call!=put). FD tests pass
+   (71). Thin skipped. Additive, `schema_version` untouched. ONLY caveat (already
+   EXPERIMENTAL): sign->regime "stabilising/destabilising" semantics reuse GEX's color
+   meaning — only the 90-day run backs that; FE must show the caveat and must NOT let
+   VEX/CHEX drive the regime classifier.
+2. **synthetic-OI #4/#5/#6/#7 (`synthetic_oi.py`,`total_hedging.py`) — SOUND math,
+   LIVE-ONLY reach.** Reductions hold (#6->#4 at tier=1.0; #5->#4 at `half_life<=0`;
+   #4 `w->0` -> pure OI-GEX). In the live worker the 3 flow maps ARE distinct (tiered
+   drops retail at `RETAIL_TIER_WEIGHT=0.0`, block ×1.5; decay reweights by recency +
+   drops ts-less trades) — NOT a collapse-to-#4 in live. **FACT:** family computed
+   ONLY in the live worker (`worker.py:394-397`); `gen_session_snapshots.py:113-118`
+   passes NO `net_flow*`, so #4/#5/#6/#7 are **ABSENT from the committed FE session
+   JSON**. **#7 `gamma_hedge` == #4 `gex` bit-for-bit** (only `charm_hedge`/
+   `vanna_hedge` novel). RESIDUAL (could-not-verify): worker `_fetch_signed_trades`
+   window cumulative-since-RTH-open vs per-minute — flag for confirmation.
+3. **surface.py (SVI + expected-move) — DOWNGRADE (`arb_free` overclaim).** EM
+   dimensionally sound (`F·σ·sqrt(T)`, T cancels on 0DTE). Thin handled (None). WIRED +
+   additive (the gap-map "isolated" note is now STALE — surface IS consumed:
+   `with_surface=True` at `worker.py:399` + `gen_session_snapshots.py:116`). THE
+   DOWNGRADE: `is_butterfly_arbitrage_free` (`surface.py:130-145`) only tests
+   `w(k)>=0`, NOT `g(k)>=0`; the promised `g(k)>=0` density check (`surface.py:28`)
+   DOES NOT EXIST. So a steep `b·(1+|ρ|)` slice can pass `arb_free=True` yet carry
+   butterfly arb. FIX (record, do not perform): implement Durrleman `g(k)>=0`, OR
+   rename to `variance_nonneg` + downgrade the wording.
+4. **hiro.py — DOWNGRADE (consistency defect, NOT look-ahead).** Dimensionally sound
+   (greek-weighted dealer delta-notional USD, `×M×F`). Aggressor sign `B/A/N->+1/-1/0`
+   correct, no double-sign. **Strictly t-causal** — window `[rth_open, ts+60s)`, real
+   daily reset, per-trade ts threaded; NO look-ahead. THE DOWNGRADE: the live worker
+   (`worker.py:264`) RE-PRICES the whole day's tape at the single current forward
+   `F_t` every minute -> cumulative HIRO drifts on zero-trade minutes and DIVERGES
+   from the offline generator (`gen_session_snapshots.py:75-112`), which FREEZES each
+   trade's increment at its arrival-minute forward via a persistent `HiroState`.
+   Worker and generator render DIFFERENT HIRO lines for the same session. FIX (record,
+   do not perform): unify accumulation — worker should use a persistent `HiroState`
+   fed only NEW trades at each trade's arrival forward. **Must fix before the FE
+   renders HIRO.**
+
+**The rename (committed):** `volatility_trigger -> oi_gamma_flip` is commit
+**`e022fd7`** — honestly names the method (a gamma flip on the OI basis, NOT
+SpotGamma's VT). contract-guardian: **CONSISTENT**, `schema_version` stays **1**.
+Field reads `oi_gamma_flip` across `proprietary.py`/`schema.py`/`snapshot.ts`/
+`CONTRACT.md`/tests/golden (verified read-only).
+
+**VERIFIED this session:** the 4 verdicts above (by quant-greeks-auditor) + the
+rename (commit `e022fd7`, code grep + contract-guardian CONSISTENT). **DEFERRED /
+NOT validated:** nothing was price-validated — only the ~90-day forward run (Gap #1)
+validates any lens. The audit's job was correctness/consistency, not edge.
+
+**OPEN FOLLOW-UPS (need a HUMAN decision):**
+- **surface `arb_free`** — implement Durrleman `g(k)>=0` OR rename to
+  `variance_nonneg` + downgrade docstring/schema. (Markdown-only here; no code change.)
+- **HIRO accumulation** — unify worker to a persistent `HiroState` so worker == generator;
+  prerequisite before the FE renders HIRO.
+- **synthetic-OI FE wiring** — `gen_session_snapshots.py` passes no `net_flow*`, so the
+  family is absent from committed FE sessions; decide whether to wire it.
+- **`_fetch_signed_trades` window** — confirm cumulative-since-RTH-open vs per-minute.
+
+**Docs changed (markdown only):** `docs/08-status-and-gaps.md` (gap #2 synthetic-OI
+live-only + rename note; gap #4 HIRO divergence DOWNGRADE; gap #5 VEX/CHEX caveat +
+surface `arb_free` DOWNGRADE), this checkpoint. **NO non-markdown touched.**
+
+**NEXT:** await user decision on the 4 open follow-ups above + Gap #1 forward-run.
+
 ### 2026-06-14 — Fase 2: `volatility_trigger` dissection (NO BUILD)
 A DISSECTION of `engine/proprietary.py` `volatility_trigger`, **not a build** —
 nothing was built; the honest finding is recorded and a rename decision is escalated.
