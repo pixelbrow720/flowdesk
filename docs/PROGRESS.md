@@ -53,6 +53,78 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — t-causal PREDICTIVE synth-OI **VOLATILITY-REGIME** eval BUILT (look-ahead-free) — n=3, BOTH /ES + /NQ UNDETERMINED; gap is now POWER not METHOD; validated NOTHING
+Built the predictive synthetic-OI eval that the prior checkpoint had relayed as a
+PENDING USER DECISION (UNBUILT, runnable look-ahead-free, underpowered). It scores
+synthetic-OI as a **VOLATILITY-REGIME** predictor — explicitly **NOT directional**
+(the advisor's standing constraint; the HIRO directional kernel was deliberately NOT
+reused, since a flow-only directional arm would ~duplicate the already-null HIRO eval).
+**This validated NOTHING** — it is an honest UNDERPOWERED UNDETERMINED with a correct,
+leak-free, reusable harness. UNDETERMINED stays UNDETERMINED.
+
+**Role-separated flow (anti-bias):** advisor (regime-not-directional framing + the
+t-causal anchor correctness point) → creative + research-expert (design) → coder
+(2-step: pure core + dbn runner) → **red-team** caught one residual look-ahead leak →
+coder fix → **test-author** locked the anti-leak guarantee → **109 harness tests pass**.
+
+**Built (NOT touched by doc-scribe — built this session by the coder):**
+- `analysis/harness/synthetic_oi_regime_eval.py` (pure core, stdlib-only,
+  deterministic) + `run_synthetic_oi_regime_eval.py` (dbn runner, through the
+  fail-closed tenor-provenance guard) + `test_synthetic_oi_regime_eval.py` +
+  `test_synthetic_oi_regime_runner.py`. Full harness suite = **109 tests pass**.
+
+**Design (VERIFIED, do NOT soften):**
+- **Predictor** = per-minute `sign(Σ synthetic-GEX)` where `Q = prior-session-OI-anchor
+  + cumulative_signed_flow(≤t)` (long-gamma=+ ⇒ dealers SUPPRESS vol; short-gamma=− ⇒
+  AMPLIFY vol). **Outcome** = SIGN-FREE realized move `|F_{t+k}−F_t|` (k=5/15/30) — a
+  REGIME/vol outcome, NOT `sign(return)`.
+- **Metric** `sep_k = (mean move|short − mean move|long)/mean move|all`; **HEADLINE** =
+  `sep_real − regime-label-shuffle null`. Controls: regime-label shuffle, aggressor-sign
+  shuffle (same anchor+gammas, random flow direction), flow-only (anchor=0) vs prior-OI-
+  anchored.
+- **T-CAUSAL anchor predicate:** `stat_type-9` quantity from the record with MAX
+  `ts_recv` SUBJECT TO `ts_recv < RTH open` (13:30 UTC); `ts_ref` must be a PRIOR session
+  (fail-closed). Never relaxed — the intraday OI republish (~14:11 UTC) shares the same
+  `ts_ref`, so only `ts_recv` separates the look-ahead-free anchor from the republish.
+
+**Red-team leak FOUND → FIXED → LOCKED (VERIFIED):** the red-team found one residual
+look-ahead — cum-flow at minute `t` included minute-`t`'s own trades printed AT-OR-AFTER
+`F_t`. FIXED by snapshot-before-fold (`out[0] == {}`, anchor-only at t=0). The null held
+**UNCHANGED**, proving the leak was masked at n=3 (not creating a false signal). 2 tests
+now encode the anti-leak guarantee (`out[0]=={}`; old leaky value surfaces at `out[1]`).
+
+**HARD LIMITS (VERIFIED):** only 4 0DTE days on disk; **06-08 DROPPED** (no pre-open OI
+publish, only the intraday republish ⇒ using it = look-ahead) → **n=3 usable**
+(06-05/09/10); ES gamma-dense (~360–379 solvable min), NQ sparse (~103–171); **06-05 has
+no regime flip** (all short-gamma) ⇒ zero within-day separation.
+
+**RESULT (VERIFIED, descriptive not evidence):** **BOTH /ES and /NQ UNDETERMINED at
+every k** — sign-inconsistent / single-day-dominated; `MIN_DAYS_FOR_EDGE=5` makes a YES
+unreachable at n=3. Metric **proven ALIVE** (planted positive control → gap positive;
+anti-control → negative). **VERDICT: UNDETERMINED at n=3 — NOT shown, NOT refuted.** The
+gap is now **POWER (more days), NOT method** — the harness is correct, look-ahead-free,
+and a reusable template; there is no real-time OI feed (the reason synthetic-OI exists),
+so predictive is RUNNABLE look-ahead-free from a prior-session anchor + intraday flow,
+just UNDERPOWERED. Realizes the user's "simulate live from historical" idea.
+
+**VERIFIED:** 109 harness tests pass (this session); the t-causal anchor predicate +
+snapshot-before-fold leak fix + anti-leak tests (read-only confirmed:
+`run_synthetic_oi_regime_eval.py:169-170, 184-197, 301-302`,
+`test_synthetic_oi_regime_runner.py:352,378`); runtime n=3 UNDETERMINED result
+(decoded/session-verified from the gitignored 0DTE pull, not reproducible from committed
+files). **DEFERRED / NOT validated:** the properly-powered, decorrelated forward run with
+a traded futures price was **dropped by the user** ⇒ verdict stays UNDETERMINED; nothing
+price-validated.
+
+**Docs changed (markdown only):**
+`docs/research/empirical/synthetic-oi-predictive-eval.md` (NEW),
+`docs/08-status-and-gaps.md` (gap #2 synthetic-OI: predictive-eval BUILT UPDATE — gap is
+now POWER not method), this checkpoint. **NO non-markdown touched.**
+
+**NEXT — mega deep review.** All planned synthetic-OI / HIRO / DDOI / VT evals are now
+built or closed; the next step is a mega deep review across the whole experimental-lens
+research tree. Nothing validated; only the dropped ~90-day forward run validates any lens.
+
 ### 2026-06-14 — synth-OI #6 TIERED eval DONE (near-rescale, UNDETERMINED) + CORRECTED the "predictive-blocked" framing (it is UNDERPOWERED-not-blocked; prior-OI anchor exists on disk; synth-OI is a REGIME not a directional predictor)
 Two things this turn, **docs only**: (A) documented the #6 tiered structural-arm
 result whose code was already committed (`23fdbfa`) but never written up; (B) corrected

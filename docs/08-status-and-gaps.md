@@ -167,8 +167,43 @@ they do **not** close gap #1.
 > `gex` bit-for-bit); also DEFERRED a **t-causal predictive eval** (runnable
 > look-ahead-free, underpowered n=4 — see the correction above, UNBUILT). The
 > synthetic-OI family is still **ABSENT from committed FE session
-> JSON** (live-only, as above). Still EXPERIMENTAL, still not price-validated; see
+ > JSON** (live-only, as above). Still EXPERIMENTAL, still not price-validated; see
 > [`research/empirical/synthetic-oi-eval.md`](research/empirical/synthetic-oi-eval.md).
+
+> **UPDATE (2026-06-14) — the t-causal PREDICTIVE synthetic-OI eval is now BUILT
+> (look-ahead-free), reads UNDETERMINED at n=3; the remaining gap is POWER, not
+> method.** The eval flagged "UNBUILT, runnable look-ahead-free, underpowered" above
+> now EXISTS: `analysis/harness/synthetic_oi_regime_eval.py` (pure core) +
+> `run_synthetic_oi_regime_eval.py` (runner) + 2 test files; **109 harness tests
+> pass**, run through the tenor-provenance guard. It scores synthetic-OI as a
+> **VOLATILITY-REGIME** predictor (NOT directional — the HIRO directional kernel was
+> deliberately NOT reused): predictor = per-minute `sign(Σ synthetic-GEX)` from
+> `Q = prior-session-OI-anchor + cumulative_signed_flow(≤t)` (long-gamma=+ ⇒
+> vol-suppression; short-gamma=− ⇒ vol-amplification); outcome = the SIGN-FREE move
+> `|F_{t+k}−F_t|` (k=5/15/30); metric `sep_k` vs a regime-label-shuffle null (HEADLINE)
+> + aggressor-sign-shuffle + flow-only(anchor=0) controls. **Look-ahead-free by
+> construction:** the OI anchor is the `stat_type-9` quantity at MAX `ts_recv` subject
+> to `ts_recv < RTH open` (13:30 UTC) — never relaxed (the intraday OI republish shares
+> the same `ts_ref`, only `ts_recv` separates them); `ts_ref` must be a PRIOR session
+> (fail-closed). A **red-team caught one residual leak** (cum-flow at minute `t`
+> included minute-`t` trades after `F_t`); **FIXED** (snapshot-before-fold,
+> `out[0] == {}`), the null held UNCHANGED (the leak was masked at n=3, not creating a
+> false signal), and 2 tests now encode the anti-leak guarantee. **HARD LIMITS:** only
+> 4 0DTE days on disk; **06-08 DROPPED** (no pre-open OI publish, only an intraday
+> ~14:11 UTC republish ⇒ using it would be look-ahead) → **n=3 usable**
+> (06-05/09/10); ES gamma-dense (~360–379 solvable min), NQ sparse (~103–171); **06-05
+> has no regime flip** (all short-gamma) ⇒ zero within-day separation. **RESULT: BOTH
+> /ES and /NQ UNDETERMINED at every k** (sign-inconsistent / single-day-dominated;
+> `MIN_DAYS_FOR_EDGE=5` makes YES unreachable). The metric is **proven ALIVE**
+> (planted positive control). **VERDICT: UNDETERMINED at n=3 — NOT shown, NOT
+> refuted.** This is the honest expected outcome at this n; the eval is correct,
+> look-ahead-free, and a **reusable template**. The **only blocker to a real verdict is
+> statistical power (more independent days)** — NOT method, and NOT a real-time OI feed
+> (there is none; synthetic-OI exists precisely because OI publishes once daily at
+> settle — predictive is RUNNABLE look-ahead-free from a prior-session anchor + intraday
+> flow, just UNDERPOWERED). The user dropped the data pull that would power it. Still
+> EXPERIMENTAL, still not price-validated; see
+> [`research/empirical/synthetic-oi-predictive-eval.md`](research/empirical/synthetic-oi-predictive-eval.md).
 
 > **HONESTY FIX — the DDOI "49.2% vs 50.8% FLAT vs VOL" number is contaminated
 > provenance and must NOT be cited as a 0DTE result.** That figure
