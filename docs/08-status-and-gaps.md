@@ -113,10 +113,31 @@ they do **not** close gap #1.
 > corrected the axis:** NOT "synthetic vs VOL" (that is CONFOUNDED — it mixes the
 > locked OI-vs-VOL basis decision #1 with the flow term) but **`gex` (w=1) vs
 > `gex_static` (w=0)** — does the native-aggressor FLOW term `(−flow)·w` add per-strike
-> STRUCTURE OVER pure OI-GEX? It is **STRUCTURAL, NOT predictive — there is NO hit-rate
-> / NO "55%"**: a predictive arm is BLOCKED because synthetic `Q` needs prior-session
-> `OI_open`, the only OI on disk is same-day EOD settle, and using settle-OI intraday
-> is look-ahead (0DTE has zero cross-day overlap). **AGGREGATOR ANCHOR verified
+> STRUCTURE OVER pure OI-GEX? **This arm as built is STRUCTURAL, NOT predictive — there
+> is NO hit-rate / NO "55%"**: this runner scores nothing against price and anchors on
+> same-day settle OI. **CORRECTION (2026-06-14) — a *predictive* arm is UNDERPOWERED
+> (n=4), NOT "blocked".** An earlier version here said a predictive arm is "BLOCKED
+> because synthetic `Q` needs prior-session `OI_open` … 0DTE has zero cross-day overlap"
+> — that **conflated two things and is wrong.** FACTS (research-expert, session-verified,
+> decoded this session): (1) there is **no real-time OI feed** (exchanges publish OI once
+> daily at settle) — that is the *reason* synthetic-OI exists (it reconstructs intraday
+> positioning from real-time signed FLOW + an OI anchor); (2) synthetic-OI's method is
+> **t-causal** (`Q = anchor_OI + cumulative_signed_flow(≤t)`, `synthetic_oi.py:139-141`);
+> (3) a clean **prior-session OI anchor DOES exist on disk** — `stat_type 9` stamped
+> `ts_ref = D-1` inside each day-D file, observable **pre-open** (~02:00 UTC), non-zero
+> for the day's expiring iids (decoded counts 1133 / —post-open / 1080 / 1187); this does
+> NOT contradict the "zero cross-day symbol overlap" finding (that is about which
+> *contracts trade* 0DTE, not where the anchor lives); (4) the only real look-ahead was a
+> **harness choice** (this runner grabs the latest `stat9` = same-day settle), and on
+> this data its realized contamination is ~zero (latest `stat9` IS the `ts_ref=D-1` value
+> for 3/4 days). **So a t-causal predictive synthetic-OI eval is RUNNABLE look-ahead-free
+> on existing data — UNDERPOWERED (n=4), not blocked — but UNBUILT, pending a decision to
+> build a regime-kernel eval vs gather more data.** INFERENCE (advisor): synthetic-OI/GEX
+> is a **volatility-regime** predictor (net-GEX sign → dealer gamma posture), NOT a
+> directional up/down predictor — a predictive eval must score a vol/mean-reversion
+> outcome, NOT `sign(return)`, and a flow-only arm would ~duplicate the already-null HIRO
+> directional eval; the new content is the **prior-OI-anchored regime predictor**.
+> **AGGREGATOR ANCHOR verified
 > (load-bearing):** the new sign-free `synthetic_gex_by_strike` sums EXACTLY to the
 > engine's scalar `synthetic_gex` at w=0/0.5/1.0 (`math.isclose`), and does NOT
 > re-apply the dealer sign already baked into `Q` (the double-sign trap was AVOIDED —
@@ -132,10 +153,20 @@ they do **not** close gap #1.
 > inconsistent); the **red-team caught it** and the verdict logic was fixed to require
 > per-day sign consistency (mirroring the HIRO pooling defect class), so **NQ now reads
 > UNDETERMINED, never YES.** **Verdict: NOT a demonstrated edge, NOT a demonstrated
-> absence.** Only **#4** was evaluated; **#5 decay / #6 tiered** (need new tier/decay
-> flow-map construction — the offline harness builds only one flow map) and **#7
-> `charm_hedge`/`vanna_hedge`** (its `gamma_hedge` == #4 `gex` bit-for-bit) are
-> **DEFERRED**; the synthetic-OI family is still **ABSENT from committed FE session
+> absence.** **#4 and #6 are now both evaluated.** **#6 SIZE-TIERED arm (added
+> 2026-06-14, code `23fdbfa`):** tests whether size-tiering the flow adds per-strike
+> structure **OVER the plain #4 flow term** (reference = plain #4, NOT pure OI);
+> `tier_weight` is IMPORTED from the engine and a reduction test proves tiered == plain
+> when all tier weights = 1.0. **RESULT: UNDETERMINED at n=4** — tiering is a
+> **near-scalar-rescale** of the plain flow term (`residual_r2` 0.85–0.998) and **every**
+> day-instrument `norm_ratio_gap` is **NEGATIVE** (no added directional structure over
+> plain flow); the engine default `retail_weight=0.0` **DELETES ~80% of trades** (ES ~19%
+> / NQ ~21% survive). The `MIN_DAYS_FOR_EDGE=5` gate makes YES unreachable at n=4 for
+> both arms. **81 harness tests pass.** Still **DEFERRED: #5 decay** (needs a new decay
+> flow-map construction) and **#7 `charm_hedge`/`vanna_hedge`** (its `gamma_hedge` == #4
+> `gex` bit-for-bit); also DEFERRED a **t-causal predictive eval** (runnable
+> look-ahead-free, underpowered n=4 — see the correction above, UNBUILT). The
+> synthetic-OI family is still **ABSENT from committed FE session
 > JSON** (live-only, as above). Still EXPERIMENTAL, still not price-validated; see
 > [`research/empirical/synthetic-oi-eval.md`](research/empirical/synthetic-oi-eval.md).
 
@@ -246,10 +277,12 @@ alongside the locked VOL-based `levels`.
 > - **DECISION: DO NOT BUILD any gamma-concentration / VT-like level (option a,
 >   data-backed).** C-5 is WORSE than the `oi_gamma_flip` relabel (mostly nonexistent +
 >   jumpy + collapses/ordinally-broken where it exists), not better. `oi_gamma_flip`
->   keeps its honest name. No code was written. No predictive arm was even reachable
->   (OI is EOD-settle, look-ahead-blocked like synthetic-OI; the ~90-day validation run
->   is dropped), so even a passing gate could never have been price-validated. The VT
->   investigation is CLOSED with a NOT-VALIDATED, data-backed negative.
+>   keeps its honest name. No code was written. The do-not-build decision rests on the
+>   distinctness-gate FAILURE alone (C-5 is an artefact, not a level); the predictive
+>   question is therefore moot. (A predictive arm would be UNDERPOWERED at n=4, not
+>   blocked — same corrected status as synthetic-OI, §gap-2 — but it is irrelevant here
+>   because the level itself failed the gate.) The VT investigation is CLOSED with a
+>   NOT-VALIDATED, data-backed negative.
 
 With these, every heavy item on the
 original backlog is built (all EXPERIMENTAL); what remains is the forward-run

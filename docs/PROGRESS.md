@@ -53,6 +53,70 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — synth-OI #6 TIERED eval DONE (near-rescale, UNDETERMINED) + CORRECTED the "predictive-blocked" framing (it is UNDERPOWERED-not-blocked; prior-OI anchor exists on disk; synth-OI is a REGIME not a directional predictor)
+Two things this turn, **docs only**: (A) documented the #6 tiered structural-arm
+result whose code was already committed (`23fdbfa`) but never written up; (B) corrected
+a wrong framing the user rightly challenged — that the synthetic-OI *predictive* eval is
+"look-ahead-BLOCKED because OI is EOD-settle." **Nothing predictive was built; validated
+nothing; corrected an honesty error.**
+
+**PART A — #6 TIERED arm (VERIFIED, descriptive not evidence):** does size-tiered flow
+weighting add per-strike structure **OVER the plain #4 flow term**? `tier_weight` is
+IMPORTED from the engine (`synthetic_oi_eval.py:89`, engine `synthetic_oi.py:77-83`); a
+reduction test proves tiered == plain when all tier weights = 1.0
+(`test_synthetic_oi_eval.py:410-425, 535-549`). **RESULT (4 on-disk days, EOD-structural,
+n=4):** tiering is a **NEAR-SCALAR-RESCALE** of the plain flow term (`residual_r2`
+0.85–0.998) and **EVERY** day-instrument `norm_ratio_gap` is **NEGATIVE** — tiering does
+**NOT** add directional structure over plain flow; engine default `retail_weight=0.0`
+**DELETES ~80% of trades** (ES ~19% / NQ ~21% survive). Both #4 and #6 **UNDETERMINED at
+n=4** (`MIN_DAYS_FOR_EDGE=5` makes YES unreachable). **81 harness tests pass.**
+
+**PART B — CORRECTED framing (VERIFIED this session, research-expert decoded on-disk
+data):** the prior "predictive BLOCKED because OI is EOD-settle" conflated two things and
+is WRONG. Corrected facts:
+- **FACT:** there is **no real-time OI feed** (exchanges publish OI once daily at settle)
+  — that is the *whole reason* synthetic-OI exists (reconstructs intraday positioning
+  from real-time signed FLOW + an OI anchor). Designed to work without real-time OI.
+- **FACT:** synthetic-OI's method is **t-causal** — `Q = anchor_OI +
+  cumulative_signed_flow(≤t)` (`synthetic_oi.py:139-141`); same ≤t flow the HIRO eval used.
+- **FACT:** a clean, non-zero, t-causal **OI ANCHOR exists on disk** — prior session's
+  settle OI carried as `stat_type 9` with `ts_ref = D-1` inside each day-D file,
+  observable **pre-open** (~02:00 UTC, before the 13:30 UTC open), non-zero for the day's
+  expiring iids (decoded counts **1133 / —post-open / 1080 / 1187**). Does NOT contradict
+  "zero cross-day symbol overlap" (that is about which *contracts trade* 0DTE; the
+  prior-session OI of today's contract lives inside day-D's own file at `ts_ref=D-1`).
+- **FACT:** the only real look-ahead was a **HARNESS CHOICE** (`run_synthetic_oi_eval`'s
+  `oi_settle` grabs the latest `stat9` = same-day settle); NOT an inherent property of
+  synthetic-OI, and on this data its realized contamination is ~zero (latest `stat9` IS
+  the `ts_ref=D-1` value for 3/4 days).
+- **CONCLUSION:** a t-causal PREDICTIVE synthetic-OI eval is **RUNNABLE look-ahead-free**
+  on existing on-disk data — **UNDERPOWERED (n=4), NOT blocked.** Every "blocked"
+  statement corrected to "underpowered (n=4), not blocked; runnable look-ahead-free."
+- **INFERENCE (advisor, labeled):** synth-OI/GEX is fundamentally a **VOLATILITY-REGIME**
+  predictor (net-GEX sign → dealer gamma posture: long-gamma=vol-suppress/mean-revert vs
+  short-gamma=amplify/trend; gamma-flip = where it flips), **NOT directional**. A proper
+  predictive eval must score a vol/mean-reversion outcome, NOT `sign(return)`; a flow-only
+  synthetic arm ~duplicates the already-null HIRO eval — the new content is the
+  **prior-OI-anchored regime predictor**.
+
+**VERIFIED:** #6 tiered result + 81 harness tests passing (code `23fdbfa`); the four
+corrected FACTs (decoded on-disk this session, session-verified). **DEFERRED:** #5 decay,
+#7 charm/vanna, FE wiring, and the t-causal predictive eval. **HARD CAP:** n=4 (only 4
+days + 1 definition file on disk) — any predictive eval is UNDETERMINED at n=4 by
+construction.
+
+**Docs changed (markdown only):** `docs/research/empirical/synthetic-oi-eval.md`
+(§1 scope, §2 + §2-consequence corrected inline, §9 updated, NEW §10 tiered + NEW §11
+correction), `docs/08-status-and-gaps.md` (synthetic-OI entry: #6 result added +
+"blocked"→"underpowered-not-blocked" correction), this checkpoint. **NO non-markdown
+touched.**
+
+**NEXT — PENDING USER DECISION (nothing predictive built this turn; the orchestrator
+deliberately did NOT over-action — relayed as a choice):** build a **t-causal predictive
+synthetic-OI eval** (prior-OI-anchored, **regime kernel** — NOT the HIRO directional
+kernel), which will be **UNDETERMINED at n=4** by the hard cap, **OR** stop at
+documentation and gather more data first.
+
 ### 2026-06-14 — VT gamma-concentration DISTINCTNESS GATE → FAIL → DO-NOT-BUILD (option a, data-backed)
 The third agreed step (VT concentration-gamma research). Investigated — read-only,
 no code — whether a faithful *local-positive-gamma-distribution* VT (the real
@@ -95,10 +159,10 @@ built). Orchestrator decided under the human's standing "go to c only if good".
 
 **DECISION (orchestrator, with the human's "go to c only if good"):** DO NOT BUILD any
 gamma-concentration / VT-like level. `oi_gamma_flip` keeps its honest name. No
-predictive arm was even reachable (OI is EOD-settle, look-ahead-blocked like
-synthetic-OI; the ~90-day validation run is dropped), so even a passing gate could
-never have been price-validated. VT investigation CLOSED — data-backed NOT-VALIDATED
-negative.
+predictive arm was relevant — the level itself FAILED the distinctness gate (C-5 is an
+artefact, not a level), so the predictive question is moot. (A predictive arm would be
+UNDERPOWERED at n=4, not blocked — corrected status, same as synthetic-OI — but
+irrelevant here.) VT investigation CLOSED — data-backed NOT-VALIDATED negative.
 
 **Docs changed (markdown only):** `docs/08-status-and-gaps.md` (gap #2 proprietary /
 `oi_gamma_flip` section — added the distinctness-gate UPDATE), this checkpoint. **NO

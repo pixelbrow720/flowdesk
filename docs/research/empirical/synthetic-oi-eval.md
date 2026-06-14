@@ -22,8 +22,11 @@
 (`assert_session_iids_0dte`). Full harness suite = **74 tests** (16 provenance + 20
 metrics + 14 divergence + 8 hiro_eval + 16 synthetic_oi_eval).
 
-This eval covers **only synthetic-OI #4** (`gex` at `w=1` vs `gex_static` at `w=0`).
-The #5 decay / #6 tiered / #7 total-hedging variants are **DEFERRED** (§6).
+This eval covers synthetic-OI **#4** (`gex` at `w=1` vs `gex_static` at `w=0`) and, as
+of 2026-06-14, **#6 size-tiered** as a second arm (§10 — does tiering add structure
+*over plain #4 flow*; **UNDETERMINED at n=4**). The #5 decay / #7 total-hedging variants
+remain **DEFERRED** (§6). See also the **§11 CORRECTION** of the earlier "predictive
+arm is BLOCKED" framing — it is **underpowered (n=4), NOT blocked**.
 
 ---
 
@@ -51,17 +54,31 @@ OI-GEX vendor is the native-aggressor flow update. So the primary arm is
 OI on this data is **END-OF-DAY settled only** (`statistics` stat_type 9). The
 synthetic-OI stock anchor is `s_static·OI_open` — *prior-session* settled OI. Using
 the same-day EOD settle-OI *intraday* would be **look-ahead** (the documented harness
-trap), and 0DTE has **zero cross-day symbol overlap** (each day is its own daily
-expiry; see [`symbology-0dte-findings.md`](symbology-0dte-findings.md)), so a clean
-prior-session `OI_open` may not even exist on disk. A predictive arm (synthetic
-gamma-flip → price) is therefore **BLOCKED and out of scope**
-(`run_synthetic_oi_eval.py:10-16`).
+trap). **This arm is therefore END-OF-SESSION STRUCTURAL, not predictive.**
 
-**Consequence (FACT):** this is an **END-OF-SESSION STRUCTURAL** comparison — nothing
-is scored against price, so there is **NO hit-rate / NO "55%"** for this arm. Unlike
-the HIRO eval ([`hiro-predictive-eval.md`](hiro-predictive-eval.md), which earned a
-predictive test because HIRO is strictly t-causal), synthetic-OI #4's reliance on
-settle-OI makes a clean predictive arm undefensible here.
+> **⚠️ CORRECTION (2026-06-14) — see §11.** An earlier version of this section
+> concluded a *predictive* synthetic-OI arm is **"BLOCKED and out of scope"** because a
+> clean prior-session `OI_open` "may not even exist on disk." **Both halves are wrong**
+> and are corrected in §11. (1) The prior-session settle OI of *today's* expiring iids
+> **DOES exist on disk** — carried inside each day-D statistics file as `stat_type 9`
+> stamped `ts_ref = D-1`, observable pre-open; this does **not** contradict the
+> "zero cross-day symbol overlap" finding ([`symbology-0dte-findings.md`](symbology-0dte-findings.md)),
+> which is about which *contracts trade* 0DTE each day, not about where the anchor
+> lives. (2) A **t-causal** predictive arm (`Q = anchor_OI(ts_ref=D-1) + cum_signed_flow(≤t)`)
+> is therefore **runnable look-ahead-free** on the existing data — it is
+> **UNDERPOWERED (n=4), NOT blocked**, and remains **UNBUILT** (a pending decision,
+> §11). The only real look-ahead was a *harness choice* (this runner grabs same-day
+> settle OI), not an inherent property of synthetic-OI.
+
+**Consequence (FACT):** **this arm as built** is an **END-OF-SESSION STRUCTURAL**
+comparison — nothing is scored against price, so there is **NO hit-rate / NO "55%"**
+for it. This is a property of *this* harness, not of synthetic-OI: per the §11
+correction, a t-causal predictive arm IS runnable look-ahead-free on the same on-disk
+data (prior-session OI anchor + cumulative ≤t flow); it is simply **underpowered (n=4)
+and UNBUILT**, not undefensible. The HIRO eval
+([`hiro-predictive-eval.md`](hiro-predictive-eval.md)) earned a predictive test because
+HIRO is strictly t-causal — and so is synthetic-OI's flow component (the same ≤t flow),
+which is precisely why the §11 predictive arm is well-defined.
 
 Net-aggressor flow is the whole-day `Σ aggressor_sign·size` since the RTH open — the
 same quantity `run_validation.flow_and_vol` accumulates and `engine.synthetic_oi`
@@ -216,13 +233,125 @@ direction) is an INFERRED approximation, not official numbers.
   aggregator-anchored (`sum == engine scalar`, no double-sign) same-session comparison
   of the flow term vs pure OI-GEX, with a shuffle-flow null and a per-day
   sign-consistency + single-day-domination gate.
-- **Isn't:** a predictive test, a hit-rate / "55%" (no predictive arm — settle-OI
-  intraday is look-ahead), a validated signal, or a "vs VOL" comparison (that axis is
-  confounded — §1). 4 correlated days; thin profiles; EOD-settle-OI anchor.
-- **Deferred:** #5 decay / #6 tiered (need new flow-map construction), #7
-  `charm_hedge` / `vanna_hedge`, and the FE wiring (synthetic-OI absent from committed
-  session JSON). A properly-powered, decorrelated sample would be required to resolve
-  edge-vs-null — and is not in scope.
+- **Isn't:** a predictive test (this arm scores nothing against price — but a t-causal
+  predictive arm is **runnable look-ahead-free**, just underpowered and unbuilt, §11), a
+  hit-rate / "55%", a validated signal, or a "vs VOL" comparison (that axis is
+  confounded — §1). 4 correlated days; thin profiles; EOD-settle-OI anchor *in this
+  structural runner*.
+- **Deferred:** #5 decay (needs a new decay flow-map construction), #7
+  `charm_hedge` / `vanna_hedge`, the FE wiring (synthetic-OI absent from committed
+  session JSON), and — newly — a **t-causal predictive eval** (§11, prior-OI-anchored
+  regime kernel). **#6 size-tiered is now BUILT** (§10) and reads UNDETERMINED at n=4.
+  A properly-powered, decorrelated sample would be required to resolve edge-vs-null —
+  and is not in scope.
+
+## 10. #6 SIZE-TIERED arm — does size-weighting add structure OVER plain #4 flow? (UNDETERMINED, n=4)
+
+> **STATUS: EXPLORATORY, EOD-STRUCTURAL, UNDETERMINED at n=4.** Added 2026-06-14
+> (code committed `23fdbfa`). This is a SECOND structural arm, NOT a predictive test
+> and NOT validation.
+
+The #6 question is narrower than #4's: not "does flow add structure over OI", but
+**"does SIZE-TIERING the flow add per-strike structure OVER the plain #4 flow term?"**
+So the tiered arm's fixed reference is the **plain #4 flow profile** (NOT pure OI):
+`flow_term_metrics(profile_tiered, profile_plain)` (`eval_tiered_term`,
+`synthetic_oi_eval.py:499-549`).
+
+**Correctness locks (FACT — unit-tested, session-verified by the test-author):**
+
+- **`tier_weight` is IMPORTED from the engine, not reimplemented** (`synthetic_oi_eval.py:89`;
+  engine `synthetic_oi.py:77-83`). The tiered flow map `tiered_net_flow_from_trades`
+  multiplies each trade by the LOCKED `tier_weight(size)` (`synthetic_oi_eval.py:156-189`).
+- **REDUCTION lock:** with `retail_weight == block_weight == 1.0` every `tier_weight`
+  is `1.0`, so the tiered map is bit-for-bit the plain #4 map ⇒ `residual_r2 == 1.0`
+  and `flow_norm_ratio == 0.0` (tiered == plain). Proven by
+  `test_tiered_reduces_to_plain_when_all_weights_one` and
+  `test_eval_tiered_term_reduces_to_plain_arm_when_weights_one`
+  (`test_synthetic_oi_eval.py:410-425, 535-549`).
+- **Aggregator anchor still holds under a tiered map**
+  (`test_tiered_map_sums_to_engine_scalar_anchor`, `test_synthetic_oi_eval.py:428-447`).
+
+**The engine-default DEGENERACY (FACT — do NOT soften).** The engine default is
+`RETAIL_TIER_WEIGHT = 0.0`, `BLOCK_TIER_WEIGHT = 1.5` (`synthetic_oi.py:73-74`). At
+`retail_weight = 0.0` the tier multiplier **DELETES every retail-size trade** from the
+flow map. On this 0DTE tape that erases the large majority of trades: **only ~19% of
+/ES trades and ~21% of /NQ trades SURVIVE** the retail deletion. The runner therefore
+reports the surviving-leg/trade counts as a first-class finding, not a footnote
+(`run_synthetic_oi_eval.py:295-304, 488-500`).
+
+**RESULT (4 on-disk days, EOD-structural, per-instrument, never pooled — descriptive,
+NOT evidence):**
+
+- **Tiering is a NEAR-SCALAR-RESCALE of the plain flow term:** `residual_r2` of the
+  tiered profile against a scalar fit of the plain profile is **0.85–0.998** across
+  day-instrument cells — i.e. the tiered profile is mostly `c·plain`, with little
+  structured residual.
+- **EVERY day-instrument `norm_ratio_gap` is NEGATIVE.** The tiered profile does **NOT**
+  beat its own same-magnitude random-sign null — tiering does **not add directional
+  structure over plain flow** on this sample.
+- **VERDICT: UNDETERMINED for both /ES and /NQ.** As with #4, the `MIN_DAYS_FOR_EDGE = 5`
+  gate makes a "YES" **unreachable at n=4** by construction; the all-negative gaps make
+  a "demonstrated added structure" verdict unsupported regardless.
+
+**HEADLINE (derived, do NOT strengthen):** at n=4, size-tiering looks like a
+**near-scalar rescale of the plain #4 flow term with no added directional structure**,
+and the engine default deletes ~80% of trades. This is **neither a demonstrated edge
+nor a demonstrated absence** — it is UNDETERMINED, like #4. **81 harness tests pass**
+(the suite grew with the #6 arm's tiered tests).
+
+## 11. CORRECTION — the "predictive arm is BLOCKED" framing was wrong; it is UNDERPOWERED (n=4), not blocked
+
+> **This section CORRECTS an earlier on-record claim** (originally in §2 and echoed in
+> `docs/08-status-and-gaps.md` and `PROGRESS.md`) that a *predictive* synthetic-OI arm
+> is **"BLOCKED"** because "OI is EOD-settle" / "a clean prior-session `OI_open` may not
+> exist on disk." That framing **conflated two separate things and is wrong.** The
+> corrected facts below were decoded from the on-disk data this session
+> (research-expert, session-verified).
+
+**FACT — there is no real-time OI feed, and that is the whole reason synthetic-OI
+exists.** Exchanges publish open interest **once daily at settle**; there is no
+intraday OI tick. Synthetic-OI is *designed* to operate without real-time OI: it
+reconstructs intraday positioning from **real-time signed FLOW** plus an **OI anchor**.
+"OI is EOD-settle" is thus a premise of the method, not a blocker to it.
+
+**FACT — synthetic-OI's method is t-causal (look-ahead-free).** The position model is
+`Q = anchor_OI + cumulative_signed_flow(≤t)` per leg (`synthetic_oi.py:139-141`,
+`q_per_leg`). The flow component is the **same t-causal cumulative-≤t signed flow the
+HIRO eval already used**; nothing in the construction reads the future.
+
+**FACT — a clean, non-zero, t-causal OI ANCHOR exists on disk.** The prior session's
+settle OI is carried in **each day-D statistics file as `stat_type 9` with
+`ts_ref = D-1`**, observable **pre-open** (~02:00 UTC, before the 13:30 UTC open),
+non-zero for the day's expiring iids. Decoded prior-session-OI observation counts:
+**1133 / —(post-open delivery) / 1080 / 1187** for the four days. This does **NOT**
+contradict the earlier "zero cross-day symbol overlap" finding
+([`symbology-0dte-findings.md`](symbology-0dte-findings.md)): that finding is about
+*which contracts trade* 0DTE each day; the prior-session OI of *today's* contract lives
+inside day-D's **own** file stamped `ts_ref = D-1`.
+
+**FACT — the only real look-ahead was a HARNESS CHOICE, not a property of synthetic-OI.**
+`run_synthetic_oi_eval`'s `oi_settle` grabs the **latest** `stat_type 9` (max `ts_recv`)
+= the **same-day** settle; using a 4pm value intraday is look-ahead. That is a choice in
+*this* structural runner. On this specific data the realized contamination is **~zero**
+— for 3 of the 4 days the latest `stat9` IS itself the prior-session `ts_ref = D-1`
+value.
+
+**CONCLUSION (corrected, replaces "BLOCKED"):** a **t-causal PREDICTIVE synthetic-OI
+eval is RUNNABLE on the existing on-disk data, look-ahead-free.** It is
+**UNDERPOWERED — n=4 correlated days is a hard cap (only 4 days + 1 definition file on
+disk)** — **NOT blocked.** Every "blocked / out of scope" statement on record should
+read **"underpowered (n=4), not blocked; runnable look-ahead-free."** It remains
+**UNBUILT this turn** — see the NEXT decision in `PROGRESS.md`.
+
+**INFERENCE (advisor — labeled INFERENCE, not yet validated):** synthetic-OI / GEX is
+fundamentally a **VOLATILITY-REGIME** predictor, **NOT a directional up/down**
+predictor. Net-GEX sign maps to dealer gamma posture (long-gamma ⇒
+vol-suppression / mean-reversion; short-gamma ⇒ amplification / trend), and the
+gamma-flip is the level where that posture flips. Two consequences if a predictive eval
+is built: (1) it must score against a **vol / mean-reversion** outcome, **NOT**
+`sign(return)`; (2) a flow-only synthetic arm would be **~a duplicate of the
+already-null HIRO directional eval** — the genuinely-new content is the
+**prior-OI-ANCHORED regime predictor**, scored on a regime kernel.
 
 See also: [`hiro-predictive-eval.md`](hiro-predictive-eval.md),
 [`ddoi-structural-eval.md`](ddoi-structural-eval.md),
