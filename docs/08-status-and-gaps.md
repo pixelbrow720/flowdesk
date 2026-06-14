@@ -119,7 +119,13 @@ alongside the locked VOL-based `levels`.
 > `abs_gamma_strike` DOES match the doc's [FAKTA] argmax-total-gamma definition.)
 > The existing EXPERIMENTAL/INFERRED labels are honest; the new caveat is only that
 > VT's OI-crossover method is the wrong *mechanism* for the named level. **Whether to
-> rename the field is a pending HUMAN decision — no code/field rename here.**
+> rename the field is a pending HUMAN decision — no code/field rename here.** The Fase
+> 2 dissection sharpens this: VT-as-coded is a **relabeled OI-basis gamma-flip**
+> (algorithmically identical to `levels.gamma_flip`, only the basis differs), the
+> archive specifies no reproducible VT formula, and FlowDesk's ES/GLBX universe has no
+> validation target for one — so **no faithful VT is buildable**; building is declined
+> (deferred to the gap-#1 90-day harness, never tuned to vendor numbers), and the
+> rename remains a pending human decision.
 
 With these, every heavy item on the
 original backlog is built (all EXPERIMENTAL); what remains is the forward-run

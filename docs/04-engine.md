@@ -218,6 +218,24 @@ Reverse-engineered SpotGamma-style **named** key levels on the **OI-gamma** basi
 > near-spot hypothesis (`mega-riset2.md:157`); `abs_gamma_strike` DOES match the
 > doc's [FAKTA] argmax-total-gamma definition. Whether to **rename** `volatility_
 > trigger` is a pending human decision — recorded here, not changed.
+>
+> **Fase 2 dissection (sharpened) — VT-as-coded is the gamma flip on the OI basis, a
+> RELABEL.** `volatility_trigger` (`proprietary.py:93`) is algorithmically IDENTICAL
+> to the locked `levels.gamma_flip` (`levels.py:139`): both take the cumulative
+> net-gamma zero-crossing with the same linear interpolation — the ONLY difference is
+> the input basis (OI-gamma vs VOL-gamma). The research archive distinguishes VT from
+> the gamma flip but gives **no reproducible formula** for SpotGamma's VT, only a
+> negative/ordinal description ("NOT a simple crossover," last major positive-gamma
+> support, above the Put Wall and below Zero Gamma — `riset-spotgamma.md:266`,
+> `mega-riset2.md:114-116,145`); every computable candidate (e.g. a τ-threshold
+> positive-gamma strike, `mega-riset2.md:130`, conf 55%) is sub-60%-confidence
+> inference needing a τ calibrated to SpotGamma's published VT numbers. Because
+> FlowDesk's ES/GLBX universe structurally cannot match the SPX-vendor's VT numbers, a
+> "faithful VT" would have **no validation target** — inference-dressed-as-reproduction.
+> Building it is therefore **DECLINED** (deferred until the gap-#1 90-day harness can
+> rank it, and even then τ must never be tuned to vendor numbers nor named as
+> SpotGamma's VT). The honest options are **rename** (a human/contract decision) or
+> **keep-with-honest-label**.
 
 Emitted as the optional `proprietary` field, gated by `with_proprietary` (worker +
 session generator pass `True`). Thin strikes skipped. **INFERRED approximations —

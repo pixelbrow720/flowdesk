@@ -53,6 +53,47 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — Fase 2: `volatility_trigger` dissection (NO BUILD)
+A DISSECTION of `engine/proprietary.py` `volatility_trigger`, **not a build** —
+nothing was built; the honest finding is recorded and a rename decision is escalated.
+
+**Role-separated flow (anti-bias):** research-expert (archive read) + creative
+(reframe) verified the finding this session; orchestrator grepped the consumer
+surface. No coder stage (nothing built).
+
+**VERIFIED facts:**
+- VT-as-coded (`proprietary.py:93`) is **algorithmically IDENTICAL** to the locked
+  `levels.gamma_flip` (`levels.py:139`) — cumulative net-gamma zero-crossing + linear
+  interpolation; the ONLY difference is the input basis (OI-gamma vs VOL-gamma). So VT
+  is "gamma-flip on the OI basis" — a **RELABEL**, not SpotGamma's Volatility Trigger.
+- The research archive distinguishes VT from the gamma-flip but gives **NO reproducible
+  formula** for SpotGamma's VT — only a negative/ordinal description ("NOT a simple
+  crossover," last major positive-gamma support, above the Put Wall and below Zero
+  Gamma; `riset-spotgamma.md:266`, `mega-riset2.md:114-116,145`). Every computable
+  candidate (H-B2 τ-threshold positive-gamma strike `mega-riset2.md:130`, conf 55%;
+  H-B3 argmax dGamma/dS, conf 35%) is **sub-60%-confidence inference** needing a τ
+  calibrated to SpotGamma's published VT numbers.
+- FlowDesk's ES/GLBX universe structurally cannot match the SPX-vendor's VT numbers ⇒
+  a "faithful VT" has **NO validation target** (inference-dressed-as-reproduction, the
+  project's documented catastrophic failure mode). **DECISION: do NOT build a faithful
+  VT.** The τ-concentration level is **DEFERRED** until the gap-#1 90-day harness can
+  rank it; even then τ must never be tuned to vendor numbers nor named/claimed as
+  SpotGamma's VT.
+
+**Consumer surface (orchestrator grep):** `volatility_trigger` is consumed by
+`engine/proprietary.py`, the contract mirror (`schema.py:310` ↔ `snapshot.ts:259,490`
+↔ `CONTRACT.md:288`), and tests (`test_proprietary.py`, `test_snapshot.py`) + golden.
+**NO frontend (`apps/web`) consumer reads it.** A rename is mechanical across the
+mirror + tests + golden.
+
+**ESCALATION (HUMAN decision, not an agent's):** renaming `volatility_trigger` →
+e.g. `oi_gamma_flip` is a **BREAKING CONTRACT CHANGE** ⇒ `schema_version` implication
+(locked contract). Presented to the user with options: **(a) rename** /
+**(b) keep + honest-label** / **(c) defer the τ-build to the 90-day harness**. Being
+escalated, not done.
+
+**Next:** await user decision on the rename + the Gap #1 forward-run.
+
 ### 2026-06-14 — Fase 1: DDOI same-session structural eval (0DTE) — INCONCLUSIVE-leaning-redundant
 Mechanism / structural result, **NOT signal validation**. The first 0DTE-valid
 evaluation of DDOI (the WITHDRAWN cross-day "49.2/50.8" was quarterly contamination;
