@@ -213,8 +213,10 @@ export interface Surface {
   skew: number;
   /** Fit RMSE in vol units. */
   rmse: number;
-  /** Gatheral sufficient no-butterfly conditions hold for the slice. */
-  arb_free: boolean;
+  /** Implied variance is non-negative everywhere (`w(k) >= 0`): `b >= 0`,
+   * `|rho| < 1`, `sigma > 0` and `a + b·sigma·sqrt(1-rho²) >= 0`. NOT a
+   * no-butterfly / non-negative-density guarantee (no Durrleman `g(k) >= 0`). */
+  variance_nonneg: boolean;
   /** Raw-SVI `a` (vertical level). */
   svi_a: number;
   /** Raw-SVI `b` (slope/wing tightness, >= 0). */
@@ -467,7 +469,7 @@ export const SurfaceSchema = z
     expected_move: finiteNumber,
     skew: finiteNumber,
     rmse: finiteNumber,
-    arb_free: z.boolean(),
+    variance_nonneg: z.boolean(),
     svi_a: finiteNumber,
     svi_b: finiteNumber,
     svi_rho: finiteNumber,

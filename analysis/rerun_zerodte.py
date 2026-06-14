@@ -204,7 +204,7 @@ for day in DAYS:
                     sv=fit_svi(ks,vs,fwd,t_exp)
                     skew=(svi_vol(sv.params,0.01,t_exp)-svi_vol(sv.params,-0.01,t_exp))/0.02
                     print(f"  SVI@12:30: ATM_vol={sv.atm_vol*100:.1f}% skew={skew:.2f} "
-                          f"EM={sv.expected_move:.1f} rmse={sv.rmse:.4f} arb_free={sv.arb_free}")
+                          f"EM={sv.expected_move:.1f} rmse={sv.rmse:.4f} variance_nonneg={sv.variance_nonneg}")
                 except Exception as e:
                     print(f"  SVI@12:30: ERR {type(e).__name__}")
 print("\nDONE.")

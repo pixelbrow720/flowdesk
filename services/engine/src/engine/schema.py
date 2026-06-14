@@ -258,8 +258,10 @@ class Surface(BaseModel):
     """ATM skew: slope of SVI vol in log-moneyness (negative = put skew)."""
     rmse: float
     """Fit RMSE in vol units."""
-    arb_free: bool
-    """Gatheral sufficient no-butterfly conditions hold for the slice."""
+    variance_nonneg: bool
+    """Implied variance is non-negative everywhere (``w(k) >= 0``): ``b >= 0``,
+    ``|rho| < 1``, ``sigma > 0`` and ``a + b·sigma·sqrt(1-rho²) >= 0``. NOT a
+    no-butterfly / non-negative-density guarantee (no Durrleman ``g(k) >= 0``)."""
     svi_a: float
     """Raw-SVI ``a`` (vertical level)."""
     svi_b: float

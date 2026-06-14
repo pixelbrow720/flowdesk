@@ -15,7 +15,7 @@ from engine.surface import (
     expected_move,
     expected_move_from_straddle,
     fit_svi,
-    is_butterfly_arbitrage_free,
+    is_variance_nonneg,
     svi_vol,
     total_variance,
 )
@@ -53,7 +53,7 @@ def test_fit_recovers_known_smile() -> None:
     for K, v in zip(strikes, vols):
         got = svi_vol(sl.params, math.log(K / FORWARD), T)
         assert abs(got - v) < 2e-3
-    assert sl.arb_free
+    assert sl.variance_nonneg
     assert sl.atm_vol > 0.0
 
 
@@ -75,13 +75,13 @@ def test_fit_requires_five_strikes() -> None:
     raise AssertionError("fit_svi should require >= 5 strikes")
 
 
-def test_butterfly_guard() -> None:
-    assert is_butterfly_arbitrage_free(_truth())
-    assert not is_butterfly_arbitrage_free(SVIParams(0.0, -1.0, 0.0, 0.0, 0.1))  # b<0
-    assert not is_butterfly_arbitrage_free(SVIParams(0.0, 0.04, 1.5, 0.0, 0.1))  # |rho|>1
-    assert not is_butterfly_arbitrage_free(SVIParams(0.0, 0.04, 0.0, 0.0, 0.0))  # sigma<=0
+def test_variance_nonneg_guard() -> None:
+    assert is_variance_nonneg(_truth())
+    assert not is_variance_nonneg(SVIParams(0.0, -1.0, 0.0, 0.0, 0.1))  # b<0
+    assert not is_variance_nonneg(SVIParams(0.0, 0.04, 1.5, 0.0, 0.1))  # |rho|>1
+    assert not is_variance_nonneg(SVIParams(0.0, 0.04, 0.0, 0.0, 0.0))  # sigma<=0
     # negative variance floor (a too negative for the wing)
-    assert not is_butterfly_arbitrage_free(SVIParams(-1.0, 0.04, 0.0, 0.0, 0.1))
+    assert not is_variance_nonneg(SVIParams(-1.0, 0.04, 0.0, 0.0, 0.1))
 
 
 def test_expected_move_lognormal() -> None:
@@ -136,14 +136,14 @@ def test_build_surface_fits_and_summarises() -> None:
     sf = build_surface(_rows_from_truth(), FORWARD, T)
     assert sf is not None
     assert sf.atm_vol > 0.0 and sf.expected_move > 0.0
-    assert sf.rmse < 1e-3 and sf.arb_free
+    assert sf.rmse < 1e-3 and sf.variance_nonneg
     assert math.isclose(
         sf.expected_move, FORWARD * sf.atm_vol * math.sqrt(T), rel_tol=1e-9
     )
     # truth has rho<0 (put skew) -> SVI vol slope in k is negative.
     assert sf.skew < 0.0
     assert set(sf.to_dict()) == {
-        "atm_vol", "expected_move", "skew", "rmse", "arb_free",
+        "atm_vol", "expected_move", "skew", "rmse", "variance_nonneg",
         "svi_a", "svi_b", "svi_rho", "svi_m", "svi_sigma",
     }
 

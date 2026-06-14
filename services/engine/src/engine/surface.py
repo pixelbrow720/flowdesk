@@ -22,10 +22,12 @@ with the five raw parameters
   * ``m``      horizontal shift of the smile minimum,
   * ``sigma > 0`` smoothness of the ATM curvature.
 
-The Black-76 implied vol at ``k`` is ``sqrt(max(w(k), 0) / T)``. Gatheral's
-sufficient no-butterfly conditions used here: ``b >= 0``, ``|rho| < 1``,
-``sigma > 0`` and ``a + b*sigma*sqrt(1 - rho**2) >= 0`` (so ``w >= 0``
-everywhere). A finer ``g(k) >= 0`` density check is provided separately.
+The Black-76 implied vol at ``k`` is ``sqrt(max(w(k), 0) / T)``. The
+``variance_nonneg`` flag checks ONLY that implied variance is non-negative
+everywhere: ``b >= 0``, ``|rho| < 1``, ``sigma > 0`` and
+``a + b*sigma*sqrt(1 - rho**2) >= 0`` (so ``w(k) >= 0``). This is necessary but
+NOT sufficient for the absence of butterfly arbitrage — the finer Durrleman
+``g(k) >= 0`` density check is NOT implemented.
 
 Expected move (mega-riset §EM)
 ==============================
@@ -56,7 +58,7 @@ __all__ = [
     "SurfaceSnapshot",
     "total_variance",
     "svi_vol",
-    "is_butterfly_arbitrage_free",
+    "is_variance_nonneg",
     "fit_svi",
     "build_surface",
     "expected_move",
@@ -97,7 +99,7 @@ class VolSlice:
     atm_vol: float
     expected_move: float
     rmse: float
-    arb_free: bool
+    variance_nonneg: bool
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -107,7 +109,7 @@ class VolSlice:
             "atm_vol": self.atm_vol,
             "expected_move": self.expected_move,
             "rmse": self.rmse,
-            "arb_free": self.arb_free,
+            "variance_nonneg": self.variance_nonneg,
         }
 
 
@@ -127,13 +129,14 @@ def svi_vol(params: SVIParams, k: float, T: float) -> float:
     return math.sqrt(w / T)
 
 
-def is_butterfly_arbitrage_free(params: SVIParams) -> bool:
-    """Gatheral's sufficient no-butterfly conditions for a raw-SVI slice.
+def is_variance_nonneg(params: SVIParams) -> bool:
+    """Non-negative implied variance ``w(k) >= 0`` everywhere for a raw-SVI slice.
 
-    ``b >= 0``, ``|rho| < 1``, ``sigma > 0`` and ``a + b*sigma*sqrt(1-rho**2) >= 0``
-    (the smile minimum total variance is non-negative). Sufficient, not
-    necessary — a slice failing this may still be arb-free, but a passing slice
-    is guaranteed convex enough for a non-negative risk-neutral density.
+    Checks ``b >= 0``, ``|rho| < 1``, ``sigma > 0`` and
+    ``a + b*sigma*sqrt(1-rho**2) >= 0`` (the smile minimum total variance is
+    non-negative). This guarantees only that ``w(k) >= 0`` for all ``k``; it is
+    NOT a no-butterfly / non-negative-density guarantee. The finer Durrleman
+    ``g(k) >= 0`` density check is NOT implemented.
     """
     if not (params.b >= 0.0):
         return False
@@ -299,7 +302,7 @@ def fit_svi(
         atm_vol=atm_vol,
         expected_move=em,
         rmse=rmse,
-        arb_free=is_butterfly_arbitrage_free(params),
+        variance_nonneg=is_variance_nonneg(params),
     )
 
 
@@ -331,16 +334,17 @@ class SurfaceSnapshot:
 
     Carries the fitted raw-SVI params (so a consumer can reconstruct the whole
     smile), the ATM vol, the 1-sigma lognormal expected move, the ATM skew, the fit
-    RMSE and the no-butterfly flag. ``None`` when fewer than ``MIN_SURFACE_STRIKES``
-    non-thin strikes are available. Structural only — the fit is deterministic and
-    tested, but it is not a price-validated signal.
+    RMSE and the ``variance_nonneg`` flag (only ``w(k) >= 0``, NOT no-butterfly).
+    ``None`` when fewer than ``MIN_SURFACE_STRIKES`` non-thin strikes are available.
+    Structural only — the fit is deterministic and tested, but it is not a
+    price-validated signal.
     """
 
     atm_vol: float
     expected_move: float
     skew: float
     rmse: float
-    arb_free: bool
+    variance_nonneg: bool
     svi_a: float
     svi_b: float
     svi_rho: float
@@ -353,7 +357,7 @@ class SurfaceSnapshot:
             "expected_move": self.expected_move,
             "skew": self.skew,
             "rmse": self.rmse,
-            "arb_free": self.arb_free,
+            "variance_nonneg": self.variance_nonneg,
             "svi_a": self.svi_a,
             "svi_b": self.svi_b,
             "svi_rho": self.svi_rho,
@@ -399,7 +403,7 @@ def build_surface(
         expected_move=slice_.expected_move,
         skew=skew,
         rmse=slice_.rmse,
-        arb_free=slice_.arb_free,
+        variance_nonneg=slice_.variance_nonneg,
         svi_a=p.a,
         svi_b=p.b,
         svi_rho=p.rho,

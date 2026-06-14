@@ -225,7 +225,7 @@ reconstruct the whole smile. See `docs/research/empirical/synthetic-oi-0dte.md`.
 | `expected_move` | `number` | index points | 1-sigma lognormal move `F·atm_vol·√T`. | FlowGreeks |
 | `skew` | `number` | vol per unit log-moneyness | ATM slope of SVI vol (negative = put skew). | FlowGreeks |
 | `rmse` | `number` | vol units | Fit RMSE. | FlowGreeks |
-| `arb_free` | `boolean` | — | Gatheral sufficient no-butterfly conditions hold. | FlowGreeks |
+| `variance_nonneg` | `boolean` | — | Implied variance non-negative everywhere (`w(k) ≥ 0`); NOT a no-butterfly/density guarantee. | FlowGreeks |
 | `svi_a` | `number` | variance | Raw-SVI `a` (vertical level). | FlowGreeks |
 | `svi_b` | `number` | ≥ 0 | Raw-SVI `b` (slope / wing tightness). | FlowGreeks |
 | `svi_rho` | `number` | `(-1, 1)` | Raw-SVI `rho` (skew / rotation). | FlowGreeks |

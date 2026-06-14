@@ -117,7 +117,7 @@ def main() -> int:
             # EM at open uses open ATM vol if available else slice
             em_o = vs.expected_move
             print(f"  {day:12s} {vs.atm_vol:>8.4f} {skew:>9.3f} {vs.rmse:>7.4f} "
-                  f"{'Y' if vs.arb_free else 'N':>4s} {vs.expected_move:>9.1f} "
+                  f"{'Y' if vs.variance_nonneg else 'N':>4s} {vs.expected_move:>9.1f} "
                   f"{vs.expected_move:>9.1f} {len(strikes):>4}")
     print("\nF.2/F.3 (descriptive): negative skew@k0 = put skew (downside fear, typical);"
           " ATM_vol & expected move should spike on the crash days (Jun 5, 9).")
