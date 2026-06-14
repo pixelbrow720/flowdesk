@@ -105,6 +105,40 @@ they do **not** close gap #1.
 > generator to pass the `net_flow*` maps for whichever lenses the dashboard shows.
 > Stays DEFERRED, not done.
 
+> **UPDATE (2026-06-14) — synthetic-OI #4 FLOW TERM now has a 0DTE-valid SAME-SESSION
+> STRUCTURAL eval; BOTH /ES and /NQ = UNDETERMINED at n=4.**
+> `analysis/harness/synthetic_oi_eval.py` (+ runner + **16 tests**; full harness suite
+> = **74 pass**, run through the tenor-provenance guard) tests the ONE thing
+> synthetic-OI #4 uniquely claims over a classic OI-GEX vendor. **the-advisor
+> corrected the axis:** NOT "synthetic vs VOL" (that is CONFOUNDED — it mixes the
+> locked OI-vs-VOL basis decision #1 with the flow term) but **`gex` (w=1) vs
+> `gex_static` (w=0)** — does the native-aggressor FLOW term `(−flow)·w` add per-strike
+> STRUCTURE OVER pure OI-GEX? It is **STRUCTURAL, NOT predictive — there is NO hit-rate
+> / NO "55%"**: a predictive arm is BLOCKED because synthetic `Q` needs prior-session
+> `OI_open`, the only OI on disk is same-day EOD settle, and using settle-OI intraday
+> is look-ahead (0DTE has zero cross-day overlap). **AGGREGATOR ANCHOR verified
+> (load-bearing):** the new sign-free `synthetic_gex_by_strike` sums EXACTLY to the
+> engine's scalar `synthetic_gex` at w=0/0.5/1.0 (`math.isclose`), and does NOT
+> re-apply the dealer sign already baked into `Q` (the double-sign trap was AVOIDED —
+> a NEW aggregator, not `ddoi_divergence.gex_by_strike`). Metrics: `residual_r2`
+> (rescale-null), `flow_norm_ratio` (headline magnitude), `argmax_distance`, vs a
+> shuffled-aggressor-sign null; the DDOI `Σw=0` sign-flip detectors were deliberately
+> NOT used (wrong mechanism). **RESULT (per-instrument, never pooled):** the flow term
+> is **materially-sized** (mean `flow_norm_ratio` ~0.5 /ES, ~0.79 /NQ) but its
+> DIRECTION is **NOT separable** from random-sign flow at n=4. **/ES UNDETERMINED**
+> (mean `norm_ratio_gap` +0.030 < 0.05, per-day sign 1+/3− inconsistent). **/NQ
+> UNDETERMINED** — a prior "YES (exploratory)" was a **single-day artefact** (06-05's
+> +1.017 is ~245% of the signed sum; excluding it the mean is −0.201; sign 2+/2−
+> inconsistent); the **red-team caught it** and the verdict logic was fixed to require
+> per-day sign consistency (mirroring the HIRO pooling defect class), so **NQ now reads
+> UNDETERMINED, never YES.** **Verdict: NOT a demonstrated edge, NOT a demonstrated
+> absence.** Only **#4** was evaluated; **#5 decay / #6 tiered** (need new tier/decay
+> flow-map construction — the offline harness builds only one flow map) and **#7
+> `charm_hedge`/`vanna_hedge`** (its `gamma_hedge` == #4 `gex` bit-for-bit) are
+> **DEFERRED**; the synthetic-OI family is still **ABSENT from committed FE session
+> JSON** (live-only, as above). Still EXPERIMENTAL, still not price-validated; see
+> [`research/empirical/synthetic-oi-eval.md`](research/empirical/synthetic-oi-eval.md).
+
 > **HONESTY FIX — the DDOI "49.2% vs 50.8% FLAT vs VOL" number is contaminated
 > provenance and must NOT be cited as a 0DTE result.** That figure
 > (`research/empirical/track-f-ddoi-exposure-vol.md:80`, self-labelled "8-day

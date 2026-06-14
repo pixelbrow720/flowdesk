@@ -53,6 +53,73 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-14 — Synthetic-OI #4 FLOW-TERM eval built (controlled, EOD STRUCTURAL) — BOTH /ES + /NQ UNDETERMINED, validated NOTHING, no 55%
+A STRUCTURAL (NOT predictive) eval of the ONE thing synthetic-OI #4 uniquely claims
+over a classic OI-GEX vendor: does the native-aggressor FLOW term `(−flow)·w` add
+per-strike STRUCTURE OVER pure OI-GEX? **This validated NOTHING** — it is an honest
+exploratory UNDETERMINED for both instruments at n=4. **There is NO hit-rate / NO
+"55%"** (structural arm — a predictive arm is BLOCKED: synthetic `Q` needs
+prior-session `OI_open`, the only OI on disk is same-day EOD settle, settle-OI
+intraday is look-ahead, and 0DTE has zero cross-day overlap).
+
+**Role-separated flow (anti-bias):** **the-advisor** corrected the comparison axis
+off the confounded "synthetic vs VOL" (which mixes the LOCKED OI-vs-VOL basis decision
+#1 with the flow term, and is possibly trivial) onto the only unique claim —
+**`gex` (w=1) vs `gex_static` (w=0)** → coder built → **test-author** anchored the new
+sign-free aggregator → **red-team** caught a single-day-artefact "NQ YES" + a missing
+sign-consistency gate → coder sign-gate fix → **74 tests pass** (16 provenance + 20
+metrics + 14 divergence + 8 hiro_eval + 16 synthetic_oi_eval).
+
+**Built (NOT touched by doc-scribe — built this session by the coder):**
+- `analysis/harness/synthetic_oi_eval.py` (pure core) + `run_synthetic_oi_eval.py`
+  (dbn runner, through the fail-closed tenor-provenance guard) +
+  `test_synthetic_oi_eval.py` (16 tests).
+
+**VERIFIED facts (do NOT soften):**
+- **AGGREGATOR ANCHOR holds (load-bearing):** `sum(synthetic_gex_by_strike(...))`
+  == engine scalar `synthetic_gex(...)` EXACTLY (`math.isclose`) at w=0/0.5/1.0
+  (`test_synthetic_oi_eval.py:118-132`). NO double-sign — a NEW sign-free aggregator
+  was written (not `ddoi_divergence.gex_by_strike`, which would re-apply the dealer
+  sign already baked into `Q` and manufacture fake divergence;
+  `test_synthetic_oi_eval.py:168-188`). This is what makes the eval trustworthy.
+- Metrics: `residual_r2` (is `gex` a scalar rescale of static), `flow_norm_ratio`
+  (headline magnitude), `argmax_distance`, vs a shuffled-aggressor-sign null. The DDOI
+  `Σw=0` sign-flip detectors were deliberately NOT used (wrong mechanism — synthetic
+  has no de-meaning).
+- **RESULT (per-instrument, never pooled):** the flow term is **materially-sized**
+  (mean `flow_norm_ratio` ~0.5 /ES, ~0.79 /NQ) but its DIRECTION is **NOT separable**
+  from random-sign flow of the same magnitude at n=4. **/ES = UNDETERMINED** (per-day
+  gaps {−0.017, −0.025, +0.171, −0.010}, mean +0.030 < 0.05, sign 1+/3− inconsistent).
+  **/NQ = UNDETERMINED** (per-day {+1.017, +0.277, −0.401, −0.479}, mean +0.103 — but a
+  **single-day artefact**: 06-05's +1.017 is ~245% of the signed sum, excluding it mean
+  = −0.201, sign 2+/2− inconsistent).
+- **HEADLINE: NOT a demonstrated edge, NOT a demonstrated absence.** NQ NEVER reads YES.
+
+**Verdict-logic bug found + fixed:** the runner had **no per-day sign-consistency
+gate**, so the NQ magnitude-mean (dominated by one thin-profile day) read "YES
+(exploratory)". The red-team caught it; fixed by adding the per-day sign tally +
+single-day-domination check (`run_synthetic_oi_eval.py:115-151`, `455-473`) — the
+**same defect CLASS** as the earlier HIRO ES+NQ-pooling defect. Structural lesson: a
+magnitude-mean dominated by one high-variance thin-profile day must never override a
+coin-flip per-day sign.
+
+**VERIFIED vs DEFERRED:** only **#4** (`gex` vs `gex_static`) was evaluated. **#5
+decay / #6 tiered** are DEFERRED — the offline harness builds only ONE flow map; the
+tier/decay maps exist only in the live worker. **#7 total_hedging** DEFERRED — its
+`gamma_hedge` == #4 `gex` bit-for-bit (`total_hedging.py:17,62`), so only
+`charm_hedge`/`vanna_hedge` are novel + unevaluated. The synthetic-OI family is still
+**ABSENT from committed FE session JSON** (live-worker only; couples to the
+not-yet-built Gap #4 dashboard).
+
+**Docs changed (markdown only):** `docs/research/empirical/synthetic-oi-eval.md`
+(NEW), `docs/08-status-and-gaps.md` gap #2 (structural-eval UPDATE), this checkpoint.
+**NO non-markdown touched.**
+
+**NEXT:** VT concentration-gamma research (the third agreed step) — investigate
+whether a τ-concentration "faithful VT" is buildable, vs the relabeled OI-basis
+`oi_gamma_flip` already shipped (gap #2 proprietary notes). Plus the DEFERRED #5/#6/#7
+follow-ups + synthetic-OI FE-wiring (couples to Gap #4).
+
 ### 2026-06-14 — HIRO t→t+k PREDICTIVE eval built (controlled, look-ahead-free) — exploratory NULL / underpowered-hint, validated NOTHING
 The first *predictive* eval of any FlowDesk lens. HIRO earns it (DDOI did not):
 HIRO is strictly t-causal (`Σ_{trades≤t} sign·δ·size·M·F`), so a `delta_hiro_t →
