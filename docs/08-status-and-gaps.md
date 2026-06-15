@@ -353,6 +353,29 @@ The HIRO-related backend findings below remain valid (they are about
 > trades at each trade's arrival forward, so the line is stable + identical across
 > both paths. This is a prerequisite before the FE renders HIRO.
 >
+> **STATUS (2026-06-15) — RESOLVED.** Phase 2 Item 3 implementation landed in
+> commits `604bad5` (design doc), `445e019` (engine), `4b97756` (api worker),
+> `8097228` (parity test). The api-layer worker now holds a persistent
+> per-instrument `HiroState` and feeds only the NEW suffix of trades each minute
+> at that minute's forward — economically correct (hedging happens at the price
+> prevailing then) and BIT-IDENTICAL to `gen_session_snapshots.py:75-112` per
+> the parity test (`services/api/tests/test_hiro_parity.py`, asserts ≤1e-9 abs
+> diff per minute on a 6-minute scripted session including zero-trade
+> minutes). Restart safety is provided by a two-tier scheme — Tier 1 reseeds
+> from a Redis dump (`flowdesk:hiro:{instrument}`, TTL 90m, written each LIVE
+> tick); Tier 2 falls back to a fresh accumulator on any miss / wrong date /
+> malformed payload / Redis hiccup. Daily reset is keyed off the ET session
+> date; defensive shrunken-window detection guards against fixture rebuilds.
+> Engine purity preserved: `HiroState.to_dict/from_dict` are plain scalars and
+> `HiroState` is never pushed into `build_snapshot`. Snapshot contract bytes
+> unchanged (no mirror-trio change). The originally-proposed `degraded` flag
+> from `docs/architecture/hiro-unification.md` §4.5 was descoped — it would
+> touch the locked Snapshot contract and the existing WARNING log on feed
+> gaps already provides the operational signal until a UX layer needs it.
+> Design lives in `docs/architecture/hiro-unification.md`. Full historical
+> context (the original DEFERRED rationale and the advisor's design
+> direction) preserved below for traceability.
+>
 > **STATUS (2026-06-14) — DEFERRED with design direction (advisor-revised).** FACT
 > + the-advisor reasoning: the divergence is **NOT an accumulation-method bug** —
 > both paths accumulate the same trade set `[open, ts]` (residual confirmed in Gap
@@ -395,9 +418,11 @@ The HIRO-related backend findings below remain valid (they are about
 > resolve). **Verdict: NOT a demonstrated edge, NOT a demonstrated absence.** The
 > forward is an OPTION-DERIVED parity forward (NOT a futures price); only
 > k∈{5,15,30}min tested; the ~90-day forward run was dropped by the user, so this
-> stays exploratory. The live-worker HIRO accumulation fix above is **still
-> DEFERRED** (separate backend chore — this eval runs on the offline/generator path,
-> not the worker). See
+> stays exploratory. The live-worker HIRO accumulation fix above is **now
+> RESOLVED** (Phase 2 Item 3, 2026-06-15) — see the RESOLVED block at the top
+> of this gap. This predictive eval still runs on the offline/generator path,
+> but the worker line is now bit-identical so the same conclusions apply
+> end-to-end. See
 > [`research/empirical/hiro-predictive-eval.md`](research/empirical/hiro-predictive-eval.md).
 
 ### 5. Surface / vanna / charm — WIRED ✅ (EXPERIMENTAL)
