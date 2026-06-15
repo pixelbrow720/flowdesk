@@ -206,6 +206,17 @@ class MinuteWorker:
                 # tolerance on a subsequent tick.
                 log.warning("feed produced nothing for %s; holding last frame", instrument)
         elif state is SessionState.STALE:
+            # STALE means determine_state saw a feed-gap (> tolerance) since the
+            # last stored ts. ALWAYS attempt a live recovery first: pull the
+            # feed and try to produce a fresh snapshot. If the feed comes back
+            # (e.g. first 09:30 tick after overnight/restart, or an in-session
+            # gap that has just resolved), _produce_live advances ts and we
+            # mark the session LIVE for this tick. Only when the feed is still
+            # down do we fall back to _republish_stale to hold the last frame.
+            recovered = await self._produce_live(instrument, now)
+            if recovered:
+                await self._state.set_session(instrument, SessionState.LIVE.value)
+                return SessionState.LIVE
             await self._republish_stale(instrument, last)
         # PREMARKET / CLOSED / HOLIDAY -> idle.
 
@@ -377,6 +388,15 @@ class MinuteWorker:
         quotes = to_engine_chain(chain, t_expiry=self._t_expiry_for(ts_utc))
         forward = float(getattr(chain, "forward"))
         axis = _axis_from_chain(instrument, chain)
+        # Front-future OHLC for the minute (mirrors the offline generator at
+        # scripts/gen_session_snapshots.py). LiveAdapter has no get_ohlc / can
+        # raise; guard like get_chain above and degrade to None on miss --
+        # never fail the whole tick on a missing OHLC.
+        try:
+            ohlc = self._feed.get_ohlc(instrument, ts_utc)
+        except Exception as exc:
+            log.debug("feed.get_ohlc unavailable for %s @ %s: %s", instrument, ts_utc, exc)
+            ohlc = None
         # Fetch the signed tape ONCE; HIRO and synthetic-OI both consume it.
         trades = self._fetch_signed_trades(instrument, ts_utc)
         snapshot = build_snapshot(
@@ -390,6 +410,7 @@ class MinuteWorker:
             t_expiry=self._t_expiry_for(ts_utc),
             stale=False,
             expired=False,
+            ohlc=ohlc,
             hiro=self._hiro_for(instrument, ts_utc, forward, trades),
             net_flow=self._net_flow_for(trades),
             net_flow_tiered=self._net_flow_tiered_for(trades, instrument),
@@ -410,7 +431,16 @@ class MinuteWorker:
         return True
 
     async def _republish_stale(self, instrument: str, last: Any) -> bool:
-        """Re-publish the last snapshot with ``stale=true`` (hold, no new ts)."""
+        """Hold the last snapshot as ``stale=true`` (FALLBACK only).
+
+        Invoked from the STALE branch of :meth:`_tick_instrument` ONLY when a
+        live recovery attempt (``_produce_live``) failed in this tick — i.e.
+        the feed is still down. Re-publishes the last stored frame with
+        ``stale=true`` and ``state=STALE``; ts/minute_index are intentionally
+        left unchanged so the feed-gap delta keeps growing and the session
+        stays STALE until the feed recovers. ``set_now`` only — no
+        ``save_snapshot`` (replay records only genuinely produced minutes).
+        """
         if not isinstance(last, Mapping):
             log.warning("STALE for %s but no last snapshot to hold", instrument)
             return False

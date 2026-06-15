@@ -7,15 +7,18 @@ round-trips exactly and ``build_snapshot`` runs the full real pipeline.
 Covered:
   * LIVE tick -> save_snapshot called once + set_now published once; the
     published payload validates under the engine schema (instrument/state/ts).
-  * STALE tick -> last frame re-published with ``stale=true``, ts unchanged,
-    and NO new row stored (hold semantics).
+  * STALE tick (feed RECOVERS) -> the worker re-attempts ``_produce_live`` on a
+    STALE branch and, when the feed answers, advances ts and flips the session
+    back to LIVE (PRD #9 -- locks the post-fix recovery contract).
+  * STALE tick (feed STILL DOWN) -> recovery attempt fails, last frame is
+    held / re-published with ``stale=true``, ts unchanged, NO new row stored.
   * CLOSED tick -> idle (no save, no publish), session recorded.
 """
 from __future__ import annotations
 
 import asyncio
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 
 from engine.black76 import price as bs_price
 from engine.feed.base import ChainRow, OptionChainMinute
@@ -60,6 +63,20 @@ class FakeFeed:
 
     def get_forward(self, instrument: str, ts: datetime) -> float:
         return 5000.0
+
+
+class FailingFeed(FakeFeed):
+    """FakeFeed whose ``get_chain`` records the attempt then RAISES.
+
+    Mirrors a real-world feed gap: ``MinuteWorker._produce_live`` catches the
+    exception and returns False, so the STALE branch falls back to
+    ``_republish_stale``. We still append to ``calls`` BEFORE raising so the
+    test can assert the worker actually attempted a live recovery.
+    """
+
+    def get_chain(self, instrument: str, ts: datetime) -> OptionChainMinute:
+        self.calls.append((instrument, ts))
+        raise RuntimeError("feed gap: upstream chain unavailable")
 
 
 class FakeRepo:
@@ -135,7 +152,15 @@ def test_live_tick_produces_stores_publishes() -> None:
     assert snap.ts == "2026-06-10T13:31:00Z"
 
 
-def test_stale_tick_holds_last_frame() -> None:
+def test_stale_recovers_when_feed_returns() -> None:
+    """STALE branch MUST attempt ``_produce_live`` first; when the feed answers
+    the worker advances ts and flips the session back to LIVE.
+
+    Locks the post-fix recovery contract (services/api/src/api/worker.py
+    :201-223). Pre-fix, the worker stuck STALE after any feed gap or restart
+    until 16:00; this test would FAIL under that old code because no feed pull
+    happens and ts/state would not advance.
+    """
     feed, repo, state = FakeFeed(), FakeRepo(), FakeState()
     now = datetime(2026, 6, 10, 12, 0, tzinfo=ET)
     # Seed a last snapshot that is 3 minutes old -> gap > tolerance -> STALE.
@@ -146,14 +171,57 @@ def test_stale_tick_holds_last_frame() -> None:
 
     states = asyncio.run(worker.tick(now))
 
+    # Recovery: determine_state saw STALE, but _produce_live succeeded so the
+    # tick concludes LIVE. The session published to Redis is "LIVE" too.
+    assert states["ES"] is SessionState.LIVE
+    expected_ts = datetime(2026, 6, 10, 16, 0, tzinfo=timezone.utc)
+    assert feed.calls == [("ES", expected_ts)], (
+        "STALE must attempt one feed recovery pull (post-fix contract)"
+    )
+    assert len(repo.saved) == 1, "recovered LIVE frame must be persisted"
+    assert len(state.published) == 1, "recovered LIVE frame must be published"
+    _, payload = state.published[0]
+    snap = parse_snapshot(payload)
+    assert snap.state == "LIVE"
+    assert snap.stale is False
+    assert snap.ts == "2026-06-10T16:00:00Z", (
+        "ts must ADVANCE to the new minute on recovery; the held old_ts would "
+        "indicate the bug resurfaced (republish_stale path)"
+    )
+    assert snap.ts != old_ts
+    assert state.sessions["ES"] == "LIVE"
+
+
+def test_stale_holds_when_feed_still_down() -> None:
+    """STALE branch falls back to ``_republish_stale`` only when the live
+    recovery attempt itself fails.
+
+    Locks the held-fallback path: ``_produce_live`` returned False (feed still
+    down), so we re-publish the last frame as ``stale=true`` with ts UNCHANGED
+    and write nothing to the durable store. The feed must still record one
+    attempt -- proving recovery was tried, not skipped.
+    """
+    feed, repo, state = FailingFeed(), FakeRepo(), FakeState()
+    now = datetime(2026, 6, 10, 12, 0, tzinfo=ET)
+    old_ts = "2026-06-10T15:57:00Z"  # 11:57 ET, 3 min before 12:00 ET (16:00 UTC)
+    state.seed("ES", {"instrument": "ES", "ts": old_ts, "minute_index": 147,
+                       "state": "LIVE", "stale": False})
+    worker = _worker(feed, repo, state, now)
+
+    states = asyncio.run(worker.tick(now))
+
     assert states["ES"] is SessionState.STALE
-    assert feed.calls == [], "STALE must not pull the feed"
-    assert repo.saved == [], "STALE holds the frame; nothing new is stored"
-    assert len(state.published) == 1, "STALE re-publishes the held frame"
+    expected_ts = datetime(2026, 6, 10, 16, 0, tzinfo=timezone.utc)
+    assert feed.calls == [("ES", expected_ts)], (
+        "STALE MUST attempt one live recovery pull before falling back"
+    )
+    assert repo.saved == [], "held frame must not be persisted (replay records only produced minutes)"
+    assert len(state.published) == 1, "held frame is re-published once"
     _, payload = state.published[0]
     assert payload["stale"] is True
     assert payload["state"] == "STALE"
     assert payload["ts"] == old_ts, "ts unchanged so the gap keeps growing"
+    assert payload["minute_index"] == 147, "minute_index also held"
     assert state.sessions["ES"] == "STALE"
 
 

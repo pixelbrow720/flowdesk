@@ -47,8 +47,38 @@ const open = (): RealtimeState =>
 describe("parseFrame", () => {
   it("parses ping and snapshot frames", () => {
     expect(parseFrame('{"type":"ping"}')).toEqual({ type: "ping" });
-    const f = parseFrame('{"type":"snapshot","data":{"instrument":"ES"}}');
+    // Post-fix contract: the snapshot branch runs `data` through
+    // `safeParseSnapshot` (zod) before accepting. Feed a FULL contract-shaped
+    // snapshot so validation succeeds and the parsed frame is returned.
+    const raw = JSON.stringify({ type: "snapshot", data: snap() });
+    const f = parseFrame(raw);
     expect(f?.type).toBe("snapshot");
+    // Prove zod actually accepted it (and didn't just cast through): the
+    // returned frame carries the full validated shape, not a partial stub.
+    expect(f?.type === "snapshot" && f.data.schema_version).toBe(1);
+    expect(f?.type === "snapshot" && f.data.instrument).toBe("ES");
+    expect(f?.type === "snapshot" && f.data.minute_index).toBe(1);
+  });
+
+  it("rejects malformed snapshot data via zod", () => {
+    // A partial like `{"instrument":"ES"}` is missing every other required
+    // field of the Snapshot contract. Pre-fix, parseFrame cast `data as
+    // Snapshot` and returned an invalid frame; post-fix, zod rejects it and
+    // parseFrame returns null. This is the load-bearing anti-regression: if
+    // anyone reverts the safeParseSnapshot call, this test will catch them.
+    expect(
+      parseFrame('{"type":"snapshot","data":{"instrument":"ES"}}'),
+    ).toBeNull();
+    // A snapshot envelope whose `data` violates a deep invariant (here:
+    // field array-length mismatch) must also be rejected by zod.
+    const bad = snap();
+    (bad as { field: { gamma: number[] } }).field = {
+      ...bad.field,
+      gamma: [1, 2], // length 2 vs price_grid length 1 -> superRefine fails
+    };
+    expect(
+      parseFrame(JSON.stringify({ type: "snapshot", data: bad })),
+    ).toBeNull();
   });
 
   it("rejects malformed / unknown frames", () => {

@@ -20,7 +20,7 @@
  * This module is pure (no sockets, no timers) so it can be unit-tested with a
  * fake socket and drives both the live client and the mock feed.
  */
-import type { Snapshot } from "@flowdesk/contracts";
+import { safeParseSnapshot, type Snapshot } from "@flowdesk/contracts";
 
 export type RealtimeStatus =
   | "connecting"
@@ -105,9 +105,18 @@ export function parseFrame(raw: string): ServerFrame | null {
   if (t === "ping") return { type: "ping" };
   if (t === "snapshot") {
     const data = (obj as { data?: unknown }).data;
-    if (typeof data === "object" && data !== null) {
-      return { type: "snapshot", data: data as Snapshot };
+    // Validate against the zod contract — this is the only live ingress that
+    // talks to the real backend, so backend drift / partial frames must be
+    // dropped here rather than rendered as garbage. Other ingresses
+    // (session-loader, replay-mock, mock-data) already use parseSnapshot.
+    const result = safeParseSnapshot(data);
+    if (result.success) {
+      return { type: "snapshot", data: result.data };
     }
+    if (typeof console !== "undefined") {
+      console.warn("ws: snapshot validation failed:", result.error.message);
+    }
+    return null;
   }
   return null;
 }
