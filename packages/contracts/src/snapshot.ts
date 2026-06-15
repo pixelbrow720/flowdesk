@@ -339,6 +339,13 @@ export const RegimeSignSchema = z.union([
 ]);
 
 const finiteNumber = z.number().finite();
+// Bounded finite reals — `.finite()` is included for parity with the pydantic
+// `FiniteFloat` mirror (Phase 1 Item 4 finiteness hardening). It is technically
+// redundant under the current bounds (NaN fails `z.number()`; ±Infinity fails
+// `min/max`), but keeping it explicit locks intent and survives any future
+// loosening of the bound.
+const finitePercent = z.number().finite().min(0).max(100);
+const finiteUnitWeight = z.number().finite().min(0).max(1);
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "session_date must be an ISO date YYYY-MM-DD");
@@ -358,7 +365,7 @@ export const RegimeSchema = z
   .object({
     net_gamma: finiteNumber,
     sign: RegimeSignSchema,
-    stability_pct: z.number().min(0).max(100),
+    stability_pct: finitePercent,
   })
   .strict();
 
@@ -438,7 +445,7 @@ export const SyntheticOiSchema = z
     gex: finiteNumber,
     sign: RegimeSignSchema,
     gex_static: finiteNumber,
-    w: z.number().min(0).max(1),
+    w: finiteUnitWeight,
   })
   .strict();
 
@@ -458,7 +465,7 @@ export const TotalHedgingSchema = z
     gamma_hedge: finiteNumber,
     charm_hedge: finiteNumber,
     vanna_hedge: finiteNumber,
-    w: z.number().min(0).max(1),
+    w: finiteUnitWeight,
   })
   .strict();
 

@@ -11,9 +11,10 @@ mirror in lockstep.
 
 from __future__ import annotations
 
+import math
 import re
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -25,6 +26,52 @@ from pydantic import (
 
 #: Canonical schema version. Bump on ANY breaking change.
 SCHEMA_VERSION = 1
+
+# ---------------------------------------------------------------------------
+# Finiteness hardening (Phase 1 Item 4)
+# ---------------------------------------------------------------------------
+# Every Snapshot float MUST be a finite IEEE-754 double on ingress AND egress.
+# NaN and ±Infinity are CONTRACT VIOLATIONS — they corrupt downstream math
+# (heatmap projection, level extraction), break wire JSON (the JSON spec has no
+# NaN/Inf token: pydantic's default emits `null`, the browser's `JSON.parse`
+# refuses `NaN`/`Infinity`), and silently desynchronise the pydantic ↔ zod
+# mirror (the TypeScript side already rejects them via `z.number().finite()`
+# and the implicit `z.number()` NaN-rejection — see snapshot.ts).
+#
+# `FiniteFloat` is the canonical numeric leaf type used everywhere the zod
+# mirror uses `finiteNumber`. `allow_inf_nan=False` is enforced by pydantic
+# core during validation, so it applies whether the input arrives as a Python
+# float, a JSON string, or a nested list element.
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
+
+
+def _assert_finite_payload(payload: Any, path: str = "$") -> None:
+    """Egress guard: refuse to serialize any non-finite float in ``payload``.
+
+    Defence-in-depth against the egress mirror of the ingress contract: even
+    after every pydantic field is finite-only, a future additive field, a
+    raw `model_construct` bypass, or a third-party serialiser plug-in could
+    still slip a NaN/Inf into the dump. `model_dump_json` would then silently
+    coerce it to JSON ``null`` (pydantic's default) or emit invalid JSON. We
+    walk the dump tree once and raise ``ValueError`` instead.
+    """
+    if isinstance(payload, float):
+        if not math.isfinite(payload):
+            raise ValueError(
+                f"Snapshot serialization rejected: non-finite float at {path} "
+                f"({payload!r}); NaN/Inf violate the contract."
+            )
+        return
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            _assert_finite_payload(value, f"{path}.{key}")
+        return
+    if isinstance(payload, list):
+        for index, value in enumerate(payload):
+            _assert_finite_payload(value, f"{path}[{index}]")
+        return
+    # bool is a subclass of int; ints, strings, None pass through unchanged.
+    return
 
 #: Tradable instrument. /ES (M=$50/pt, step 5) or /NQ (M=$20/pt, step 10). PRD #0 §4.
 Instrument = Literal["ES", "NQ"]
@@ -41,11 +88,11 @@ class Axis(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    strike_min: float
+    strike_min: FiniteFloat
     """Lowest strike on the shared axis, in index points. PRD #8 §3."""
-    strike_max: float
+    strike_max: FiniteFloat
     """Highest strike on the shared axis, in index points. PRD #8 §3."""
-    step: float = Field(gt=0)
+    step: FiniteFloat = Field(gt=0, allow_inf_nan=False)
     """Strike increment in index points (/ES = 5, /NQ = 10). PRD #0 §4."""
 
 
@@ -54,11 +101,11 @@ class Regime(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    net_gamma: float
+    net_gamma: FiniteFloat
     """Aggregate dealer net gamma exposure, USD per 1% move. PRD #0 §5–§6."""
     sign: RegimeSign
     """Sign of ``net_gamma``: -1 | 0 | 1. PRD #0 §6."""
-    stability_pct: float = Field(ge=0, le=100)
+    stability_pct: FiniteFloat = Field(ge=0, le=100, allow_inf_nan=False)
     """Regime stability, percent in [0, 100]. PRD #0 §2."""
 
 
@@ -67,11 +114,11 @@ class ProfileRow(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    strike: float
+    strike: FiniteFloat
     """Strike, in index points."""
-    net_gex: float
+    net_gex: FiniteFloat
     """Net dealer Gamma Exposure at this strike, USD per 1% move. PRD #0 §5."""
-    net_dex: float
+    net_dex: FiniteFloat
     """Net dealer Delta Exposure at this strike, USD notional. PRD #0 §2."""
     interpolated: bool
     """True if this strike's values were interpolated (synthetic). PRD #8 §3."""
@@ -82,11 +129,11 @@ class FieldGrid(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    price_grid: list[float]
+    price_grid: list[FiniteFloat]
     """Price grid (index points) defining the field's price axis."""
-    gamma: list[float]
+    gamma: list[FiniteFloat]
     """Gamma field value at each grid point, USD per 1% move. PRD #0 §5."""
-    delta: list[float]
+    delta: list[FiniteFloat]
     """Delta field value at each grid point, USD notional. PRD #8 §3."""
 
     @model_validator(mode="after")
@@ -110,15 +157,15 @@ class Levels(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    call_walls: list[float]
+    call_walls: list[FiniteFloat]
     """Call walls by OI, STATIC, ordered by rank (index 0 = rank 1). PRD #0 §2."""
-    put_walls: list[float]
+    put_walls: list[FiniteFloat]
     """Put walls by OI, STATIC, ordered by rank (index 0 = rank 1). PRD #0 §2."""
-    gamma_flip: float | None
+    gamma_flip: FiniteFloat | None
     """Gamma flip strike (net-gamma zero-crossing) by VOL, or null. PRD #0 §2."""
-    largest_gex: float | None
+    largest_gex: FiniteFloat | None
     """Strike of the largest GEX by VOL, or null. PRD #0 §2."""
-    largest_dex: float | None
+    largest_dex: FiniteFloat | None
     """Strike of the largest DEX by VOL, or null. PRD #0 §2."""
 
 
@@ -130,13 +177,13 @@ class OHLC(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    o: float
+    o: FiniteFloat
     """Open: first futures trade price in the minute, index points."""
-    h: float
+    h: FiniteFloat
     """High: max futures trade price in the minute."""
-    l: float  # noqa: E741 — locked OHLC field name (mirrors snapshot.ts)
+    l: FiniteFloat  # noqa: E741 — locked OHLC field name (mirrors snapshot.ts)
     """Low: min futures trade price in the minute."""
-    c: float
+    c: FiniteFloat
     """Close: last futures trade price in the minute (== forward)."""
 
 
@@ -153,15 +200,15 @@ class Hiro(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    total: float
+    total: FiniteFloat
     """Cumulative HIRO (all legs), USD delta-notional since RTH open."""
-    calls: float
+    calls: FiniteFloat
     """Cumulative HIRO from call trades only, USD delta-notional."""
-    puts: float
+    puts: FiniteFloat
     """Cumulative HIRO from put trades only, USD delta-notional."""
-    zerodte: float
+    zerodte: FiniteFloat
     """Cumulative HIRO from 0DTE trades (T < 1/365), USD delta-notional."""
-    retail: float
+    retail: FiniteFloat
     """Cumulative HIRO from the (heuristic) retail proxy, USD delta-notional."""
 
 
@@ -179,13 +226,13 @@ class SyntheticOi(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    gex: float
+    gex: FiniteFloat
     """Net synthetic-OI GEX at weight ``w``, USD per 1% move. EXPERIMENTAL."""
     sign: RegimeSign
     """Sign of ``gex``: -1 | 0 | 1."""
-    gex_static: float
+    gex_static: FiniteFloat
     """``w=0`` pure-OI GEX baseline (SpotGamma-classic), USD per 1% move."""
-    w: float = Field(ge=0, le=1)
+    w: FiniteFloat = Field(ge=0, le=1, allow_inf_nan=False)
     """Open/close flow weight in [0, 1] used for ``gex``."""
 
 
@@ -203,11 +250,11 @@ class ExposureExt(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    net_vex: float
+    net_vex: FiniteFloat
     """Net vanna exposure, USD dealer dollar-delta per 1% IV move. EXPERIMENTAL."""
     vex_sign: RegimeSign
     """Sign of ``net_vex``: -1 | 0 | 1."""
-    net_chex: float
+    net_chex: FiniteFloat
     """Net charm exposure, USD dealer dollar-delta per calendar day. EXPERIMENTAL."""
     chex_sign: RegimeSign
     """Sign of ``net_chex``: -1 | 0 | 1."""
@@ -228,13 +275,13 @@ class TotalHedging(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    gamma_hedge: float
+    gamma_hedge: FiniteFloat
     """Gamma term on Q, USD per 1% price move (== synthetic-OI GEX at ``w``)."""
-    charm_hedge: float
+    charm_hedge: FiniteFloat
     """Charm term on Q, USD dealer dollar-delta drift per calendar day."""
-    vanna_hedge: float
+    vanna_hedge: FiniteFloat
     """Vanna term on Q, USD dealer dollar-delta per 1% IV (vol-point)."""
-    w: float = Field(ge=0, le=1)
+    w: FiniteFloat = Field(ge=0, le=1, allow_inf_nan=False)
     """Open/close flow weight in [0, 1] used for the ``Q`` base."""
 
 
@@ -250,27 +297,27 @@ class Surface(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    atm_vol: float
+    atm_vol: FiniteFloat
     """At-the-money implied vol (annualised, per 1.00) from the SVI fit at k=0."""
-    expected_move: float
+    expected_move: FiniteFloat
     """1-sigma lognormal expected move ``F·atm_vol·sqrt(T)``, index points."""
-    skew: float
+    skew: FiniteFloat
     """ATM skew: slope of SVI vol in log-moneyness (negative = put skew)."""
-    rmse: float
+    rmse: FiniteFloat
     """Fit RMSE in vol units."""
     variance_nonneg: bool
     """Implied variance is non-negative everywhere (``w(k) >= 0``): ``b >= 0``,
     ``|rho| < 1``, ``sigma > 0`` and ``a + b·sigma·sqrt(1-rho²) >= 0``. NOT a
     no-butterfly / non-negative-density guarantee (no Durrleman ``g(k) >= 0``)."""
-    svi_a: float
+    svi_a: FiniteFloat
     """Raw-SVI ``a`` (vertical level)."""
-    svi_b: float
+    svi_b: FiniteFloat
     """Raw-SVI ``b`` (slope/wing tightness, >= 0)."""
-    svi_rho: float
+    svi_rho: FiniteFloat
     """Raw-SVI ``rho`` (skew/rotation, |rho| < 1)."""
-    svi_m: float
+    svi_m: FiniteFloat
     """Raw-SVI ``m`` (horizontal shift of smile minimum)."""
-    svi_sigma: float
+    svi_sigma: FiniteFloat
     """Raw-SVI ``sigma`` (ATM curvature smoothness, > 0)."""
 
 
@@ -289,7 +336,7 @@ class Ddoi(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    gex: float
+    gex: FiniteFloat
     """Net synthetic-ΔOI GEX, USD per 1% move. EXPERIMENTAL."""
     sign: RegimeSign
     """Sign of ``gex``: -1 | 0 | 1."""
@@ -309,11 +356,11 @@ class Proprietary(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    oi_gamma_flip: float | None = None
+    oi_gamma_flip: FiniteFloat | None = None
     """Zero-crossing of cumulative net OI-gamma (OI/static analogue of levels.gamma_flip)."""
-    abs_gamma_strike: float | None = None
+    abs_gamma_strike: FiniteFloat | None = None
     """Strike of the largest total OI-gamma concentration."""
-    hedge_wall: float | None = None
+    hedge_wall: FiniteFloat | None = None
     """Strike of the largest |net OI-gamma| (dominant net dealer hedging node)."""
 
 
@@ -338,9 +385,9 @@ class Snapshot(BaseModel):
     """True when the feed is stale (1–2 min gap, last frame held). PRD #0 §2."""
     expired: bool
     """True once the 0DTE contracts for the session have expired. PRD #9."""
-    forward: float
+    forward: FiniteFloat
     """Forward = futures price F, in index points. PRD #0 §3."""
-    rate: float
+    rate: FiniteFloat
     """Continuous annual risk-free rate r = ln(1 + SOFR). PRD #0 §3–§4."""
     axis: Axis
     regime: Regime
@@ -388,7 +435,20 @@ class Snapshot(BaseModel):
         return v
 
     def to_json(self, *, indent: int | None = None) -> str:
-        """Serialize to JSON with keys identical to the TypeScript contract."""
+        """Serialize to JSON with keys identical to the TypeScript contract.
+
+        Finiteness hardening (Phase 1 Item 4): every emitted float is checked
+        finite before serialisation. Pydantic's default ``model_dump_json``
+        silently coerces NaN/Inf to JSON ``null`` (and the JSON spec has no
+        token for them anyway), which would corrupt downstream consumers and
+        desynchronise the zod mirror that rejects them on parse. The ingress
+        ``FiniteFloat`` annotation already forbids non-finite values, but we
+        re-check on egress as defence-in-depth: a NaN/Inf reaching this point
+        means a bypass (raw ``model_construct``, future field added without
+        the annotation, …) and is a contract violation, not data to pass on.
+        """
+        payload = self.model_dump()
+        _assert_finite_payload(payload)
         return self.model_dump_json(indent=indent)
 
 

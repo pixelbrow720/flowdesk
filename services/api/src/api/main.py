@@ -26,7 +26,9 @@ lifespan from REDIS_URL / TIMESCALE_DSN when present.
 """
 from __future__ import annotations
 
+import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Optional
@@ -57,9 +59,49 @@ from api.ws import register_ws_routes
 # --------------------------------------------------------------------------- #
 # Settings helpers (read env at call time so tests/process env stay flexible). #
 # --------------------------------------------------------------------------- #
+_CORS_ORIGIN_RE = re.compile(r"^(https://[^/\s]+|http://localhost(:\d+)?)$")
+
+
 def _cors_origins() -> list[str]:
     raw = os.environ.get("CORS_ORIGINS", "")
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def _validate_cors_config(origins: list[str], *, allow_credentials: bool) -> None:
+    """Fail-fast CORS validation called at app build (PRD #8 hardening).
+
+    Rules (Phase 1 Item 1, beta-readiness):
+      1. ``CORS_ORIGINS`` containing the literal ``"*"`` while
+         ``allow_credentials=True`` is silently rejected by browsers but the
+         server has been booting clean — raise loudly so misconfig is caught
+         in CI/staging, not in production where it manifests as "auth broken".
+      2. Empty ``CORS_ORIGINS`` is allowed (some deployments are same-origin)
+         but emits a WARN log so the operator notices the implicit lockdown.
+      3. Every origin must match ``https://...`` or ``http://localhost[:port]``.
+         Plain ``http://`` for non-localhost hosts is refused (cookies + creds
+         over plaintext is a beta-disqualifier).
+    """
+    log = logging.getLogger("api.cors")
+    if not origins:
+        log.warning(
+            "CORS_ORIGINS is empty; cross-origin requests will be blocked entirely. "
+            "Set CORS_ORIGINS to a comma-separated allowlist "
+            "(e.g. 'https://app.flowdesk.example,http://localhost:3000') "
+            "or this WILL look like 'auth broken' in prod."
+        )
+        return
+    if allow_credentials and any(o == "*" for o in origins):
+        raise RuntimeError(
+            "CORS_ORIGINS contains '*' while allow_credentials=True. "
+            "Browsers reject this combo silently; refusing to boot. "
+            "Use an explicit origin allowlist."
+        )
+    bad = [o for o in origins if not _CORS_ORIGIN_RE.match(o)]
+    if bad:
+        raise RuntimeError(
+            "CORS_ORIGINS contains origins that are not https:// or "
+            f"http://localhost[:port]: {bad!r}. Refusing to boot."
+        )
 
 
 def _feed_mode() -> str:
@@ -211,9 +253,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     app = FastAPI(title="FlowDesk API", version=__version__, lifespan=lifespan)
 
+    _origins = _cors_origins()
+    _validate_cors_config(_origins, allow_credentials=True)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_cors_origins(),
+        allow_origins=_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
