@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { TURQUOISE, CRIMSON } from "@flowdesk/tokens";
 import { rampToCssGradient, type RampStop } from "../../lib/heatmap/oklab";
 import { NumberReadout } from "../ui/number-readout";
 import type { Basis } from "../../lib/heatmap/field-2d";
@@ -15,14 +16,11 @@ export interface ColorbarProps {
 }
 
 // Locked ramp anchors (PRD #2). Mid changes with theme; ends are fixed.
-const LOW = "#40E0D0"; // turquoise = strongest positive
-const HIGH = "#E0183C"; // crimson  = strongest negative
-
 function stopsFor(theme: "dark" | "light"): RampStop[] {
   return [
-    { stop: 0, color: LOW },
+    { stop: 0, color: TURQUOISE },
     { stop: 0.5, color: theme === "light" ? "#FFFFFF" : "#000000" },
-    { stop: 1, color: HIGH },
+    { stop: 1, color: CRIMSON },
   ];
 }
 

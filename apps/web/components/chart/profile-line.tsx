@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { ProfileRow } from "@flowdesk/contracts";
+import { TURQUOISE, CRIMSON } from "@flowdesk/tokens";
 import type { YScale } from "../../lib/scale";
 import { useDashboardStore } from "../../lib/store";
 
@@ -16,8 +17,8 @@ export interface ProfileLineProps {
   className?: string;
 }
 
-const TURQUOISE = "#40E0D0";
-const CRIMSON = "#E0183C";
+// Local constant — not in @flowdesk/tokens. Promote to a locked token
+// (e.g. `tokens.bone`, `tokens.coal`) when locked-token expansion is approved.
 const BONE = "#E8E2D0"; // start-of-day gamma marker
 
 /**

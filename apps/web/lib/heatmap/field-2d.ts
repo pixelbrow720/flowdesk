@@ -155,15 +155,45 @@ function percentileAbs(values: number[], p: number): number {
 }
 
 /**
+ * Project one frame's 1D exposure field onto a shared target price grid.
+ * Returns a column of length `targetGrid.length`. Missing frame / missing
+ * field => all-zero column (caller treats as neutral).
+ */
+function projectFrameOntoGrid(
+  frame: ProfileFrame | undefined,
+  metric: HeatMetric,
+  targetGrid: number[],
+): number[] {
+  const height = targetGrid.length;
+  const col = new Array<number>(height).fill(0);
+  if (!frame || !frame.field) return col;
+  const series = metric === "net_gex" ? frame.field.gamma : frame.field.delta;
+  const grid = frame.field.price_grid;
+  if (!grid || !series || grid.length === 0) return col;
+  const byPrice = new Map<number, number>();
+  for (let i = 0; i < grid.length; i++) {
+    const p = grid[i];
+    if (p !== undefined) byPrice.set(p, series[i] ?? 0);
+  }
+  for (let y = 0; y < height; y++) {
+    col[y] = byPrice.get(targetGrid[y] ?? -1) ?? 0;
+  }
+  return col;
+}
+
+/**
  * Build the 2D heatmap field from a sequence of replay frames, using the
  * engine's TRACE-style projected field (`field.gamma` / `field.delta`) — the
  * dealer exposure RE-EVALUATED at each hypothetical spot.
  *
  * - Columns use a FIXED-WIDTH sliding window (see {@link candleWindow}): candle
  *   width never changes, the right 25% stays empty.
- * - Colour scale is clipped at the 98th percentile of |value| so a single 0DTE
- *   gamma spike can't compress the whole field to black ("senter" brightness:
- *   strong GEX = bright, weak = dim).
+ * - Each visible candle column shows the close-of-bin frame's projected field
+ *   (true historical evolution along X); a missing frame degrades that column
+ *   to neutral instead of crashing.
+ * - Colour scale is clipped at the 98th percentile of |value| ACROSS ALL bins
+ *   so the scale stays stable as the panel slides (a single 0DTE gamma spike
+ *   can't compress the whole field to black — "senter" brightness convention).
  * - Values normalize symmetrically: +clip -> 0 (turquoise), 0 -> 0.5 (neutral),
  *   -clip -> 1 (crimson).
  */
@@ -178,41 +208,44 @@ export function buildReplayField2D(
   const { bins, totalCols } = candleWindow(frames.length, upToIndex, candleSize);
   const width = Math.max(1, totalCols);
   const data = new Float32Array(width * height);
-
-  // No historical evolution: every visible candle column shows the CURRENT
-  // frame's exposure field. The shader flashlight is the only horizontal
-  // variation (it dims older / left columns toward black). Sample the latest
-  // frame's field onto the shared strike grid once, then replicate it across the
-  // candle region; the right 25% margin stays neutral (0.5 -> black).
   const last = Math.max(0, Math.min(upToIndex, frames.length - 1));
-  const f = frames[last];
-  const col = new Array<number>(height).fill(0);
-  const mags: number[] = [];
-  if (f) {
-    const series = metric === "net_gex" ? f.field.gamma : f.field.delta;
-    const grid = f.field.price_grid;
-    const byPrice = new Map<number, number>();
-    for (let i = 0; i < grid.length; i++) {
-      const p = grid[i];
-      if (p !== undefined) byPrice.set(p, series[i] ?? 0);
-    }
+  const latest = frames[last];
+
+  // Phase 1: project each visible bin's CLOSE-OF-BIN frame onto the shared
+  // strike grid. cols[x] is the per-strike column for candle x. Collect all
+  // non-zero magnitudes across every column so the clip percentile is computed
+  // over the whole visible window (stable color scale as the panel slides).
+  const cols: number[][] = [];
+  const allMags: number[] = [];
+  for (let x = 0; x < bins.length; x++) {
+    const bin = bins[x];
+    const closeIdx = bin ? bin[1] : last;
+    // Fall back to the latest frame if the close-of-bin frame is missing.
+    const binFrame = frames[closeIdx] ?? latest;
+    const col = projectFrameOntoGrid(binFrame, metric, targetGrid);
+    cols.push(col);
     for (let y = 0; y < height; y++) {
-      const v = byPrice.get(targetGrid[y] ?? -1) ?? 0;
-      col[y] = v;
-      if (v !== 0) mags.push(v);
+      const v = col[y] ?? 0;
+      if (v !== 0) allMags.push(v);
     }
   }
 
-  const clip = percentileAbs(mags, CLIP_PERCENTILE) || 1;
+  const clip = percentileAbs(allMags, CLIP_PERCENTILE) || 1;
   const candleCols = bins.length;
 
+  // Phase 2: fill the texture. Candle region carries the per-bin field; the
+  // right margin stays neutral (0.5 -> black so the flashlight has nothing to
+  // light there).
   for (let y = 0; y < height; y++) {
     const row = height - 1 - y; // flip: higher strike at top
-    const norm = normalizeSigned(col[y] ?? 0, clip);
     for (let x = 0; x < width; x++) {
-      // Candle region carries the field; the right margin stays neutral so the
-      // flashlight has nothing to light there (empty space reads as black).
-      data[row * width + x] = x < candleCols ? norm : 0.5;
+      if (x < candleCols) {
+        const col = cols[x];
+        const v = col?.[y] ?? 0;
+        data[row * width + x] = normalizeSigned(v, clip);
+      } else {
+        data[row * width + x] = 0.5;
+      }
     }
   }
 

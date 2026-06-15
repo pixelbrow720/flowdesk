@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { TURQUOISE, CRIMSON } from "@flowdesk/tokens";
 import { useDashboardStore } from "../../lib/store";
 import { candleWindow } from "../../lib/heatmap/field-2d";
 import { NumberReadout } from "../ui/number-readout";
@@ -11,9 +12,11 @@ export interface HeatmapOverlayProps {
   className?: string;
 }
 
-const TURQUOISE = "#40E0D0"; // support (put walls, below price)
-const CRIMSON = "#E0183C"; // resistance (call walls, above price)
+// Local constant — not in @flowdesk/tokens. Promote to a locked token
+// (e.g. `tokens.bone`, `tokens.coal`) when locked-token expansion is approved.
 const BONE = "#E8E2D0"; // bone-white: candle borders + up body
+// Local constant — not in @flowdesk/tokens. Promote to a locked token
+// (e.g. `tokens.bone`, `tokens.coal`) when locked-token expansion is approved.
 const COAL = "#0A0A0A"; // near-black: down body (reads against the lit field)
 
 /**

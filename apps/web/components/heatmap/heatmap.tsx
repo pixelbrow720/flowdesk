@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
+import { TURQUOISE, CRIMSON } from "@flowdesk/tokens";
 import { useDashboardStore, type CandleSize } from "../../lib/store";
 import { useTheme } from "../theme-provider";
 import { SegmentedControl } from "../ui/segmented-control";
 import { Toggle } from "../ui/toggle";
 import { HeatmapCanvas } from "./heatmap-canvas";
 import { HeatmapOverlay } from "./heatmap-overlay";
+import { HiroLine } from "./hiro-line";
 import { Colorbar } from "./colorbar";
 import { buildReplayField2D } from "../../lib/heatmap/field-2d";
 
@@ -17,10 +19,6 @@ export interface HeatmapProps {
   showControls?: boolean;
   className?: string;
 }
-
-// Locked ramp ends; mid anchor swaps with theme (black<->white).
-const LOW = "#40E0D0";
-const HIGH = "#E0183C";
 
 /**
  * Heatmap centerpiece: WebGL2 topografi surface + OKLab colorbar. Driven by the
@@ -53,7 +51,7 @@ export function Heatmap({ priceGrid, showControls = true, className }: HeatmapPr
   }, [snapshot, heatMetric, grid, candleSize, mode, frames, frameIndex]);
 
   const stops = useMemo(
-    () => ({ low: LOW, mid: theme === "light" ? "#FFFFFF" : "#000000", high: HIGH }),
+    () => ({ low: TURQUOISE, mid: theme === "light" ? "#FFFFFF" : "#000000", high: CRIMSON }),
     [theme],
   );
 
@@ -90,6 +88,7 @@ export function Heatmap({ priceGrid, showControls = true, className }: HeatmapPr
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
           <HeatmapCanvas field={field} stops={stops} block={!smooth} />
           <HeatmapOverlay priceGrid={field.priceGrid} />
+          <HiroLine />
         </div>
         <Colorbar
           basis={profileMetric === "GEX" ? "GAMMA" : "DELTA"}

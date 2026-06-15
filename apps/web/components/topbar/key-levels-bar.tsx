@@ -1,14 +1,12 @@
 "use client";
 
+import { TURQUOISE, CRIMSON } from "@flowdesk/tokens";
 import { useDashboardStore } from "../../lib/store";
 import { NumberReadout } from "../ui/number-readout";
 
 export interface KeyLevelsBarProps {
   className?: string;
 }
-
-const TURQUOISE = "#40E0D0"; // support (put walls, below price)
-const CRIMSON = "#E0183C"; // resistance (call walls, above price)
 
 /**
  * Thin key-levels strip under the topbar: the active snapshot's Call/Put walls
