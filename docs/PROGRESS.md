@@ -53,6 +53,98 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-15 — Phase 4 DONE: backend hardening complete, paid beta GO (historical)
+**Verdict (`docs/architecture/beta-readiness.md`):** GO for paid beta on
+`FEED_MODE=historical`. LiveAdapter built but stays disarmed (the
+`LIVE_FEED_ARMED=1` second key is intentionally absent from the beta
+image; flipping it requires the operator runbook procedure).
+
+**12 hardening commits since baseline `b3c2ae0`:**
+
+```
+1630ee7 docs(ops): deploy runbook                              (P4 c2)
+a7eff77 docs(architecture): beta-readiness audit + go/no-go    (P4 c1)
+a611ac4 docs(08): mark live feed RESOLVED                      (P3 c5)
+69d7893 test(engine): LiveAdapter mocked unit tests            (P3 c4)
+c46cb20 feat(api,engine): refuse-by-default rail FEED_MODE     (P3 c3)
+37e7a03 feat(engine): LiveAdapter arming gate + breaker        (P3 c2)
+dca4e9f docs(architecture): LiveAdapter threat model + rail    (P3 c1)
+bf185cf docs(08): mark HIRO unification RESOLVED               (P2 c5)
+8097228 test(api): HIRO worker<->generator parity              (P2 c4)
+4b97756 feat(api): wire persistent HiroState in MinuteWorker   (P2 c3)
+445e019 feat(engine): HiroState.to_dict/from_dict              (P2 c2)
+604bad5 docs(architecture): HIRO unification design            (P2 c1)
+04c29dd feat(api): rate-limit /me/recheck, OAuth, WS           (P1 i2)
+7ef0abc feat(api,engine): CORS validation + Snapshot finite    (P1 i1+i4)
+```
+
+**Phase 1 — boundary hardening (3 items, 2 commits):**
+- CORS validator refuses `*`+credentials and non-https/non-localhost.
+- Redis-backed token-bucket rate limit on `/api/me/recheck`, OAuth
+  callback, WS handshake. Wired BEFORE auth/CSRF; fail-open on Redis
+  hiccup; WS close 4429 on overflow.
+- Snapshot finiteness: pydantic ingress + zod egress validators reject
+  NaN/Inf at both boundaries.
+
+**Phase 2 — HIRO unification (5 commits, RESOLVED):**
+- `engine/hiro.py` `HiroState.to_dict`/`from_dict` round-trip (12 unit
+  tests).
+- `api/worker.py` `MinuteWorker` holds persistent state per-instrument,
+  feeds only the NEW suffix at each minute's `F_t`. Two-tier Redis
+  restore (TTL 5400s) + fresh-accumulator fallback. Daily ET reset on
+  session-date rollover.
+- Bit-equality parity test vs `gen_session_snapshots.py:75-112` over a
+  6-min scripted session: ≤1e-9 abs diff (`test_hiro_parity.py`).
+- The 2026-06-14 quant-greeks-auditor "consistency defect" is now
+  closed.
+
+**Phase 3 — LiveAdapter safety rail (5 commits, RESOLVED):**
+- Threat model doc (`docs/architecture/live-feed-threat-model.md`)
+  catalogues F1–F7 failure modes — central concern is the 2 prior
+  Databento account locks.
+- Two-key arming rail: `FEED_MODE=live` AND `LIVE_FEED_ARMED=1`
+  required; `make_adapter("live")` refuses with `LiveFeedNotArmed`
+  otherwise. `import databento` is lazy and gated behind
+  `_open_client()` — verified by `test_module_does_not_eagerly_
+  import_databento`.
+- Circuit breaker: 5 consecutive failures in a 5-min rolling window
+  opens permanently for the process lifetime. No auto-recovery.
+- Bounded reconnect: max 5 attempts, exponential backoff capped at 60s,
+  5-min total wall budget.
+- 13 mocked unit tests (`test_live_adapter.py`) using `FakeLiveClient`
+  via the `client_factory` seam. **Zero CI path imports the real
+  databento package.**
+- `build_worker_from_env` logs a loud `WARNING` with `feed_mode` /
+  `live_armed` at boot.
+
+**Phase 4 — beta-readiness audit + runbook (2 commits):**
+- Audit doc verifies 10 go/no-go gates all PASS.
+- Operator runbook covers env matrix, pre-deploy checklist, post-deploy
+  verification, the live-feed arm procedure (does not apply in beta),
+  rollback, retention, and incident triage.
+
+**Test status:** engine **415 passed** (was 401 at HIRO start, +14 from
+Phases 2+3 new tests). api **116 passed**. `schema_version=1` and the
+mirror trio untouched throughout.
+
+**Outstanding (deferred, classified LOW/NEGLIGIBLE):**
+- LiveAdapter minute-assembly logic (definition + OI + cumulative VOL +
+  top-of-book mid wired to the realtime stream) — beta ships on
+  historical, can land in a follow-up PR with recorded fixtures.
+- On-disk crash-loop arm-attempts log (F3 layered defence) — in-process
+  breaker + the explicit second key already cover the K8s
+  restart-storm case at the orchestrator level.
+- Pre-existing concurrent `pytest engine api` collection sys.path quirk
+  in `services/engine/test_repo.py` import of `gen_fixture` — suites
+  run cleanly when invoked separately.
+- Experimental research lenses still `NOT-VALIDATED` — out of scope for
+  this audit; honesty labels travel with the snapshot fields by
+  contract; the FE will surface them as `EXPERIMENTAL`.
+
+**Next:** FE rebuild from scratch (locked TURQUOISE/CRIMSON tokens +
+Space Grotesk/JetBrains Mono fonts in `02-locked-contract.md` remain
+authoritative).
+
 ### 2026-06-15 — Frontend reset (full deletion before redesign)
 **User decision**: delete the entire FE (apps/web, packages/tokens, HANDOFF-FE.md, 1.png, flowdesk-site.zip, docs/07-frontend.md, FE_AUTH_CONTRACT.md, frontend-viz mode) to redesign the layout from scratch later. Backend + contract + experimental-lens research/audit/eval work all stay. Locked color tokens (TURQUOISE/CRIMSON, fonts) remain in docs/02-locked-contract.md as product-level rules that any future FE must honor — only the @flowdesk/tokens implementation was removed.
 
