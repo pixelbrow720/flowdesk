@@ -65,7 +65,10 @@ def test_get_forward_matches_future_mid() -> None:
     assert _adapter().get_forward(INSTRUMENT, TS) == 5000.0
 
 
-def test_adapters_share_one_interface() -> None:
+def test_adapters_share_one_interface(monkeypatch) -> None:
+    # FEED_MODE=live now requires the explicit arming key (Phase 3 rail);
+    # arm only within this test scope to verify shape compatibility.
+    monkeypatch.setenv("LIVE_FEED_ARMED", "1")
     hist = make_adapter("historical", data_dir=DATA_DIR)
     live = make_adapter("live")
     assert isinstance(hist, FeedAdapter) and isinstance(hist, HistoricalSimAdapter)
@@ -73,14 +76,29 @@ def test_adapters_share_one_interface() -> None:
     assert hist.mode == "historical" and live.mode == "live"
 
 
-def test_live_adapter_is_stub() -> None:
+def test_live_adapter_refuses_without_arming(monkeypatch) -> None:
+    # Anti-account-lock rail: building a LiveAdapter without LIVE_FEED_ARMED=1
+    # must refuse loudly. Constructing the class directly is allowed (no
+    # network), but make_adapter is the production path and must refuse.
+    monkeypatch.delenv("LIVE_FEED_ARMED", raising=False)
+    try:
+        make_adapter("live")
+    except LiveFeedNotAvailable:
+        return
+    raise AssertionError("make_adapter('live') without arming must raise")
+
+
+def test_live_adapter_first_call_requires_arming() -> None:
+    # Even if a LiveAdapter is constructed in-process (e.g. a test), its
+    # first network-shaped call (_connect via get_chain) must still go
+    # through the arming gate.
     live = LiveAdapter()
     for call in (lambda: live.get_chain(INSTRUMENT, TS), lambda: live.get_forward(INSTRUMENT, TS)):
         try:
             call()
         except LiveFeedNotAvailable:
             continue
-        raise AssertionError("LiveAdapter should raise LiveFeedNotAvailable")
+        raise AssertionError("LiveAdapter must raise LiveFeedNotAvailable when not armed")
 
 
 def test_unknown_instrument_rejected() -> None:

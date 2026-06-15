@@ -61,7 +61,16 @@ def make_adapter(
         schema = quote_schema or os.environ.get("QUOTE_SCHEMA", "mbp-1")
         return HistoricalSimAdapter(data_dir, quote_schema=schema)
     if mode == "live":
-        from engine.feed.live import LiveAdapter
+        # Refuse-by-default rail (Phase 3): contacting the real Databento
+        # account requires an explicit second key, LIVE_FEED_ARMED=1. See
+        # docs/architecture/live-feed-threat-model.md (F1, F3).
+        from engine.feed.live import LiveAdapter, LiveFeedNotArmed
 
+        if not LiveAdapter._is_armed():
+            raise LiveFeedNotArmed(
+                "FEED_MODE=live requested but LIVE_FEED_ARMED is not set. "
+                "Refusing to construct LiveAdapter without explicit arming "
+                "(see docs/architecture/live-feed-threat-model.md)."
+            )
         return LiveAdapter(api_key=api_key)
     raise ValueError(f"unknown FEED_MODE {feed_mode!r}; expected 'historical' or 'live'")

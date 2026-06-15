@@ -632,8 +632,18 @@ async def build_worker_from_env() -> MinuteWorker:
     from api.state import create_state_store
     from db.repo import SnapshotRepository, create_pool
 
+    feed_mode = os.environ.get("FEED_MODE", "historical").strip().lower()
+    armed = os.environ.get("LIVE_FEED_ARMED", "").strip() == "1"
+    # Loud boot log so operators can spot a misconfigured live flip in
+    # the first line of the worker's stdout. The two-key arming rail is
+    # enforced inside make_adapter (see engine/feed/__init__.py).
+    log.warning(
+        "flowdesk worker boot: feed_mode=%s live_armed=%s "
+        "(see docs/architecture/live-feed-threat-model.md)",
+        feed_mode, armed,
+    )
     feed = make_adapter(
-        os.environ.get("FEED_MODE", "historical"),
+        feed_mode,
         data_dir=os.environ.get("DATA_DIR"),
         api_key=os.environ.get("DATABENTO_API_KEY"),
     )
