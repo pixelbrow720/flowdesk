@@ -1,5 +1,11 @@
 # FlowDesk — Build Playbook Per-Fase (Prompt-by-Prompt)
 
+> **Note (2026-06-15)**: this document references the original frontend implementation
+> (`apps/web/`, `@flowdesk/tokens`, etc.) which has been deleted pending a layout
+> redesign. Backend / engine / contract sections remain accurate; FE component
+> references are HISTORICAL.
+
+
 > Kompilasi seluruh prompt per-fase (Fase 0–6, total 34 prompt) untuk membangun FlowDesk lewat AI agent.
 > Aturan: **satu prompt = satu deliverable ZIP + README**. Kerjakan Fase 0 → 6 berurutan.
 > Sebelum mengirim prompt apa pun ke agent, **tempel MASTER PREAMBLE di bawah ini di ATAS prompt** (itu yang mengunci: no-internet, output file lengkap, token desain, anti-AI-look).

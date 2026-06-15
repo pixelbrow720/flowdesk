@@ -17,7 +17,6 @@ the previous scatter of root-level planning docs, per-phase READMEs, and the
 | 04 | [Engine](04-engine.md) | The compute core: Black-76, IV, exposure, field, levels, snapshot, HIRO, surface |
 | 05 | [Data & Feeds](05-data-and-feeds.md) | Databento schemas, feed adapters, the batched ingest |
 | 06 | [API & Auth](06-api-and-auth.md) | REST/WS endpoints, the worker, Discord OAuth gating |
-| 07 | [Frontend](07-frontend.md) | The Next.js app, design tokens, what's built |
 | 08 | [Status & Gaps](08-status-and-gaps.md) | **Honest** map: real vs. stubbed vs. naive — the backlog |
 | 09 | [Roadmap](09-roadmap.md) | MVP → v4, mapped to current status |
 | 10 | [Acceptance & Testing](10-acceptance-and-testing.md) | The T-01…T-10 gate and how the suites are run |
@@ -42,7 +41,6 @@ the previous scatter of root-level planning docs, per-phase READMEs, and the
 These intentionally stay with their modules:
 
 - `packages/contracts/CONTRACT.md` — canonical Snapshot contract, beside `snapshot.ts`.
-- `packages/tokens/USAGE.md` — design-token usage.
-- `services/api/src/api/{AUTH,FE_AUTH_CONTRACT,REST,STATE,WORKER,WS}_README.md` — per-module API docs.
+- `services/api/src/api/{AUTH,REST,STATE,WORKER,WS}_README.md` — per-module API docs.
 - `services/api/tests/AUTH_TEST_NOTES.md` — auth test rationale.
 - `services/engine/README.md` — engine package quickstart.

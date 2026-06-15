@@ -1,5 +1,11 @@
 # FlowDesk — Stitching Guide untuk AI Agent (VSCode / Opus 4.x)
 
+> **Note (2026-06-15)**: this document references the original frontend implementation
+> (`apps/web/`, `@flowdesk/tokens`, etc.) which has been deleted pending a layout
+> redesign. Backend / engine / contract sections remain accurate; FE component
+> references are HISTORICAL.
+
+
 > Tujuan: menjahit semua patch rilis (0.1–1.6 backend + Fase 4/5/6 berikutnya) menjadi satu monorepo `flowdesk/` yang utuh, jalan, dan lolos acceptance. Bahasa penjelasan Indonesia; kode/identifier Inggris. LOCKED CONTRACT = mutlak (lihat §2).
 
 ---

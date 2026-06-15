@@ -15,7 +15,7 @@ The original full text lives in [`reference/Stitching-Guide.md`](reference/Stitc
   - Base background `#000000`
 - **Fonts:** Space Grotesk (display/UI) + JetBrains Mono (numbers/data).
   **Never Inter.**
-- Tokens are enforced in code via `@flowdesk/tokens` (TS exports + Tailwind preset).
+- Tokens are LOCKED contract values; any future frontend must honor these exact hex values and font choices. (Previously enforced via `@flowdesk/tokens` TypeScript package; that implementation has been removed pending a new frontend.)
 
 ## Instruments
 

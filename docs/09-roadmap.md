@@ -24,10 +24,11 @@ The roadmap is currently inverted: this should have come before more features.
   enough or whether DDOI is worth building.
 - **Heavy item — confirm scope with the human first.**
 
-### B. Finish the frontend dashboard
-- Integrated TRACE-style layout to match `1.png`.
-- Intraday **HIRO line** render (the `hiro` field is already produced).
-- Timeline scrubber polish; end-to-end live-WS wiring.
+### B. Frontend (DELETED 2026-06-15 — pending redesign)
+The original frontend (`apps/web/`, `@flowdesk/tokens`, components) was deleted
+on 2026-06-15 to be rebuilt from scratch. See `PROGRESS.md` 2026-06-15 checkpoint.
+Locked design rules (TURQUOISE/CRIMSON, Space Grotesk + JetBrains Mono) remain
+in `02-locked-contract.md` and any future FE must honor them.
 
 ### C. Wire in the surface
 - Put SVI / expected-move (`surface.py`) into the Snapshot as **optional** fields.

@@ -1,5 +1,11 @@
 # FlowDesk — Status Implementasi vs FlowGreeks-Riset-Lengkap.md
 
+> **Note (2026-06-15)**: this document references the original frontend implementation
+> (`apps/web/`, `@flowdesk/tokens`, etc.) which has been deleted pending a layout
+> redesign. Backend / engine / contract sections remain accurate; FE component
+> references are HISTORICAL.
+
+
 > Dibuat 2026-06-11. Membandingkan implementasi nyata FlowDesk dengan cetak biru di
 > `../research/archive/FlowGreeks-Riset-Lengkap.md` (Bagian 1–6). Tujuan: peta jujur "apa yang
 > sudah dibangun" vs "apa yang belum", per bagian dokumen, dengan rujukan file.

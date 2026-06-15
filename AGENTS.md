@@ -12,9 +12,8 @@
 FlowDesk is a real-time **0DTE GEX/DEX options terminal** for **/ES & /NQ** CME
 futures options. A Python compute engine prices the option chain (Black-76) and
 emits **one canonical `Snapshot` per instrument per minute**; a FastAPI service
-serves those snapshots over REST/WebSocket behind Discord-role auth; a Next.js
-app renders the heatmap + exposure profiles. Everything revolves around the
-`Snapshot` data contract (`schema_version` 1).
+serves those snapshots over REST/WebSocket behind Discord-role auth. Everything
+revolves around the `Snapshot` data contract (`schema_version` 1).
 
 ## 1. Read-before-you-work (in this order)
 
@@ -62,15 +61,13 @@ services/engine/   flowdesk-engine  — Python compute core (Black-76, IV, expos
                    field, levels, snapshot, hiro, surface, feed adapters, ingest)
 services/api/      flowdesk-api     — FastAPI REST+WS, Discord OAuth, worker,
                    Redis/Timescale repos, session state machine
-apps/web/          @flowdesk/web    — Next.js 14 frontend (heatmap, profiles, auth UI)
 packages/contracts @flowdesk/contracts — zod mirror of Snapshot + /api/me
-packages/tokens    @flowdesk/tokens — locked design tokens + Tailwind preset
 infra/             docker-compose etc. (Fase 6 — currently only .gitkeep)
 docs/              ALL human documentation (start at docs/README.md)
 ```
 
 Two ecosystems are managed **separately**: TS/JS via pnpm workspaces
-(`apps/*`, `packages/*`); Python via per-service `pyproject.toml` (NOT in the
+(`packages/*`); Python via per-service `pyproject.toml` (NOT in the
 pnpm workspace).
 
 ## 4. Verification — run after EVERY change
@@ -83,7 +80,6 @@ cd services/api && pytest && ruff check . && mypy
 # TS
 pnpm -r typecheck && pnpm -r lint
 pnpm --filter @flowdesk/contracts validate   # zod contract: accepts example, rejects malformed
-pnpm --filter @flowdesk/web test
 # Engine golden fixture (after an INTENTIONAL contract change only)
 cd services/engine && PYTHONPATH=src python tests/gen_golden.py
 ```
@@ -110,11 +106,11 @@ Full rationale + the heavy unbuilt items: `docs/reference/methodology-decisions.
 ## 6. When you touch the Snapshot or data
 
 - Edit `schema.py` AND `snapshot.ts` together; keep `CONTRACT.md` accurate.
-- Regenerate FE session JSON after any engine change that affects snapshot values:
+- Regenerate session-snapshot JSON after any engine change that affects snapshot values:
   ```bash
   cd services/engine && PYTHONPATH=src python scripts/gen_session_snapshots.py \
     --date 2026-06-09 --data-dir <ABS>/data/raw \
-    --out ../../apps/web/public/sessions --quote-schema bbo-1m
+    --out <output-dir> --quote-schema bbo-1m
   ```
 - New optional Snapshot field → consumers must treat absence as valid.
 
@@ -138,8 +134,9 @@ See `docs/08-status-and-gaps.md` for the full version with file references. Shor
    positioning vs. official ΔOI, and **no** check that GEX predicts /ES price.
    This is the single biggest source of "feels done but lacking."
 2. **Live feed** — `LiveAdapter` is a stub; only historical-sim works.
-3. **Frontend dashboard** — heatmap/profile primitives exist; the full TRACE
-   dashboard matching `1.png` (incl. HIRO line render) is the largest remaining FE work.
+3. **Frontend** — the prior `apps/web` Next.js app and `@flowdesk/tokens` package
+   were deleted on 2026-06-15; the layout will be redesigned from scratch later.
+   See the 2026-06-15 checkpoint in `docs/PROGRESS.md`.
 4. **Surface / vanna / charm wiring** — `surface.py` + `black76.vanna/charm`
    exist but are isolated (not in Snapshot, no VEX/CHEX aggregation).
 5. **DDOI engine & proprietary metrics** — deliberately unbuilt (needs approval).

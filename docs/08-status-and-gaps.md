@@ -327,10 +327,15 @@ original backlog is built (all EXPERIMENTAL); what remains is the forward-run
 `feed/live.py` raises `LiveFeedNotAvailable`. Today only historical replay works.
 Real-time is unbuilt.
 
-### 4. Frontend dashboard incomplete 🟡
-Heatmap, profiles, levels, and auth exist as primitives. The full integrated
-TRACE-style dashboard (`1.png`), the intraday **HIRO line** render, and
-end-to-end live-WS wiring are the largest remaining FE work.
+### 4. Frontend — DELETED 2026-06-15 (pending redesign) 🟡
+The original frontend (`apps/web/`, `@flowdesk/tokens`, all heatmap/profile/HIRO/
+auth components) was deleted on 2026-06-15 to be rebuilt from scratch. Locked
+design rules (TURQUOISE/CRIMSON, Space Grotesk + JetBrains Mono) remain in
+`02-locked-contract.md` and any future FE must honor them. See PROGRESS.md
+2026-06-15 checkpoint.
+
+The HIRO-related backend findings below remain valid (they are about
+`engine/hiro.py` and the worker, not about the deleted FE):
 
 > **AUDIT (2026-06-14, quant-greeks-auditor) — HIRO: DOWNGRADE (consistency
 > defect, NOT look-ahead). MUST fix before the FE renders HIRO.** `hiro.py` is

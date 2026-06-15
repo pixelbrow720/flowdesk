@@ -2,7 +2,7 @@
 node_modules/
 .pnpm-store/
 
-# ── Next.js ──
+# ── Next.js (legacy apps/web build cache; FE removed 2026-06-15, ignore for safety) ──
 .next/
 out/
 next-env.d.ts

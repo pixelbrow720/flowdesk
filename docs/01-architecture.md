@@ -4,10 +4,8 @@
 
 ```
 flowdesk-main/
-├─ apps/web/             @flowdesk/web      Next.js 14 frontend
 ├─ packages/
-│  ├─ contracts/         @flowdesk/contracts  zod mirror of Snapshot + /api/me
-│  └─ tokens/            @flowdesk/tokens     locked design tokens + Tailwind preset
+│  └─ contracts/         @flowdesk/contracts  zod mirror of Snapshot + /api/me
 ├─ services/
 │  ├─ engine/            flowdesk-engine    Python compute core
 │  └─ api/               flowdesk-api       FastAPI REST + WS + worker
@@ -17,12 +15,12 @@ flowdesk-main/
 
 **Two toolchains, deliberately separate:**
 
-- **TypeScript** via pnpm workspaces — `apps/*` and `packages/*` only.
+- **TypeScript** via pnpm workspaces — `packages/*` only.
 - **Python** via per-service `pyproject.toml` — `services/engine` and
   `services/api` are **not** in the pnpm workspace. `flowdesk-api` depends on
   `flowdesk-engine` and expects it installed editable (`pip install -e ../engine`).
 
-## The four packages
+## The three packages
 
 ### `flowdesk-engine` (services/engine)
 The brain. Pure-Python compute. Given a chain of option quotes/trades plus a
@@ -42,10 +40,6 @@ The zod mirror of the Snapshot and the `/api/me` payload. This is the
 TypeScript half of the cross-language data contract; it must match the engine's
 pydantic models byte-for-byte. `CONTRACT.md` lives here.
 
-### `@flowdesk/tokens` (packages/tokens)
-The locked design tokens (colors, fonts, spacing) exported as TS + a Tailwind
-preset, so the visual contract is enforced in code, not by convention.
-
 ## Runtime data flow (one minute)
 
 1. The **worker** ticks for instrument *I* at minute *m*.
@@ -55,10 +49,8 @@ preset, so the visual contract is enforced in code, not by convention.
 4. The engine prices the chain (Black-76 → IV → greeks), aggregates exposure,
    projects the field grid, extracts levels, optionally computes HIRO, and
    returns a `Snapshot`.
-5. The API validates, stores it (Redis hot, Timescale history), and broadcasts
-   it over WebSocket to subscribed clients.
-6. The **web app** receives the Snapshot, re-validates it against the zod
-   contract, and renders the heatmap + profiles + levels.
+5. The API validates, stores it (Redis hot, Timescale history), and serves the
+   Snapshot via REST/WS to authorized consumers.
 
 ## The contract spine
 

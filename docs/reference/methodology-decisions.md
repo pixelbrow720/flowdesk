@@ -1,5 +1,10 @@
 # REKOMENDASI KEPUTUSAN — Backend FlowGreeks
 
+> **Note (2026-06-15)**: this document references the original frontend implementation
+> (`apps/web/`, `@flowdesk/tokens`, mock-up `1.png`, etc.) which has been deleted pending
+> a layout redesign. Backend / engine / contract sections remain accurate; FE component
+> references are HISTORICAL.
+
 > **STATUS (2026-06-12): kelima keputusan SUDAH DIPUTUSKAN user & DIEKSEKUSI.**
 > Keputusan: **#1→A** (VOL-GEX tetap), **#2→B** (wall gamma-$), **#3→A** (day-count jam-riil, default di-flip), **#4→A** (trades.side), **#5→A** (field `hiro` opsional, tanpa bump schema_version).
 > Engine + API + contracts hijau; golden fixture di-rebaseline; JSON sesi FE 2026-06-09 diregen. Doc di bawah dipertahankan sebagai rekaman opsi/tradeoff + rencana item berat (§4.B) yang BELUM dibangun (DDOI, metrik proprietary).

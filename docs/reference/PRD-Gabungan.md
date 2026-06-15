@@ -1,5 +1,11 @@
 # FlowDesk — PRD Gabungan
 
+> **Note (2026-06-15)**: this document references the original frontend implementation
+> (`apps/web/`, `@flowdesk/tokens`, etc.) which has been deleted pending a layout
+> redesign. Backend / engine / contract sections remain accurate; FE component
+> references are HISTORICAL.
+
+
 > Dokumen ini menggabungkan **dua sumber PRD**:
 > - **Bagian I — PRD Asli (multi-halaman Notion):** halaman induk + sub-halaman 0–14 (lengkap, termasuk Build Playbook).
 > - **Bagian II — PRD Konsolidasi v1:** versi padat yang sudah diselaraskan dengan status build aktual (rilis 0.1–1.6).

@@ -31,11 +31,10 @@ assign ke agent yang tepat, tegakkan aturan, integrasikan hasil, putuskan.
 RISET:  quant-research-creative (ideasi) → quant-research-expert (verifikasi fakta)
 BUILD:
 - coder             → engine/API Python logic, mirror edits, fixtures (math/contract wiring)
-- frontend-viz      → apps/web: heatmap/HIRO/dashboard (1.png), snapshot consumption, WS client
 - streaming-backend → services/api realtime: live feed, WS fan-out, reconnection, session-state
-Ketiganya IMPLEMENTER murni: dilarang menguji/mengaudit/mendokumentasikan karyanya
+Keduanya IMPLEMENTER murni: dilarang menguji/mengaudit/mendokumentasikan karyanya
 sendiri. Hasil → test-author (tes independen) → redteam-auditor + (jika Snapshot)
-contract-guardian → doc-scribe. Untuk tugas FE/realtime berat, advisor gate tetap jalan
+contract-guardian → doc-scribe. Untuk tugas realtime berat, advisor gate tetap jalan
 di hulu sebelum delegasi.
 AUDIT:  redteam-auditor (adversarial) + quant-greeks-auditor (math) + contract-guardian (paritas mirror)
 Urutan tugas berat: creative → expert → coder → test-author → (redteam+quant-greeks+contract-guardian) → expert re-validate → doc-scribe.
@@ -62,7 +61,9 @@ C. Tindak lanjuti temuan audit non-blocking (PROGRESS.md): label open/close DDOI
 - Gap #1 VALIDASI (satu-satunya gap nyata): forward-test ~90 hari. Pull data MANUAL
   oleh user (protokol anti-lock Databento — JANGAN pull sendiri). Harness siap di
   analysis/harness/. Ini yang mengubah semua fitur EXPERIMENTAL → terbukti/ditolak.
-- Frontend TRACE dashboard match 1.png — DITUNDA sampai fondasi tervalidasi.
+- Frontend redesign: FE lama dihapus penuh (2026-06-15 checkpoint di PROGRESS.md);
+  layout akan dibangun ulang dari nol nanti, kemungkinan via tool vision-capable.
+  DITUNDA sampai user memberi arahan baru.
 
 == ATURAN KERAS ==
 - JANGAN ubah LOCKED CONTRACT / VOL-GEX / schema_version (tetap 1; field baru WAJIB
@@ -99,7 +100,7 @@ Mulai LANGKAH 0. Lapor ringkas pemahaman + rencana, baru jalankan tugas tertunda
    expert (B) + tindak lanjut temuan audit (C).
 2. **Putuskan Gap #1:** kapan siap pull ~90 hari manual (protokol anti-lock) untuk
    forward-test — ini satu-satunya yang mengubah fitur EXPERIMENTAL jadi terbukti.
-3. **Frontend TRACE** — setelah fondasi tervalidasi.
+3. **Frontend redesign** — FE lama dihapus penuh (2026-06-15); rancang ulang dari nol nanti, awaiting user direction.
 
 ## Status fleet (per 2026-06-13)
 8 agent permanen, semua opus, di `.claude/agents/`:

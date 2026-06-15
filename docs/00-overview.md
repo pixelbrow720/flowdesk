@@ -32,10 +32,6 @@ Databento GLBX.MDP3 (definition, statistics, trades, mbp-1/bbo-1m)
   flowdesk-api (FastAPI)
    worker drives the session state machine; REST + WebSocket;
    Discord OAuth gate; Redis (hot snapshot) + Timescale (history)
-        │  Snapshot JSON (validated against the zod contract)
-        ▼
-  @flowdesk/web (Next.js)
-   WebGL heatmap + exposure profiles + levels + auth UI
 ```
 
 The **`Snapshot`** is the spine of the whole system. Every layer either produces
@@ -45,7 +41,7 @@ TypeScript (zod) and must stay identical on both sides.
 ## Design philosophy
 
 - **One canonical artifact.** No ad-hoc payloads; the Snapshot is the only thing
-  that crosses the engine→api→web boundary.
+  that crosses the engine→api boundary.
 - **Deterministic core.** `build_snapshot` is pure and calendar-free: same inputs
   → same output, guaranteed by a golden fixture.
 - **Locked contract.** Visual identity, instruments, and math conventions are

@@ -12,10 +12,10 @@
 | `mbp-1` / `bbo-1m` | Top-of-book quotes — mid price for IV; `bbo-1m` is the 1-minute BBO variant |
 
 **Quote schema note:** the engine fixtures and adapter default to `mbp-1`. The
-locked data-contract research (and the FE session generation here) also support
-**`bbo-1m`**, which is sufficient for IV/mids. `bbo-1m` is **not** sufficient to
-build HIRO — HIRO needs per-trade `trades.side`, which is why the HIRO path reads
-`trades`, not quotes. `mbp-10` / deeper book are **not** required.
+locked data-contract research (and the session-snapshot generation here) also
+support **`bbo-1m`**, which is sufficient for IV/mids. `bbo-1m` is **not**
+sufficient to build HIRO — HIRO needs per-trade `trades.side`, which is why the
+HIRO path reads `trades`, not quotes. `mbp-10` / deeper book are **not** required.
 
 ## Feed adapters
 
@@ -27,7 +27,7 @@ the chain + trades for instrument *I* at minute *m*."
 
 ### `historical.py` (working)
 Replays stored DBN/fixture data minute-by-minute over the RTH window. This is
-the path used today for development, the golden fixture, and FE session JSON.
+the path used today for development, the golden fixture, and session-snapshot JSON.
 
 ### `live.py` (STUB)
 `LiveAdapter` raises `LiveFeedNotAvailable`. Real-time streaming is **not
@@ -45,14 +45,14 @@ documented in the research and in the user's Notion "Arsitektur Ingest Historis
 Cost-Optimal" note. Honour those limits when extending ingest.
 
 ### `scripts/gen_session_snapshots.py`
-Generates the per-session Snapshot JSON the frontend loads from
-`apps/web/public/sessions/` (e.g. `ES_2026-06-09.json`). Re-run after any engine
-change that affects Snapshot values:
+Generates per-session Snapshot JSON (e.g. `ES_2026-06-09.json`) for offline
+consumption by REST/WS clients. Re-run after any engine change that affects
+Snapshot values:
 
 ```bash
 cd services/engine && PYTHONPATH=src python scripts/gen_session_snapshots.py \
   --date 2026-06-09 --data-dir <ABS>/data/raw \
-  --out ../../apps/web/public/sessions --quote-schema bbo-1m
+  --out <output-dir> --quote-schema bbo-1m
 ```
 
 ### `scripts/validate.py`

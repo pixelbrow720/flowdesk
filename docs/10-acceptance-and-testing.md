@@ -51,7 +51,6 @@ pytest && ruff check . && mypy
 pnpm install
 pnpm -r typecheck && pnpm -r lint
 pnpm --filter @flowdesk/contracts validate
-pnpm --filter @flowdesk/web test
 ```
 
 ## Golden fixture

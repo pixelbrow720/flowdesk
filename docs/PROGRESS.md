@@ -53,6 +53,15 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-15 — Frontend reset (full deletion before redesign)
+**User decision**: delete the entire FE (apps/web, packages/tokens, HANDOFF-FE.md, 1.png, flowdesk-site.zip, docs/07-frontend.md, FE_AUTH_CONTRACT.md, frontend-viz mode) to redesign the layout from scratch later. Backend + contract + experimental-lens research/audit/eval work all stay. Locked color tokens (TURQUOISE/CRIMSON, fonts) remain in docs/02-locked-contract.md as product-level rules that any future FE must honor — only the @flowdesk/tokens implementation was removed.
+
+**What stays**: services/engine, services/api, packages/contracts (Python↔TS mirror), analysis/harness, all docs/research/empirical/* eval write-ups, 10 .kilocodemodes (frontend-viz removed), advisor + redteam + audit workflow.
+
+**What's gone**: 97 files (entire apps/web tree + tokens package + FE refs in workspace config). pnpm-lock regenerated, Makefile dev-web target removed, pnpm-workspace.yaml down to packages/* only. .kilocodemodes mode count: 11 → 10.
+
+**Why**: prior agent built FE under non-vision constraint; iteration was fighting that. User will rebuild layout fresh, possibly via vision-capable tool. Backend is in clean hand-off state — math/contract/security/anti-bias all sound, all evals committed, all honest.
+
 ### 2026-06-14 — t-causal PREDICTIVE synth-OI **VOLATILITY-REGIME** eval BUILT (look-ahead-free) — n=3, BOTH /ES + /NQ UNDETERMINED; gap is now POWER not METHOD; validated NOTHING
 Built the predictive synthetic-OI eval that the prior checkpoint had relayed as a
 PENDING USER DECISION (UNBUILT, runnable look-ahead-free, underpowered). It scores
