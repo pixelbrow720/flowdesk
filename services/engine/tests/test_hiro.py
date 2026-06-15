@@ -128,3 +128,51 @@ def test_empty_series() -> None:
     assert series.final.total == 0.0
     assert series.cumulative == []
     assert series.skipped == 0
+
+
+# --------------------------------------------------------------------------- #
+# Redis snapshot round-trip (HIRO unification — docs/architecture/hiro-unification.md §4.4 Tier 1)
+# --------------------------------------------------------------------------- #
+def test_state_to_dict_from_dict_roundtrip() -> None:
+    from engine.hiro import HiroState
+
+    # Fed a small mixed batch so all five lines + skipped are non-trivial.
+    state = HiroState(M_ES)
+    trades = [
+        _priced(5000.0, True, "B", 3.0, 0.21),     # retail call (size <= 5)
+        _priced(5000.0, False, "B", 200.0, 0.21),  # block put
+        _priced(5050.0, True, "A", 50.0, 0.21),    # mid call
+        HiroTrade(strike=5000.0, is_call=True, price=-1.0, size=1.0, side="B", t_expiry=T),  # bad px -> skipped
+    ]
+    for tr in trades:
+        state.add(tr, F, RATE)
+
+    payload = state.to_dict()
+    # Plain JSON-friendly scalars only.
+    import json
+
+    assert json.dumps(payload)  # serialisable
+
+    restored = HiroState.from_dict(payload)
+    assert restored.snapshot() == state.snapshot()
+    assert restored.skipped == state.skipped
+    # Continuing accumulation post-restore matches a never-restarted run.
+    follow = _priced(5025.0, True, "B", 10.0, 0.21)
+    state.add(follow, F, RATE)
+    restored.add(follow, F, RATE)
+    assert restored.snapshot() == state.snapshot()
+
+
+def test_state_from_dict_missing_fields_defaults_to_zero() -> None:
+    from engine.hiro import HiroState
+
+    # Defensive: a malformed/empty payload reseeds a usable empty accumulator
+    # rather than crashing — Tier-2 fallback in the worker still works.
+    restored = HiroState.from_dict({})
+    snap = restored.snapshot()
+    assert snap.total == 0.0
+    assert snap.calls == 0.0
+    assert snap.puts == 0.0
+    assert snap.zerodte == 0.0
+    assert snap.retail == 0.0
+    assert restored.skipped == 0

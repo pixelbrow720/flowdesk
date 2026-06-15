@@ -219,6 +219,47 @@ class HiroState:
             retail=self._retail,
         )
 
+    def to_dict(self) -> dict[str, float]:
+        """Serialise the accumulator state for durable storage (Redis snapshot).
+
+        Captures everything needed to resume accumulation across a worker restart:
+        the five running totals, the skipped count, and the construction params
+        (``M``, ``retail_max``). The output is plain JSON-friendly scalars; pair
+        with :meth:`from_dict` to round-trip. NOT part of the locked snapshot
+        contract — internal worker state only.
+        """
+        return {
+            "M": self._M,
+            "retail_max": self._retail_max,
+            "total": self._total,
+            "calls": self._calls,
+            "puts": self._puts,
+            "zerodte": self._zerodte,
+            "retail": self._retail,
+            "skipped": float(self.skipped),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, float]) -> "HiroState":
+        """Reseed an accumulator from a :meth:`to_dict` payload.
+
+        Used by the api-layer worker to restore HIRO state after a pod restart
+        within the same RTH session (see ``docs/architecture/hiro-unification.md``
+        §4.4 Tier 1). Missing/bad fields default to ``0.0`` / sentinel — callers
+        that detect a malformed payload should fall back to a fresh ``HiroState``.
+        """
+        state = cls(
+            M=float(data.get("M", 0.0)),
+            retail_max_size=float(data.get("retail_max", RETAIL_MAX_SIZE)),
+        )
+        state._total = float(data.get("total", 0.0))
+        state._calls = float(data.get("calls", 0.0))
+        state._puts = float(data.get("puts", 0.0))
+        state._zerodte = float(data.get("zerodte", 0.0))
+        state._retail = float(data.get("retail", 0.0))
+        state.skipped = int(data.get("skipped", 0))
+        return state
+
 
 def hiro_series(
     trades: Sequence[HiroTrade],
