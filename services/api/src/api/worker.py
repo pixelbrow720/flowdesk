@@ -29,12 +29,13 @@ import asyncio
 import logging
 import math
 import os
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Mapping, Optional, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
+from datetime import UTC, datetime
+from typing import Any
 
 from api.session import (
-    SessionState,
     MarketCalendar,
+    SessionState,
     default_calendar,
     determine_state,
 )
@@ -99,15 +100,15 @@ def _utc_minute(now: datetime) -> datetime:
     """Convert an aware datetime to UTC truncated to the minute."""
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("worker clock must return a timezone-aware datetime")
-    return now.astimezone(timezone.utc).replace(second=0, microsecond=0)
+    return now.astimezone(UTC).replace(second=0, microsecond=0)
 
 
-def _parse_aware(ts: Any) -> Optional[datetime]:
+def _parse_aware(ts: Any) -> datetime | None:
     """Parse a snapshot ``ts`` (ISO-8601 ...Z) into an aware UTC datetime."""
     if ts is None:
         return None
     if isinstance(ts, datetime):
-        return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+        return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
     s = str(ts).strip()
     if s.endswith("Z"):
         s = s[:-1] + "+00:00"
@@ -115,7 +116,7 @@ def _parse_aware(ts: Any) -> Optional[datetime]:
         dt = datetime.fromisoformat(s)
     except ValueError:
         return None
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
 def _axis_from_chain(instrument: str, chain: Any) -> dict[str, float]:
@@ -138,26 +139,26 @@ class MinuteWorker:
         repo: Any,
         state_store: Any,
         instruments: Sequence[str] = ("ES", "NQ"),
-        calendar: Optional[MarketCalendar] = None,
-        clock: Optional[Clock] = None,
-        sleeper: Optional[Sleeper] = None,
+        calendar: MarketCalendar | None = None,
+        clock: Clock | None = None,
+        sleeper: Sleeper | None = None,
         sofr_rate: float = DEFAULT_SOFR_RATE,
-        t_expiry: Optional[float] = None,
-        feed_gap_tolerance_s: Optional[float] = None,
-        build_snapshot: Optional[Callable[..., Any]] = None,
-        to_engine_chain: Optional[Callable[..., Any]] = None,
+        t_expiry: float | None = None,
+        feed_gap_tolerance_s: float | None = None,
+        build_snapshot: Callable[..., Any] | None = None,
+        to_engine_chain: Callable[..., Any] | None = None,
     ) -> None:
         self._feed = feed
         self._repo = repo
         self._state = state_store
         self._instruments = tuple(instruments)
         self._calendar = calendar or default_calendar()
-        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._clock = clock or (lambda: datetime.now(UTC))
         self._sleeper = sleeper or asyncio.sleep
         self._rate = rate_from_sofr(sofr_rate)
         # None => real-clock day-count per tick (Divergence #3 -> option A,
         # the default). A float pins a FIXED year-fraction (legacy / tests).
-        self._t_expiry: Optional[float] = (
+        self._t_expiry: float | None = (
             None if t_expiry is None else float(t_expiry)
         )
         self._gap_kwargs = (
@@ -168,6 +169,12 @@ class MinuteWorker:
         self._build_snapshot = build_snapshot
         self._to_engine_chain = to_engine_chain
         self._stop = asyncio.Event()
+        # Persistent HIRO accumulators per instrument (worker <-> generator
+        # parity, docs/architecture/hiro-unification.md). Populated lazily on
+        # first HIRO-eligible tick; survive worker restarts via Redis Tier-1.
+        self._hiro_states: dict[str, Any] = {}
+        self._hiro_consumed: dict[str, int] = {}
+        self._hiro_session_date: dict[str, Any] = {}
 
     # -- engine lazy binding ---------------------------------------------- #
     def _engine(self) -> tuple[Callable[..., Any], Callable[..., Any]]:
@@ -180,7 +187,7 @@ class MinuteWorker:
         return self._build_snapshot, self._to_engine_chain
 
     # -- single cycle ----------------------------------------------------- #
-    async def tick(self, now: Optional[datetime] = None) -> dict[str, SessionState]:
+    async def tick(self, now: datetime | None = None) -> dict[str, SessionState]:
         """Run exactly one cycle for every instrument; return resolved states."""
         now = now or self._clock()
         out: dict[str, SessionState] = {}
@@ -252,27 +259,147 @@ class MinuteWorker:
             return None
         return get_trades(instrument, ts_utc)
 
-    def _hiro_for(self, instrument: str, ts_utc: datetime, forward: float, trades: Any = None) -> Any:
-        """Cumulative HIRO series for this minute, or ``None`` if unavailable.
+    # -- HIRO persistent accumulator (worker <-> generator parity) -------- #
+    @staticmethod
+    def _et_date_of(ts_utc: datetime) -> Any:
+        """Calendar date in America/New_York for a UTC timestamp.
 
-        HIRO (Divergence #5 -> option A) is an optional snapshot field: when the
-        feed cannot supply signed per-trade data (live stub / test fakes lack
-        ``get_hiro_trades``) the snapshot simply carries ``hiro=None``, mirroring
-        the ``ohlc`` precedent. Computed from the engine's pure ``hiro_series``.
-        ``trades`` may be a pre-fetched tape (shared with synthetic-OI) to avoid
-        re-fetching; when ``None`` it is fetched here.
+        Used to drive the daily reset-at-RTH-open: the accumulator's state-date
+        is compared against this to detect a session rollover.
+        """
+        from api.session import ET
+
+        return ts_utc.astimezone(ET).date()
+
+    async def _maybe_restore_hiro(self, instrument: str, ts_utc: datetime) -> None:
+        """Tier-1 restore: pull the accumulator dump from Redis on first use.
+
+        Called the first time we touch HIRO for an instrument (state dict miss).
+        If the persisted dump's session date matches today's ET date we reseed
+        the in-memory ``HiroState`` and ``_hiro_consumed`` so cumulative HIRO
+        survives a worker restart within the same RTH session. On any miss
+        (no key, expired, malformed, date mismatch, or storage error) we fall
+        back to a fresh accumulator — Tier 2 (see
+        ``docs/architecture/hiro-unification.md`` §4.4).
+        """
+        from engine.hiro import HiroState
+        from engine.snapshot import MULTIPLIER
+
+        today_et = self._et_date_of(ts_utc)
+        try:
+            payload = await self._state.get_hiro_state(instrument)
+        except Exception as exc:  # storage hiccup -> Tier 2 fallback (silent)
+            log.warning("hiro restore failed for %s: %s; starting fresh", instrument, exc)
+            payload = None
+
+        if payload is not None:
+            stored_date = payload.get("date_et")
+            if stored_date == today_et.isoformat():
+                try:
+                    state = HiroState.from_dict(payload)
+                    consumed = int(payload.get("consumed", 0))
+                    self._hiro_states[instrument] = state
+                    self._hiro_consumed[instrument] = consumed
+                    self._hiro_session_date[instrument] = today_et
+                    log.info(
+                        "hiro restored for %s (consumed=%d, total=%.2f)",
+                        instrument, consumed, state.snapshot().total,
+                    )
+                    return
+                except Exception as exc:
+                    log.warning(
+                        "hiro payload malformed for %s: %s; starting fresh",
+                        instrument, exc,
+                    )
+
+        # Tier-2 fallback: fresh accumulator.
+        self._hiro_states[instrument] = HiroState(MULTIPLIER[instrument])
+        self._hiro_consumed[instrument] = 0
+        self._hiro_session_date[instrument] = today_et
+
+    def _maybe_reset_hiro_for_session(self, instrument: str, ts_utc: datetime) -> None:
+        """Reset accumulator if the ET session date has rolled over.
+
+        Triggered when ``_hiro_session_date[instrument]`` differs from today's
+        ET date (the **b** option from §4.3). Drops the in-memory state, resets
+        ``_hiro_consumed``, and updates the session date. The Redis dump from
+        the previous day is left to expire by TTL (or be overwritten on the
+        next persist).
+        """
+        from engine.hiro import HiroState
+        from engine.snapshot import MULTIPLIER
+
+        today_et = self._et_date_of(ts_utc)
+        if self._hiro_session_date.get(instrument) == today_et:
+            return
+        log.info("hiro reset for %s (new session %s)", instrument, today_et.isoformat())
+        self._hiro_states[instrument] = HiroState(MULTIPLIER[instrument])
+        self._hiro_consumed[instrument] = 0
+        self._hiro_session_date[instrument] = today_et
+
+    async def _hiro_for(
+        self,
+        instrument: str,
+        ts_utc: datetime,
+        forward: float,
+        trades: Any = None,
+    ) -> Any:
+        """Cumulative HIRO snapshot via the **persistent accumulator**.
+
+        Worker <-> generator parity (see
+        ``docs/architecture/hiro-unification.md``): per session, hold one
+        ``HiroState`` and feed only the NEW suffix of trades each minute at the
+        **current minute's forward**. This freezes each trade's increment at
+        its arrival forward — economically correct (hedging happens at the
+        price prevailing then) and identical to ``gen_session_snapshots.py``.
+
+        Returns ``None`` when the feed cannot supply signed per-trade data
+        (live stub / test fakes), mirroring the ``ohlc`` precedent.
         """
         if trades is None:
             trades = self._fetch_signed_trades(instrument, ts_utc)
         if trades is None:
             return None
-        from engine.hiro import hiro_series
-        from engine.snapshot import MULTIPLIER
 
-        # The scalar cumulative snapshot for this minute (.final); the intraday
-        # HIRO line is reconstructed FE-side from the per-minute frame sequence,
-        # so no per-trade path is embedded in the snapshot.
-        return hiro_series(trades, float(forward), MULTIPLIER[instrument], self._rate).final
+        # Tier-1 restore on first touch this process for this instrument.
+        if instrument not in self._hiro_states:
+            await self._maybe_restore_hiro(instrument, ts_utc)
+        # Daily reset at RTH-open rollover.
+        self._maybe_reset_hiro_for_session(instrument, ts_utc)
+
+        state = self._hiro_states[instrument]
+        consumed = self._hiro_consumed[instrument]
+        # Defensive: if the upstream window shrank (replay restart, timezone
+        # quirk, fixture rebuild) the suffix index is stale — start over from
+        # zero rather than IndexError. Worst case is one tick of re-priced
+        # increments at the current forward.
+        if consumed > len(trades):
+            log.warning(
+                "hiro consumed (%d) > trade window (%d) for %s; resetting accumulator",
+                consumed, len(trades), instrument,
+            )
+            from engine.hiro import HiroState
+            from engine.snapshot import MULTIPLIER
+
+            state = HiroState(MULTIPLIER[instrument])
+            self._hiro_states[instrument] = state
+            consumed = 0
+
+        # Feed only the NEW suffix at the current minute's forward.
+        for tr in trades[consumed:]:
+            state.add(tr, float(forward), self._rate)
+        self._hiro_consumed[instrument] = len(trades)
+
+        # Persist Tier-1 dump for restart recovery (best-effort, never fail tick).
+        payload = state.to_dict()
+        payload["consumed"] = float(self._hiro_consumed[instrument])
+        payload["date_et"] = self._hiro_session_date[instrument].isoformat()
+        try:
+            await self._state.set_hiro_state(instrument, payload)
+        except Exception as exc:
+            log.warning("hiro persist failed for %s: %s", instrument, exc)
+
+        return state.snapshot()
 
     def _net_flow_for(self, trades: Any) -> Any:
         """Per-(strike, is_call) net aggressor-signed flow for synthetic-OI, or None.
@@ -386,7 +513,7 @@ class MinuteWorker:
             return False
 
         quotes = to_engine_chain(chain, t_expiry=self._t_expiry_for(ts_utc))
-        forward = float(getattr(chain, "forward"))
+        forward = float(chain.forward)
         axis = _axis_from_chain(instrument, chain)
         # Front-future OHLC for the minute (mirrors the offline generator at
         # scripts/gen_session_snapshots.py). LiveAdapter has no get_ohlc / can
@@ -411,7 +538,7 @@ class MinuteWorker:
             stale=False,
             expired=False,
             ohlc=ohlc,
-            hiro=self._hiro_for(instrument, ts_utc, forward, trades),
+            hiro=await self._hiro_for(instrument, ts_utc, forward, trades),
             net_flow=self._net_flow_for(trades),
             net_flow_tiered=self._net_flow_tiered_for(trades, instrument),
             net_flow_decay=self._net_flow_decay_for(trades, ts_utc),
@@ -459,7 +586,7 @@ class MinuteWorker:
         """Signal :meth:`run` to exit after the current sleep."""
         self._stop.set()
 
-    async def run(self, *, max_ticks: Optional[int] = None) -> int:
+    async def run(self, *, max_ticks: int | None = None) -> int:
         """Run the aligned per-minute loop. Returns the number of ticks executed.
 
         Aligns to the wall-clock minute boundary (sleeps the remainder of the
@@ -501,8 +628,9 @@ async def build_worker_from_env() -> MinuteWorker:
     ``TIMESCALE_DSN`` (repo), ``REDIS_URL`` (state) and ``SOFR_RATE`` (rate).
     """
     from engine.feed import make_adapter
-    from db.repo import SnapshotRepository, create_pool
+
     from api.state import create_state_store
+    from db.repo import SnapshotRepository, create_pool
 
     feed = make_adapter(
         os.environ.get("FEED_MODE", "historical"),

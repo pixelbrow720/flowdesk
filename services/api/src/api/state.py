@@ -23,15 +23,19 @@ the test suite using fakeredis — import cleanly without a live Redis server.
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator, Mapping, Optional
+from collections.abc import AsyncIterator, Mapping
+from typing import Any
 
 __all__ = [
     "NOW_KEY",
     "SESSION_KEY",
     "UPDATES_CHANNEL",
+    "HIRO_STATE_KEY",
+    "HIRO_STATE_TTL_S",
     "now_key",
     "session_key",
     "updates_channel",
+    "hiro_state_key",
     "StateStore",
     "Subscription",
     "create_client",
@@ -44,6 +48,12 @@ __all__ = [
 NOW_KEY = "flowdesk:now:{instrument}"
 SESSION_KEY = "flowdesk:session:{instrument}"
 UPDATES_CHANNEL = "flowdesk:updates:{instrument}"
+HIRO_STATE_KEY = "flowdesk:hiro:{instrument}"
+#: TTL (seconds) for the HIRO accumulator Redis snapshot. 90 minutes covers any
+#: plausible same-session worker restart and expires before the next RTH open
+#: so a stale state from yesterday cannot leak into today (defence-in-depth on
+#: top of the explicit ET-date check in the worker).
+HIRO_STATE_TTL_S: int = 90 * 60
 
 
 def now_key(instrument: str) -> str:
@@ -59,6 +69,17 @@ def session_key(instrument: str) -> str:
 def updates_channel(instrument: str) -> str:
     """Pub/sub channel used to fan out per-minute snapshots to the WS layer."""
     return UPDATES_CHANNEL.format(instrument=instrument)
+
+
+def hiro_state_key(instrument: str) -> str:
+    """Redis STRING key holding the HIRO accumulator dump for an instrument.
+
+    Worker writes a JSON dump of ``HiroState.to_dict()`` once per minute (TTL
+    :data:`HIRO_STATE_TTL_S`). On worker restart within the same RTH session the
+    state is restored to preserve cumulative-HIRO parity with the offline
+    generator (see ``docs/architecture/hiro-unification.md`` §4.4).
+    """
+    return HIRO_STATE_KEY.format(instrument=instrument)
 
 
 # --------------------------------------------------------------------------- #
@@ -112,7 +133,7 @@ class Subscription:
         self._channel = updates_channel(instrument)
         self._pubsub: Any = None
 
-    async def __aenter__(self) -> "Subscription":
+    async def __aenter__(self) -> Subscription:
         self._pubsub = self._client.pubsub()
         await self._pubsub.subscribe(self._channel)
         return self
@@ -167,7 +188,7 @@ class StateStore:
         await self._client.publish(updates_channel(instrument), payload)
         return payload
 
-    async def get_now(self, instrument: str) -> Optional[dict[str, Any]]:
+    async def get_now(self, instrument: str) -> dict[str, Any] | None:
         """Return the latest snapshot payload, or None if not set yet."""
         raw = await self._client.get(now_key(instrument))
         if raw is None:
@@ -178,7 +199,7 @@ class StateStore:
         """Store the current session state string (PRD #9 SessionState)."""
         await self._client.set(session_key(instrument), str(state))
 
-    async def get_session(self, instrument: str) -> Optional[str]:
+    async def get_session(self, instrument: str) -> str | None:
         """Return the current session state string, or None if unset."""
         raw = await self._client.get(session_key(instrument))
         if raw is None:
@@ -188,6 +209,36 @@ class StateStore:
     def subscribe(self, instrument: str) -> Subscription:
         """Return a Subscription async-context-manager for the WS layer."""
         return Subscription(self._client, instrument)
+
+    # -- HIRO accumulator durability (worker restart recovery) ------------- #
+    async def set_hiro_state(self, instrument: str, payload: Mapping[str, Any]) -> None:
+        """Persist the worker's HIRO accumulator dump (JSON, TTL bounded).
+
+        Called by :class:`MinuteWorker` once per produced LIVE tick. Stores the
+        ``HiroState.to_dict()`` payload at :func:`hiro_state_key` with TTL
+        :data:`HIRO_STATE_TTL_S` so the next worker start can resume cumulative
+        HIRO instead of re-priced-from-scratch (see
+        ``docs/architecture/hiro-unification.md`` §4.4 Tier 1).
+        """
+        encoded = json.dumps(dict(payload), separators=(",", ":"))
+        await self._client.set(
+            hiro_state_key(instrument), encoded, ex=HIRO_STATE_TTL_S
+        )
+
+    async def get_hiro_state(self, instrument: str) -> dict[str, Any] | None:
+        """Return the persisted HIRO accumulator dump, or ``None`` if absent.
+
+        Returns ``None`` for missing key, expired TTL, or malformed JSON — the
+        worker treats all three as "no Tier-1 cache" and falls back to a fresh
+        accumulator (Tier 2). Never raises on bad payloads.
+        """
+        raw = await self._client.get(hiro_state_key(instrument))
+        if raw is None:
+            return None
+        try:
+            return _decode_json(raw)
+        except (ValueError, TypeError):
+            return None
 
 
 # --------------------------------------------------------------------------- #

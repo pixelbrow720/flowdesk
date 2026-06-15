@@ -79,13 +79,7 @@ Why two tiers: Tier 1 gives perfect parity post-restart in 99%+ of cases (same-p
 
 When `determine_state` returns `STALE` and the recovery `_produce_live` succeeds (`worker.py:216-219`), the `HiroState` survives the gap untouched — that's correct: no trades arrived during the gap, so the accumulator should not advance, only the cumulative line freezes.
 
-When the gap is **>30s** (the existing `feed_gap_tolerance_s` threshold), an extra flag is added to the snapshot: `degraded=true` (NEW boolean field, additive, defaults `false`). FE-side this powers a "data quality" pip on the HIRO line.
-
-Decision: `degraded=true` is set ONLY on the first recovery tick after a >30s gap, then back to `false`. It does NOT cause any state mutation, just signals "this minute's value crossed a gap".
-
-**Schema delta:** `degraded: Optional[bool] = False` on `Snapshot` model + zod mirror + CONTRACT.md row. Mirror trio update is **atomic** in commit 3 (per locked rules).
-
-> Note on the original Q3 phrasing ("recover from Timescale trades"): rejected — Timescale has no `trades` table (only `snapshots`), so a SQL-replay tier is impossible. Tier 2 fallback in §4.4 replaces it.
+**Scope reduction (2026-06-15 implementation note):** the `degraded=true` flag originally proposed here would touch the locked Snapshot contract (pydantic + zod + CONTRACT.md mirror trio) — out of scope for this fix-set whose goal is **parity only**. The worker already logs `feed produced nothing for X; holding last frame` at WARNING; that operational signal is sufficient until a UX layer needs the per-tick degraded pip. Tracked as a separate enhancement, not a parity blocker.
 
 ## 5. Implementation plan (4 commits)
 
@@ -93,7 +87,7 @@ Decision: `degraded=true` is set ONLY on the first recovery tick after a >30s ga
 |---|-------|-------|-------|
 | 1 | This design doc | `docs/architecture/hiro-unification.md` | n/a |
 | 2 | Engine: confirm/extend `HiroState` API (no semantic change — `add()` already works); add a `to_dict()` / `from_dict()` for Redis snapshot/restore | `services/engine/src/engine/hiro.py`, `services/engine/tests/test_hiro.py` | unit: round-trip `to_dict`/`from_dict` preserves all five lines + skipped + multiplier |
-| 3 | Worker: wire persistent `HiroState`, reset-at-RTH-open, Redis snapshot/restore, `degraded` flag on the snapshot model | `services/api/src/api/worker.py`, `services/api/src/api/state.py` (helper for hiro key), pydantic + zod + CONTRACT.md | unit: reset trigger, restart-with-redis, restart-without-redis, gap-degraded flag |
+| 3 | Worker: wire persistent `HiroState`, reset-at-RTH-open, Redis snapshot/restore | `services/api/src/api/worker.py`, `services/api/src/api/state.py` (helper for hiro key) | unit: reset trigger, restart-with-redis, restart-without-redis |
 | 4 | Parity test: drive the worker over a fixture session and assert `worker.hiro == generator.hiro` minute-by-minute | `services/api/tests/test_hiro_parity.py` | `pytest -k hiro_parity` green |
 
 ## 6. Acceptance
