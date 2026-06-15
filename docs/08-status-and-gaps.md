@@ -323,9 +323,54 @@ With these, every heavy item on the
 original backlog is built (all EXPERIMENTAL); what remains is the forward-run
 **validation** that would move any of them from "mechanism" to "evidence".
 
-### 3. Live feed is a stub 🔴
-`feed/live.py` raises `LiveFeedNotAvailable`. Today only historical replay works.
-Real-time is unbuilt.
+### 3. Live feed — RESOLVED (Phase 3, 2026-06-15) ✅
+**Was:** `feed/live.py` raised `LiveFeedNotAvailable`; only historical
+replay worked.
+
+**Now:** `feed/live.py` is a real adapter (`LiveAdapter`) gated by an
+explicit two-key arming rail (`FEED_MODE=live` **and** `LIVE_FEED_ARMED=1`)
+to defend against the F1–F7 failure modes catalogued in
+`docs/architecture/live-feed-threat-model.md`. Highlights:
+
+- `make_adapter("live")` refuses with `LiveFeedNotArmed` unless the
+  arming key is set — neither `FEED_MODE=live` alone nor an inherited env
+  can flip the worker into real-account contact.
+- `import databento` is lazy and gated: it only runs inside
+  `_open_client()`, behind the arming check, behind the `client_factory`
+  test seam. Tests substitute a hand-rolled `FakeLiveClient` and never
+  load the real package.
+- Circuit breaker (`_BreakerState`): >= 5 consecutive failures within a
+  rolling 5-minute window opens it permanently for the process lifetime;
+  subsequent calls raise `LiveFeedDegraded`. No automatic recovery —
+  humans only (F6).
+- Bounded reconnect: max 5 attempts per `_connect()`, exponential
+  backoff capped at 60s, 5-minute total wall budget.
+- `build_worker_from_env` logs a loud WARNING with `feed_mode` /
+  `live_armed` at boot so an operator can spot a misconfigured live flip
+  in stdout's first line.
+- Public surface (`get_chain` / `get_forward` / `get_hiro_trades`) is
+  shape-identical to `HistoricalSimAdapter`, so the engine, datastore,
+  and locked Snapshot contract stay byte-for-byte unchanged when the
+  mode flips.
+
+**Test status:** 13 dedicated `test_live_adapter.py` tests + 2 updated
+shape-/refusal-coverage tests in `test_historical.py`. Engine 415 passed,
+API 116 passed. **No code path in CI ever imports the real `databento`
+package.**
+
+**Remaining (deferred, not on the critical path):**
+
+- The actual minute-assembly logic (definition + OI + cumulative VOL +
+  top-of-book mid wired to the realtime stream) ships in a follow-up;
+  the FakeLiveClient seam means the assembly code can be developed
+  against recorded fixtures in isolation.
+- Crash-loop detector via on-disk arm-attempts log is documented in §5
+  of the threat model but not yet implemented (lower priority — the
+  in-process breaker + the explicit second key already cover the
+  Kubernetes-restart-storm case at the orchestrator level).
+
+Commits: `dca4e9f` (threat model) → `37e7a03` (adapter + breaker) →
+`c46cb20` (refuse-by-default rail) → `69d7893` (mocked tests).
 
 ### 4. Frontend — DELETED 2026-06-15 (pending redesign) 🟡
 The original frontend (`apps/web/`, `@flowdesk/tokens`, all heatmap/profile/HIRO/
