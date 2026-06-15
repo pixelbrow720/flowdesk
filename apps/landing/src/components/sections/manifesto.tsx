@@ -20,7 +20,7 @@ export function Manifesto() {
           </span>
           <br />
           <SplitText text="We optimize for" by="word" delay={0.2} />{" "}
-          <span className="text-crimson">
+          <span className="text-brick">
             <SplitText text="output." by="word" delay={0.3} />
           </span>
         </h2>
@@ -36,7 +36,13 @@ export function Manifesto() {
               className="col-span-12 border-t border-[color:var(--hairline-strong)] pt-6 md:col-span-4"
             >
               <div className="mb-6 flex items-center gap-3">
-                <span className="font-mono text-[11px] text-crimson">{p.id}</span>
+                <span
+                  className={`font-mono text-[11px] ${
+                    p.accent === "teal" ? "text-teal-glow" : "text-brick"
+                  }`}
+                >
+                  {p.id}
+                </span>
                 <span className="eyebrow">{p.kicker}</span>
               </div>
               <h3 className="mb-3 text-2xl font-medium text-bone-0 md:text-3xl">{p.title}</h3>
@@ -52,18 +58,21 @@ export function Manifesto() {
 const pillars = [
   {
     id: "01",
+    accent: "brick",
     kicker: "Decision",
     title: "Context, not chat.",
     copy: "FOG indexes every artifact, message, and decision. Every prompt arrives loaded. No more 'where was that link.'",
   },
   {
     id: "02",
+    accent: "teal",
     kicker: "Execution",
     title: "Determinism over magic.",
     copy: "FLUX runs typed workflows you can read, version, and replay. Side-effects logged. No agent hallucinations in prod.",
   },
   {
     id: "03",
+    accent: "brick",
     kicker: "Signal",
     title: "Operator dashboards.",
     copy: "Velocity, blockers, throughput — surfaced. The view your CTO actually opens at 8am, not the kanban graveyard.",

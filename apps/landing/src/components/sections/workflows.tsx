@@ -19,7 +19,7 @@ export function Workflows() {
           <div className="col-span-12 md:col-span-6">
             <span className="eyebrow">[04] FLUX</span>
             <h2 className="mt-6 text-balance text-4xl font-medium leading-[1.05] md:text-6xl">
-              Workflows you can <span className="text-crimson">read.</span>
+              Workflows you can <span className="text-brick">read.</span>
             </h2>
           </div>
           <p className="col-span-12 max-w-[44ch] text-bone-2 md:col-span-5 md:col-start-8 md:text-lg">
@@ -44,14 +44,14 @@ export function Workflows() {
                     )}
                   >
                     <span className="flex items-baseline gap-4">
-                      <span className="font-mono text-[11px] text-crimson">
+                      <span className="font-mono text-[11px] text-brick">
                         0{i + 1}
                       </span>
                       <span className="text-2xl font-medium md:text-3xl">{wf.name}</span>
                     </span>
                     <motion.span
                       animate={{ x: active === i ? 0 : -8, opacity: active === i ? 1 : 0 }}
-                      className="text-crimson"
+                      className="text-teal-glow"
                     >
                       →
                     </motion.span>
@@ -68,7 +68,7 @@ export function Workflows() {
                 <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-bone-3">
                   flux/workflows/{w.id}.flux.ts
                 </span>
-                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-signal-green">
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-teal-glow">
                   ● typed
                 </span>
               </div>
@@ -89,7 +89,7 @@ export function Workflows() {
                     <div className="flex-1 rounded border border-[color:var(--hairline)] bg-ink-2 px-4 py-3">
                       <div className="flex items-center justify-between">
                         <span className="font-mono text-sm text-bone-0">{n.label}</span>
-                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-crimson">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-teal-glow">
                           {n.kind}
                         </span>
                       </div>

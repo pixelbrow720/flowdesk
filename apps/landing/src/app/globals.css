@@ -22,7 +22,7 @@
     overflow-x: hidden;
   }
   ::selection {
-    background: theme(colors.crimson.DEFAULT);
+    background: theme(colors.brick.DEFAULT);
     color: theme(colors.bone.0);
   }
   /* Lenis required */

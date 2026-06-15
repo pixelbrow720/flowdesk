@@ -11,7 +11,7 @@ export function CTA() {
 
   return (
     <section id="cta" ref={ref} className="relative isolate overflow-hidden border-t border-[color:var(--hairline)] py-40 md:py-56">
-      {/* big crimson radial */}
+      {/* big toned brick + teal radial */}
       <motion.div
         style={{ scale: glowScale }}
         className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[80vmin] w-[80vmin] -translate-x-1/2 -translate-y-1/2 rounded-full"
@@ -21,7 +21,7 @@ export function CTA() {
           className="h-full w-full rounded-full"
           style={{
             background:
-              "radial-gradient(circle, rgba(230,57,70,0.45) 0%, rgba(230,57,70,0.1) 35%, transparent 65%)",
+              "radial-gradient(circle, rgba(184,51,62,0.32) 0%, rgba(31,138,140,0.12) 35%, transparent 65%)",
           }}
         />
       </motion.div>
@@ -35,7 +35,7 @@ export function CTA() {
         <h2 className="text-display-1 text-balance">
           <SplitText text="Stop searching." by="word" />
           <br />
-          <span className="text-crimson">
+          <span className="text-brick">
             <SplitText text="Start shipping." by="word" delay={0.2} />
           </span>
         </h2>
@@ -48,7 +48,7 @@ export function CTA() {
           <a
             href="mailto:operators@flowdesk.app"
             data-cursor="grow"
-            className="group relative inline-flex h-14 items-center gap-3 overflow-hidden rounded-full bg-crimson px-8 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-0 transition-transform hover:scale-[1.02]"
+            className="group relative inline-flex h-14 items-center gap-3 overflow-hidden rounded-full bg-brick px-8 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-0 transition-transform hover:scale-[1.02]"
           >
             <span className="relative z-10">operators@flowdesk.app</span>
             <span className="relative z-10">→</span>
@@ -56,9 +56,9 @@ export function CTA() {
           <a
             href="#system"
             data-cursor="grow"
-            className="inline-flex h-14 items-center gap-3 rounded-full border border-[color:var(--hairline-strong)] px-8 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-1 transition-colors hover:border-bone-2"
+            className="inline-flex h-14 items-center gap-3 rounded-full border border-teal/40 px-8 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-1 transition-colors hover:border-teal hover:text-bone-0"
           >
-            Re-read the system <span className="text-crimson">↑</span>
+            Re-read the system <span className="text-teal-glow">↑</span>
           </a>
         </div>
       </div>

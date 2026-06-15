@@ -17,14 +17,29 @@ const config: Config = {
           2: "#C9C9C2",
           3: "#8E8E88",
         },
+        // Primary accent — toned-down crimson (brick / kiln)
+        // Less saturation than #E63946, reads "considered" not "alarm"
+        brick: {
+          DEFAULT: "#B8333E",
+          deep: "#8E232C",
+          glow: "#D54452",
+        },
+        // Backwards-compat alias so old `crimson` classes still work
         crimson: {
-          DEFAULT: "#E63946",
-          deep: "#C12836",
-          glow: "#FF4D5C",
+          DEFAULT: "#B8333E",
+          deep: "#8E232C",
+          glow: "#D54452",
+        },
+        // Secondary accent — deep teal (petrol)
+        // For signal/info/secondary CTAs. NOT cyan, NOT mint.
+        teal: {
+          DEFAULT: "#1F8A8C",
+          deep: "#155C5E",
+          glow: "#3FB0B2",
         },
         signal: {
-          green: "#4ADE80",
-          amber: "#F59E0B",
+          teal: "#1F8A8C",
+          amber: "#D4A445",
         },
       },
       fontFamily: {

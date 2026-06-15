@@ -18,7 +18,7 @@ export function System() {
           <div className="col-span-12 md:col-span-5">
             <span className="eyebrow">[03] System</span>
             <h2 className="mt-6 text-balance text-4xl font-medium leading-[1.05] md:text-6xl">
-              Four layers. <span className="text-crimson">One graph.</span>
+              Four layers. <span className="text-brick">One graph.</span>
             </h2>
           </div>
           <p className="col-span-12 max-w-[48ch] text-lg text-bone-2 md:col-span-6 md:col-start-7 md:text-xl">
@@ -40,9 +40,18 @@ export function System() {
           {/* sidebar specs */}
           <div className="col-span-12 lg:col-span-5">
             <div className="sticky top-28 space-y-4">
-              {LAYERS.map((l) => (
-                <div key={l.id} className="border-l-2 border-crimson/40 pl-4">
-                  <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-crimson">
+              {LAYERS.map((l, i) => (
+                <div
+                  key={l.id}
+                  className={`border-l-2 pl-4 ${
+                    i % 2 === 0 ? "border-brick/50" : "border-teal/60"
+                  }`}
+                >
+                  <div
+                    className={`font-mono text-[11px] uppercase tracking-[0.18em] ${
+                      i % 2 === 0 ? "text-brick" : "text-teal-glow"
+                    }`}
+                  >
                     {l.id}
                   </div>
                   <div className="mt-1 text-base text-bone-1">{l.tagline}</div>
@@ -76,11 +85,17 @@ function Layer({
   return (
     <motion.div
       style={{ opacity, x }}
-      className="group relative overflow-hidden rounded-lg border border-[color:var(--hairline-strong)] bg-ink-1 p-6 transition-colors hover:border-crimson/40 md:p-8"
+      className="group relative overflow-hidden rounded-lg border border-[color:var(--hairline-strong)] bg-ink-1 p-6 transition-colors hover:border-brick/40 md:p-8"
     >
       <div className="flex items-baseline justify-between">
         <div className="flex items-baseline gap-4">
-          <span className="font-mono text-[11px] text-crimson">L{index + 1}</span>
+          <span
+            className={`font-mono text-[11px] ${
+              index % 2 === 0 ? "text-brick" : "text-teal-glow"
+            }`}
+          >
+            L{index + 1}
+          </span>
           <h3 className="text-2xl font-medium md:text-3xl">{layer.id}</h3>
         </div>
         <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-bone-3">
@@ -98,8 +113,12 @@ function Layer({
           </span>
         ))}
       </div>
-      {/* crimson accent on hover */}
-      <div className="absolute inset-x-0 bottom-0 h-px origin-left scale-x-0 bg-crimson transition-transform duration-700 group-hover:scale-x-100" />
+      {/* accent on hover */}
+      <div
+        className={`absolute inset-x-0 bottom-0 h-px origin-left scale-x-0 transition-transform duration-700 group-hover:scale-x-100 ${
+          index % 2 === 0 ? "bg-brick" : "bg-teal"
+        }`}
+      />
     </motion.div>
   );
 }

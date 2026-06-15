@@ -42,12 +42,12 @@ export function Hero() {
         />
       </motion.div>
 
-      {/* radial crimson glow */}
+      {/* radial brick glow — toned down */}
       <div
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(ellipse 60% 50% at 50% 100%, rgba(230,57,70,0.25), transparent 70%)",
+            "radial-gradient(ellipse 60% 50% at 50% 100%, rgba(184,51,62,0.18), transparent 70%)",
         }}
         aria-hidden
       />
@@ -61,7 +61,7 @@ export function Hero() {
           className="mb-8 flex flex-wrap items-center gap-x-6 gap-y-2 md:mb-10"
         >
           <span className="eyebrow flex items-center gap-2">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-signal-green" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal" />
             v0.4 — Paid Beta · Live
           </span>
           <span className="eyebrow text-bone-3">SOC2-grade · Single tenant</span>
@@ -74,17 +74,17 @@ export function Hero() {
         >
           <SplitText text="Workspace." by="word" />
           <br />
-          <span className="text-crimson">
+          <span className="text-brick">
             <SplitText text="For operators." by="word" delay={0.15} />
           </span>
         </motion.h1>
 
-        {/* crimson rule */}
+        {/* brick rule */}
         <motion.div
           initial={{ scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: 1.4, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="my-10 h-[2px] w-full origin-left bg-crimson md:my-14"
+          className="my-10 h-[2px] w-full origin-left bg-brick md:my-14"
         />
 
         {/* sub-grid: lede + meta */}
@@ -112,18 +112,18 @@ export function Hero() {
               <a
                 href="#cta"
                 data-cursor="grow"
-                className="group relative inline-flex h-12 items-center gap-3 overflow-hidden rounded-full bg-crimson px-6 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-0 transition-transform hover:scale-[1.02]"
+                className="group relative inline-flex h-12 items-center gap-3 overflow-hidden rounded-full bg-brick px-6 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-0 transition-transform hover:scale-[1.02]"
               >
                 <span className="relative z-10">Request access</span>
                 <span className="relative z-10">→</span>
-                <span className="absolute inset-0 bg-crimson-deep opacity-0 transition-opacity group-hover:opacity-100" />
+                <span className="absolute inset-0 bg-brick-deep opacity-0 transition-opacity group-hover:opacity-100" />
               </a>
               <a
                 href="#system"
                 data-cursor="grow"
-                className="inline-flex h-12 items-center gap-3 rounded-full border border-[color:var(--hairline-strong)] px-6 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-1 transition-colors hover:border-bone-2 hover:text-bone-0"
+                className="inline-flex h-12 items-center gap-3 rounded-full border border-[color:var(--hairline-strong)] px-6 font-mono text-[11px] uppercase tracking-[0.18em] text-bone-1 transition-colors hover:border-teal hover:text-bone-0"
               >
-                See the system <span className="text-crimson">↓</span>
+                See the system <span className="text-teal">↓</span>
               </a>
             </div>
           </motion.div>
@@ -137,13 +137,17 @@ export function Hero() {
           className="mt-16 grid grid-cols-2 gap-px overflow-hidden rounded border border-[color:var(--hairline)] bg-[color:var(--hairline)] md:mt-24 md:grid-cols-4"
         >
           {[
-            ["FOG", "Context engine"],
-            ["FLUX", "Deterministic automation"],
-            ["ARC", "Multi-agent orchestration"],
-            ["OUTPUT", "Operator dashboards"],
-          ].map(([k, v]) => (
+            ["FOG", "Context engine", "brick"],
+            ["FLUX", "Deterministic automation", "teal"],
+            ["ARC", "Multi-agent orchestration", "brick"],
+            ["OUTPUT", "Operator dashboards", "teal"],
+          ].map(([k, v, color]) => (
             <div key={k} className="bg-ink-0 p-5 md:p-6">
-              <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-crimson">
+              <div
+                className={`font-mono text-[11px] uppercase tracking-[0.18em] ${
+                  color === "teal" ? "text-teal-glow" : "text-brick"
+                }`}
+              >
                 {k}
               </div>
               <div className="mt-2 text-base text-bone-1 md:text-lg">{v}</div>

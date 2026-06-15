@@ -27,14 +27,14 @@ export function Marquee() {
         </motion.div>
       </div>
 
-      {/* secondary tape — opposite direction, slower, smaller */}
-      <div className="group relative mt-6 flex overflow-hidden opacity-60">
+      {/* secondary tape — opposite direction, slower, smaller, teal accent */}
+      <div className="group relative mt-6 flex overflow-hidden opacity-70">
         <motion.div
           className="flex shrink-0 items-center gap-10 pr-10 will-change-transform group-hover:[animation-play-state:paused]"
           style={{ animation: "marquee 60s linear infinite reverse" }}
         >
           {STATS.concat(STATS).map((s, i) => (
-            <span key={`${s}-${i}`} className="font-mono text-[11px] uppercase tracking-[0.18em] text-bone-3 whitespace-nowrap">
+            <span key={`${s}-${i}`} className="font-mono text-[11px] uppercase tracking-[0.18em] text-teal-glow whitespace-nowrap">
               {s}
             </span>
           ))}
@@ -47,7 +47,7 @@ export function Marquee() {
 function Pill({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 whitespace-nowrap">
-      <span className="h-1.5 w-1.5 rounded-full bg-crimson" />
+      <span className="h-1.5 w-1.5 rounded-full bg-brick" />
       <span className="text-2xl font-medium text-bone-1 md:text-3xl">{label}</span>
     </div>
   );

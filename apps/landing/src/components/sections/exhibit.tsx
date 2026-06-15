@@ -22,7 +22,7 @@ export function Exhibit() {
         <div className="grid grid-cols-12 gap-10">
           <div className="col-span-12 lg:col-span-5">
             <h2 className="text-balance text-4xl font-medium leading-[1.05] md:text-5xl">
-              The shape of work, <span className="text-crimson">before & after.</span>
+              The shape of work, <span className="text-brick">before & after.</span>
             </h2>
             <p className="mt-6 max-w-[44ch] text-bone-2 md:text-lg">
               Same team, same headcount, same comp plan. Twelve weeks on FlowDesk. Searching collapses,
@@ -73,7 +73,7 @@ function Bar({
           {metric.label}
         </span>
         <span className="font-mono text-[11px] text-bone-3">
-          {metric.beforeLabel} → <span className="text-crimson">{metric.afterLabel}</span>
+          {metric.beforeLabel} → <span className="text-teal-glow">{metric.afterLabel}</span>
         </span>
       </div>
       {/* baseline (before) */}
@@ -84,7 +84,7 @@ function Bar({
         />
         <motion.div
           style={{ width }}
-          className="absolute inset-y-0 left-0 bg-crimson"
+          className="absolute inset-y-0 left-0 bg-brick"
         />
       </div>
     </div>

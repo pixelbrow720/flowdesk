@@ -50,11 +50,11 @@ export function Lenses() {
             </div>
             <div className="flex items-baseline justify-between gap-6">
               <h2 className="text-3xl font-medium tracking-snug text-balance md:text-4xl lg:text-5xl">
-                Seven lenses on the same <span className="text-crimson">graph of work.</span>
+                Seven lenses on the same <span className="text-brick">graph of work.</span>
               </h2>
               {/* progress bar */}
               <div className="hidden h-px w-48 flex-shrink-0 bg-[color:var(--hairline-strong)] lg:block">
-                <motion.div className="h-full bg-crimson" style={{ width: progressWidth }} />
+                <motion.div className="h-full bg-brick" style={{ width: progressWidth }} />
               </div>
             </div>
           </div>
@@ -86,13 +86,14 @@ function SectionHeader() {
         <span className="eyebrow text-bone-3">7 views</span>
       </div>
       <h2 className="text-3xl font-medium tracking-snug text-balance md:text-5xl">
-        Seven lenses on the same <span className="text-crimson">graph of work.</span>
+        Seven lenses on the same <span className="text-brick">graph of work.</span>
       </h2>
     </>
   );
 }
 
 function LensCard({ lens, index = 0, compact = false }: { lens: (typeof LENSES)[number]; index?: number; compact?: boolean }) {
+  const accentClass = index % 2 === 0 ? "text-brick" : "text-teal-glow";
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -108,7 +109,7 @@ function LensCard({ lens, index = 0, compact = false }: { lens: (typeof LENSES)[
       {/* big numeral */}
       <div className={compact ? "mb-4 flex items-baseline gap-3" : "col-span-5"}>
         <div className="flex items-baseline gap-3">
-          <span className="font-mono text-[11px] text-crimson">
+          <span className={`font-mono text-[11px] ${accentClass}`}>
             0{index + 1} / 0{LENSES.length}
           </span>
           <span className="eyebrow text-bone-3">{lens.tag}</span>

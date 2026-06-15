@@ -45,7 +45,7 @@ export function Cursor() {
     <>
       {/* dot */}
       <motion.div
-        className="pointer-events-none fixed left-0 top-0 z-[100] h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-crimson"
+        className="pointer-events-none fixed left-0 top-0 z-[100] h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brick"
         style={{ x, y }}
       />
       {/* ring */}
@@ -57,7 +57,7 @@ export function Cursor() {
               width: variant === "grow" ? 64 : 28,
               height: variant === "grow" ? 64 : 28,
               opacity: variant === "grow" ? 1 : 0.55,
-              borderColor: variant === "grow" ? "rgba(230,57,70,0.9)" : "rgba(250,250,247,0.35)",
+              borderColor: variant === "grow" ? "rgba(184,51,62,0.9)" : "rgba(250,250,247,0.35)",
             }}
             transition={{ type: "spring", stiffness: 280, damping: 24 }}
             className="pointer-events-none fixed left-0 top-0 z-[99] -translate-x-1/2 -translate-y-1/2 rounded-full border"
