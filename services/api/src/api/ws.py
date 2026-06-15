@@ -41,9 +41,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Optional, Set
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
@@ -54,6 +55,7 @@ __all__ = [
     "WS_CLOSE_NO_DESK",
     "WS_CLOSE_BAD_INSTRUMENT",
     "WS_CLOSE_UNAVAILABLE",
+    "WS_CLOSE_RATE_LIMITED",
     "DEFAULT_HEARTBEAT_S",
     "VALID_INSTRUMENTS",
     "heartbeat_interval_s",
@@ -68,6 +70,9 @@ WS_CLOSE_NO_SESSION = 4401
 WS_CLOSE_NO_DESK = 4403
 WS_CLOSE_BAD_INSTRUMENT = 4400
 WS_CLOSE_UNAVAILABLE = 1011
+# 4xxx = app-defined; mirrors HTTP 429 so FE / load tests can disambiguate
+# rate-limit closes from generic policy violations.
+WS_CLOSE_RATE_LIMITED = 4429
 
 DEFAULT_HEARTBEAT_S = 15.0
 
@@ -95,19 +100,19 @@ class _InstrumentHub:
     def __init__(self, store: Any, instrument: str) -> None:
         self._store = store
         self._instrument = instrument
-        self._queues: Set["asyncio.Queue[dict[str, Any]]"] = set()
-        self._task: Optional[asyncio.Task[None]] = None
+        self._queues: set[asyncio.Queue[dict[str, Any]]] = set()
+        self._task: asyncio.Task[None] | None = None
 
     @property
     def empty(self) -> bool:
         return not self._queues
 
-    def add(self, queue: "asyncio.Queue[dict[str, Any]]") -> None:
+    def add(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
         self._queues.add(queue)
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._run())
 
-    def remove(self, queue: "asyncio.Queue[dict[str, Any]]") -> None:
+    def remove(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
         self._queues.discard(queue)
         if not self._queues and self._task is not None:
             self._task.cancel()
@@ -147,12 +152,12 @@ class ConnectionManager:
         return hub
 
     @asynccontextmanager
-    async def stream(self, instrument: str) -> AsyncIterator["asyncio.Queue[dict[str, Any]]"]:
+    async def stream(self, instrument: str) -> AsyncIterator[asyncio.Queue[dict[str, Any]]]:
         """Yield a queue that receives every snapshot for ``instrument``."""
         # Bounded: paired with the drop-oldest fan-out in _InstrumentHub._run so a
         # slow/stalled client cannot grow memory without bound. 256 minutes of
         # buffered frames is far beyond any sane client lag at 1-frame/min cadence.
-        queue: "asyncio.Queue[dict[str, Any]]" = asyncio.Queue(maxsize=256)
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
         hub = self._hub(instrument)
         hub.add(queue)
         try:
@@ -175,7 +180,7 @@ def _get_manager(app: Any, store: Any) -> ConnectionManager:
 # --------------------------------------------------------------------------- #
 # Per-connection loops.                                                        #
 # --------------------------------------------------------------------------- #
-async def _push_loop(websocket: WebSocket, queue: "asyncio.Queue[dict[str, Any]]") -> None:
+async def _push_loop(websocket: WebSocket, queue: asyncio.Queue[dict[str, Any]]) -> None:
     """Forward fan-out snapshots to this client."""
     try:
         while True:
@@ -226,7 +231,7 @@ async def _ws_refresh_entitlement(websocket: WebSocket, session: Any) -> Any:
         return session
     from api.auth_session import RECHECK_INTERVAL_S, _parse_iso, check_access
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last = _parse_iso(session.last_checked)
     if last is not None and (now - last).total_seconds() <= RECHECK_INTERVAL_S:
         return session  # not due
@@ -250,6 +255,16 @@ async def _ws_refresh_entitlement(websocket: WebSocket, session: Any) -> Any:
 # --------------------------------------------------------------------------- #
 async def serve(websocket: WebSocket, instrument: str) -> None:
     """DESK-gated WS handler: connect-snapshot, pub/sub push, heartbeat."""
+    # --- rate-limit BEFORE cookie/session work (PRD #6 §rate-limit) ---
+    # An anonymous flooder spamming /ws should hit the cap before we
+    # parse cookies, hit Discord, or allocate a pub/sub subscription.
+    limiter = getattr(websocket.app.state, "rate_limiter", None)
+    if limiter is not None:
+        verdict = await limiter.check("ws_handshake", websocket)
+        if not verdict.allowed:
+            await websocket.close(code=WS_CLOSE_RATE_LIMITED)
+            return
+
     # --- gating BEFORE accept (PRD #8 AC-A5, T-09) ---
     session = parse_session_cookie(websocket.cookies.get(SESSION_COOKIE))
     if session is None:

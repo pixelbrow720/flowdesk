@@ -29,23 +29,23 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Optional
+from datetime import UTC, datetime
+from typing import Any
 
+from engine.schema import Instrument, Snapshot
 from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-from engine.schema import Instrument, Snapshot
 
 from api import __version__
 from api.auth import get_discord_client, register_auth_routes
 from api.auth_session import Session, check_access, serialize_session, set_session_cookie
 from api.discord_client import DiscordAuthError, DiscordUnavailable
 from api.entitlement import build_me_response
-from api.errors import ApiError, NotFound, ServiceUnavailable
+from api.errors import ApiError, NotFound, ServiceUnavailable, TooManyRequests
 from api.models import HealthResponse, MeResponse, ReplayResponse, ReplaySession
 from api.security import (
     SESSION_COOKIE,
@@ -54,7 +54,6 @@ from api.security import (
     require_session,
 )
 from api.ws import register_ws_routes
-
 
 # --------------------------------------------------------------------------- #
 # Settings helpers (read env at call time so tests/process env stay flexible). #
@@ -122,13 +121,13 @@ def _desk_role_id() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # --------------------------------------------------------------------------- #
 # Dependencies.                                                                #
 # --------------------------------------------------------------------------- #
-def current_session(request: Request) -> Optional[Session]:
+def current_session(request: Request) -> Session | None:
     """Read + verify the signed session cookie."""
     return parse_session_cookie(request.cookies.get(SESSION_COOKIE))
 
@@ -166,6 +165,24 @@ def get_repo(request: Request) -> Any:
     if repo is None:
         raise ServiceUnavailable("snapshot repository not configured")
     return repo
+
+
+async def _enforce_rate_limit(scope: str, request: Request) -> None:
+    """Check the rate limit for ``scope`` against ``request.client.host``.
+
+    Raises :class:`TooManyRequests` (HTTP 429 + ``Retry-After``) when the
+    caller is over budget. No-op when no limiter is wired (dev / no-Redis):
+    the limiter itself fails open, so this stays consistent.
+    """
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is None:
+        return
+    verdict = await limiter.check(scope, request)
+    if not verdict.allowed:
+        raise TooManyRequests(
+            f"rate limit exceeded for {scope}",
+            retry_after=verdict.retry_after,
+        )
 
 
 async def _run_access_check(
@@ -219,14 +236,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pool = None
     app.state.state_store = None
     app.state.repo = None
+    app.state.rate_limiter = None
     if getattr(app.state, "discord_client", None) is None:
         from api.discord_client import client_from_env
 
         app.state.discord_client = client_from_env()
     if redis_url:
-        from api.state import create_state_store
+        from api.rate_limit import RateLimiter
+        from api.state import create_client, create_state_store
 
         app.state.state_store = create_state_store(redis_url)
+        # Separate redis-py client for rate-limit counters so flushing the
+        # limiter never collides with snapshot pub/sub state.
+        app.state.rate_limiter = RateLimiter(create_client(redis_url))
+    else:
+        # Dev / no-Redis mode: limiter still installed but disabled (fail-open).
+        from api.rate_limit import RateLimiter
+
+        app.state.rate_limiter = RateLimiter(client=None)
     if dsn:
         from db.repo import SnapshotRepository, apply_migrations, create_pool
 
@@ -265,7 +292,13 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(ApiError)
     async def _api_error_handler(_request: Request, exc: ApiError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content=exc.to_payload())
+        headers: dict[str, str] | None = None
+        if isinstance(exc, TooManyRequests):
+            # RFC 9110 §10.2.3 — clients (and well-behaved bots) honour this.
+            headers = {"Retry-After": str(exc.retry_after)}
+        return JSONResponse(
+            status_code=exc.status_code, content=exc.to_payload(), headers=headers
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_handler(
@@ -364,6 +397,9 @@ def create_app() -> FastAPI:
     # ----- me/recheck (force an immediate Discord re-check; 401 if anonymous) -----
     @app.post("/api/me/recheck", response_model=MeResponse)
     async def me_recheck(request: Request, response: Response) -> MeResponse:
+        # Rate-limit BEFORE auth: an anonymous flooder also gets capped per-IP
+        # so they cannot DoS the Discord upstream by hammering 401s.
+        await _enforce_rate_limit("recheck", request)
         session = require_session(current_session(request))
         session = await _run_access_check(request, response, session, force=True)
         return build_me_response(session, now=_now())

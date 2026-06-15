@@ -25,8 +25,7 @@ from __future__ import annotations
 
 import os
 import secrets as _secrets
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -34,6 +33,7 @@ from fastapi.responses import RedirectResponse
 from api.auth_session import (
     OAUTH_STATE_COOKIE,
     Session,
+    SignatureError,
     clear_session_cookie,
     clear_state_cookie,
     serialize_session,
@@ -41,7 +41,6 @@ from api.auth_session import (
     set_state_cookie,
     sign_value,
     verify_value,
-    SignatureError,
 )
 from api.discord_client import (
     DiscordAuthError,
@@ -115,7 +114,7 @@ def get_discord_client(request: Request) -> DiscordClient:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def register_auth_routes(app: FastAPI) -> None:
@@ -142,9 +141,15 @@ def register_auth_routes(app: FastAPI) -> None:
     @app.get("/api/auth/callback", include_in_schema=False, name="auth_callback_alias")
     async def auth_callback(
         request: Request,
-        code: Optional[str] = Query(default=None),
-        state: Optional[str] = Query(default=None),
+        code: str | None = Query(default=None),
+        state: str | None = Query(default=None),
     ) -> Response:
+        # Rate-limit BEFORE CSRF check: a flooder hitting /callback with junk
+        # query strings should hit the cap before we spend cycles on signature
+        # verification and (worse) Discord token exchange.
+        from api.main import _enforce_rate_limit  # local import to avoid cycle
+
+        await _enforce_rate_limit("oauth_callback", request)
         # CSRF: the state in the query must match our signed state cookie.
         cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
         if not state or not cookie_state or state != cookie_state:

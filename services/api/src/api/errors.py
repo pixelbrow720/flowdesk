@@ -67,6 +67,28 @@ class NotFound(ApiError):
     code = "NOT_FOUND"
 
 
+class TooManyRequests(ApiError):
+    """Client exceeded the rate limit for this endpoint.
+
+    Carries ``retry_after`` (seconds) which the exception handler surfaces as
+    a ``Retry-After`` HTTP header (RFC 9110 §10.2.3).
+    """
+
+    status_code = 429
+    code = "RATE_LIMITED"
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        retry_after: int = 1,
+        code: str | None = None,
+        status_code: int | None = None,
+    ) -> None:
+        super().__init__(message, code=code, status_code=status_code)
+        self.retry_after = max(1, int(retry_after))
+
+
 class ServiceUnavailable(ApiError):
     """A backing dependency (Redis/Timescale) is not configured/available."""
 
