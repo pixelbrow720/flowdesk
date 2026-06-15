@@ -51,3 +51,8 @@ tmp_*
 Thumbs.db
 .idea/
 .vscode/
+
+# Landing build artifacts
+apps/landing/node_modules/
+apps/landing/dist/
+apps/landing/.astro/

@@ -1,0 +1,133 @@
+/* FlowDesk Landing — Design Tokens
+ * LOCKED 2026-06-15 per docs/design/landing-page-plan.md
+ * Mono-accent: CRIMSON dominant. TURQUOISE = secondary tonal accent.
+ * Type: Space Grotesk (display) / JetBrains Mono (numeric + UI labels).
+ */
+
+:root {
+  --ink-100: #f4f1ea;
+  --ink-80:  #cfc9bd;
+  --ink-60:  #8a8478;
+  --ink-40:  #4d4940;
+  --ink-20:  #2a2823;
+  --ground-0:  #0b0a08;
+  --ground-2:  #110f0c;
+  --ground-4:  #1a1714;
+  --ground-8:  #221e1a;
+
+  --crimson:    #c8312b;
+  --crimson-d:  #8e1f1b;
+  --crimson-l:  #e8443d;
+  --turquoise:  #2dd4bf;
+  --turquoise-d: #14a094;
+
+  --bg:         var(--ground-0);
+  --bg-elev:    var(--ground-2);
+  --fg:         var(--ink-100);
+  --fg-mute:    var(--ink-60);
+  --rule:       var(--ink-20);
+  --accent:     var(--crimson);
+  --live:       var(--turquoise);
+  --warn:       #d4a14a;
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  --fs-mono-xs:  0.6875rem;
+  --fs-mono-sm:  0.8125rem;
+  --fs-body:     1.0625rem;
+  --fs-lead:     1.375rem;
+  --fs-h3:       1.75rem;
+  --fs-h2:       2.5rem;
+  --fs-h1:       clamp(2.75rem, 6vw, 5.5rem);
+  --fs-display:  clamp(4rem, 12vw, 11rem);
+
+  --lh-tight: 1.05;
+  --lh-snug: 1.2;
+  --lh-body: 1.55;
+
+  --tracking-tight: -0.02em;
+  --tracking-mono: 0.04em;
+  --tracking-label: 0.18em;
+
+  --maxw: 1320px;
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --section-y: clamp(5rem, 12vh, 9rem);
+
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 180ms;
+  --dur-med:  360ms;
+  --dur-slow: 720ms;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  overflow-x: hidden;
+}
+
+::selection { background: var(--crimson); color: var(--ink-100); }
+
+a { color: inherit; text-decoration: none; }
+a:focus-visible { outline: 2px solid var(--crimson); outline-offset: 3px; }
+
+button { font: inherit; background: none; border: 0; color: inherit; cursor: pointer; }
+
+img, svg, video { display: block; max-width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.mono { font-family: var(--font-mono); letter-spacing: var(--tracking-mono); }
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-mute);
+}
+.exhibit-tag {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--crimson);
+}
+.warn-tag {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  padding: 0.15em 0.5em;
+  display: inline-block;
+}
+
+.rule { height: 1px; background: var(--rule); border: 0; margin-block: clamp(2rem, 5vh, 4rem); }
+.tabular { font-variant-numeric: tabular-nums; }

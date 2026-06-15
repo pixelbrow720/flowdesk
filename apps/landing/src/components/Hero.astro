@@ -1,0 +1,212 @@
+---
+import { EXHIBIT_A, LATENCY_BUDGET_MS } from '../lib/data.ts';
+
+const last = EXHIBIT_A[EXHIBIT_A.length - 1];
+const fluxFmt = (n: number) => {
+  const s = n >= 0 ? '+' : '−';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${s}${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${s}${(abs / 1_000).toFixed(0)}K`;
+  return `${s}${abs}`;
+};
+---
+
+<header class="hero" data-section="hero">
+  <div class="container hero__inner">
+
+    <nav class="hero__nav" aria-label="Primary">
+      <a href="/" class="hero__brand">
+        <span class="hero__brand-mark mono">FD</span>
+        <span class="hero__brand-name">FlowDesk</span>
+      </a>
+      <ul class="hero__navlist">
+        <li><a href="#manifesto" class="label">Manifesto</a></li>
+        <li><a href="#lenses" class="label">Lenses</a></li>
+        <li><a href="#honesty" class="label">Honesty</a></li>
+        <li><a href="#access" class="label">Beta access</a></li>
+      </ul>
+      <span class="hero__nav-status label">
+        <span class="dot dot--live" aria-hidden="true"></span>
+        ENGINE · 531/531 GREEN
+      </span>
+    </nav>
+
+    <div class="hero__tape" role="status" aria-live="polite">
+      <span class="exhibit-tag">EXHIBIT&nbsp;A · LIVE TAPE</span>
+      <ul class="hero__ticks tabular mono">
+        {EXHIBIT_A.map((t) => (
+          <li class="tick">
+            <time datetime={t.ts}>{t.ts.slice(11, 16)}Z</time>
+            <span class="tick__fwd">{t.forward.toFixed(2)}</span>
+            <span class={`tick__flux ${t.flux >= 0 ? 'is-pos' : 'is-neg'}`}>{fluxFmt(t.flux)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <h1 class="hero__h1" data-anim="hero-h1">
+      <span class="hero__h1-line">The options market</span>
+      <span class="hero__h1-line hero__h1-line--accent">has a hedge layer.</span>
+      <span class="hero__h1-line">FlowDesk renders it.</span>
+    </h1>
+
+    <p class="hero__lede">
+      Dealer flow. Gamma fields. Locked contracts. Built for operators who
+      trade the difference between <em>intent</em> and <em>noise</em>.
+    </p>
+
+    <div class="hero__meta">
+      <dl class="hero__stamp">
+        <div>
+          <dt class="label">Snapshot ts</dt>
+          <dd class="mono tabular">{last.ts}</dd>
+        </div>
+        <div>
+          <dt class="label">Forward (ES)</dt>
+          <dd class="mono tabular">{last.forward.toFixed(2)}</dd>
+        </div>
+        <div>
+          <dt class="label">FLUX</dt>
+          <dd class="mono tabular">{fluxFmt(last.flux)}</dd>
+        </div>
+        <div>
+          <dt class="label">Latency budget</dt>
+          <dd class="mono tabular">≤{LATENCY_BUDGET_MS}s</dd>
+        </div>
+      </dl>
+
+      <div class="hero__cta">
+        <a href="#access" class="btn btn--primary">Request beta access</a>
+        <a href="#manifesto" class="btn btn--ghost">Read the manifesto</a>
+      </div>
+    </div>
+
+    <p class="hero__honesty label">
+      <span class="warn-tag">NOT-VALIDATED</span>
+      &nbsp;Three lenses are research, surfaced behind tags. Schema_version 2 (breaking).
+      Live feed gated — paid beta runs in historical mode only.
+    </p>
+  </div>
+</header>
+
+<style>
+  .hero {
+    position: relative;
+    padding-block: clamp(2rem, 6vh, 4rem) var(--section-y);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(200, 49, 43, 0.12), transparent 60%),
+      radial-gradient(900px 500px at 5% 30%, rgba(45, 212, 191, 0.04), transparent 70%),
+      var(--bg);
+    border-bottom: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .hero__inner { display: flex; flex-direction: column; gap: clamp(1.5rem, 4vh, 2.5rem); }
+
+  .hero__nav {
+    display: flex; align-items: center; gap: 1.5rem;
+    padding-block: 0.75rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero__brand { display: inline-flex; align-items: center; gap: 0.6rem; }
+  .hero__brand-mark {
+    width: 2rem; height: 2rem;
+    display: grid; place-items: center;
+    background: var(--crimson); color: var(--ink-100);
+    font-weight: 700; font-size: 0.85rem;
+  }
+  .hero__brand-name { font-weight: 600; letter-spacing: var(--tracking-tight); }
+
+  .hero__navlist {
+    list-style: none; display: flex; gap: 1.25rem;
+    margin-inline-start: auto;
+  }
+  .hero__navlist a:hover { color: var(--ink-100); }
+
+  .hero__nav-status {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    color: var(--ink-80);
+  }
+  .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; display: inline-block; }
+  .dot--live {
+    background: var(--turquoise);
+    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.6);
+    animation: pulse 2s var(--ease-in-out) infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(45, 212, 191, 0.5); }
+    50% { box-shadow: 0 0 0 6px rgba(45, 212, 191, 0); }
+  }
+
+  .hero__tape {
+    display: flex; flex-direction: column; gap: 0.6rem;
+    padding-block: 0.5rem;
+  }
+  .hero__ticks {
+    display: flex; gap: 1.5rem; flex-wrap: wrap;
+    font-size: var(--fs-mono-sm); color: var(--ink-80);
+  }
+  .tick { display: inline-flex; gap: 0.5rem; align-items: baseline; }
+  .tick time { color: var(--fg-mute); }
+  .tick__fwd { color: var(--ink-100); }
+  .tick__flux.is-pos { color: var(--turquoise); }
+  .tick__flux.is-neg { color: var(--crimson-l); }
+
+  .hero__h1 {
+    font-size: var(--fs-h1);
+    line-height: var(--lh-tight);
+    letter-spacing: var(--tracking-tight);
+    font-weight: 500;
+    max-width: 22ch;
+  }
+  .hero__h1-line { display: block; }
+  .hero__h1-line--accent {
+    color: var(--crimson);
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .hero__lede {
+    font-size: var(--fs-lead);
+    color: var(--ink-80);
+    max-width: 52ch;
+    line-height: 1.45;
+  }
+  .hero__lede em { color: var(--ink-100); font-style: normal; border-bottom: 1px solid var(--crimson); padding-bottom: 1px; }
+
+  .hero__meta {
+    display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between;
+    gap: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+  }
+  .hero__stamp { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1.25rem 2rem; flex: 1 1 auto; min-width: 280px; }
+  .hero__stamp dt { margin-bottom: 0.25rem; }
+  .hero__stamp dd { font-size: 1.05rem; color: var(--ink-100); }
+
+  .hero__cta { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+
+  .btn {
+    font-family: var(--font-mono);
+    font-size: var(--fs-mono-sm);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    padding: 0.85rem 1.4rem;
+    border: 1px solid currentColor;
+    transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  }
+  .btn--primary { background: var(--crimson); border-color: var(--crimson); color: var(--ink-100); }
+  .btn--primary:hover { background: var(--crimson-l); border-color: var(--crimson-l); }
+  .btn--ghost { color: var(--ink-100); }
+  .btn--ghost:hover { background: var(--ink-100); color: var(--ground-0); }
+
+  .hero__honesty {
+    color: var(--fg-mute);
+    max-width: 80ch;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 720px) {
+    .hero__navlist { display: none; }
+    .hero__nav-status { margin-inline-start: auto; }
+  }
+</style>

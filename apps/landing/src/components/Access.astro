@@ -1,0 +1,72 @@
+---
+---
+
+<section id="access" class="access" data-section="access">
+  <div class="container">
+    <header class="access__hd">
+      <span class="exhibit-tag">EXHIBIT I · BETA ACCESS</span>
+      <h2 class="access__title">One screening question. No marketing list.</h2>
+      <p class="access__lede">
+        Beta seats are limited and reviewed individually. Tell me what you
+        trade and what you currently use. If we are a fit, you get a reply
+        within 48h with a Stripe link. No newsletter. No funnel.
+      </p>
+    </header>
+
+    <form class="form" method="POST" action="/api/beta-access" novalidate>
+      <label class="field">
+        <span class="label">Email</span>
+        <input type="email" name="email" required autocomplete="email" placeholder="you@desk.com" />
+      </label>
+
+      <label class="field">
+        <span class="label">What do you trade and what do you currently use?</span>
+        <textarea name="context" required rows="4" placeholder="ES options day-trader. Currently SpotGamma + a homebuilt vol panel. Want better dealer-flow separation."></textarea>
+      </label>
+
+      <div class="form__row">
+        <button type="submit" class="btn btn--primary">Submit</button>
+        <span class="label form__note">Reviewed manually. ~48h. No automated drip.</span>
+      </div>
+    </form>
+  </div>
+</section>
+
+<style>
+  .access {
+    padding-block: var(--section-y);
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+  }
+  .access__hd { max-width: 60ch; display: flex; flex-direction: column; gap: 1rem; margin-bottom: clamp(2.5rem, 6vh, 4rem); }
+  .access__title {
+    font-size: var(--fs-h2);
+    line-height: var(--lh-snug);
+    letter-spacing: var(--tracking-tight);
+    font-weight: 500;
+  }
+  .access__lede { color: var(--ink-80); line-height: 1.55; }
+
+  .form { max-width: 600px; display: flex; flex-direction: column; gap: 1.5rem; }
+  .field { display: flex; flex-direction: column; gap: 0.5rem; }
+  .field input,
+  .field textarea {
+    background: var(--ground-2);
+    border: 1px solid var(--rule);
+    padding: 0.85rem 1rem;
+    color: var(--ink-100);
+    font: inherit;
+    font-size: var(--fs-body);
+    width: 100%;
+    transition: border-color var(--dur-fast) var(--ease-out);
+  }
+  .field input:focus,
+  .field textarea:focus {
+    outline: 0;
+    border-color: var(--crimson);
+  }
+  .field textarea { resize: vertical; min-height: 6rem; font-family: var(--font-display); }
+
+  .form__row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+  .form__note { color: var(--fg-mute); }
+</style>

@@ -1,0 +1,70 @@
+---
+import { PERF_TARGETS } from '../lib/data.ts';
+---
+
+<section id="performance" class="perf" data-section="perf">
+  <div class="container">
+    <header class="perf__hd">
+      <span class="exhibit-tag">EXHIBIT F · PERFORMANCE</span>
+      <h2 class="perf__title">Performance is brand.</h2>
+      <p class="perf__lede">
+        Every page on this site ships under a hard latency budget. No hero
+        video. No 1MB JavaScript bundle. No cookie wall. The product behind it
+        operates under the same rules.
+      </p>
+    </header>
+
+    <ul class="perf__grid">
+      {PERF_TARGETS.map((p) => (
+        <li class="perf__cell">
+          <span class="label">{p.metric}</span>
+          <span class="perf__target mono tabular">{p.target}</span>
+          <span class="perf__actual label">measured: <span class="mono">{p.actual}</span></span>
+        </li>
+      ))}
+    </ul>
+
+    <p class="perf__note label">
+      Targets enforced by Astro static build, lightningcss minify, no SPA
+      runtime, no analytics blob, no font foundry CDN. Web Vitals will be
+      logged once the domain points.
+    </p>
+  </div>
+</section>
+
+<style>
+  .perf {
+    padding-block: var(--section-y);
+    background: var(--ground-2);
+    border-bottom: 1px solid var(--rule);
+  }
+  .perf__hd { max-width: 60ch; display: flex; flex-direction: column; gap: 1rem; margin-bottom: clamp(2rem, 5vh, 4rem); }
+  .perf__title {
+    font-size: var(--fs-h2);
+    line-height: var(--lh-snug);
+    letter-spacing: var(--tracking-tight);
+    font-weight: 500;
+  }
+  .perf__lede { color: var(--ink-80); line-height: 1.55; }
+
+  .perf__grid {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .perf__cell {
+    background: var(--bg);
+    padding: clamp(1.5rem, 3vw, 2rem);
+    display: flex; flex-direction: column; gap: 0.75rem;
+  }
+  .perf__target {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    color: var(--ink-100);
+    line-height: 1;
+  }
+  .perf__actual { color: var(--fg-mute); }
+  .perf__note { color: var(--fg-mute); margin-top: 1.5rem; max-width: 80ch; line-height: 1.5; }
+</style>
