@@ -48,8 +48,8 @@ __all__ = [
 NOW_KEY = "flowdesk:now:{instrument}"
 SESSION_KEY = "flowdesk:session:{instrument}"
 UPDATES_CHANNEL = "flowdesk:updates:{instrument}"
-HIRO_STATE_KEY = "flowdesk:hiro:{instrument}"
-#: TTL (seconds) for the HIRO accumulator Redis snapshot. 90 minutes covers any
+HIRO_STATE_KEY = "flowdesk:flux:{instrument}"
+#: TTL (seconds) for the FLUX accumulator Redis snapshot. 90 minutes covers any
 #: plausible same-session worker restart and expires before the next RTH open
 #: so a stale state from yesterday cannot leak into today (defence-in-depth on
 #: top of the explicit ET-date check in the worker).
@@ -72,12 +72,12 @@ def updates_channel(instrument: str) -> str:
 
 
 def hiro_state_key(instrument: str) -> str:
-    """Redis STRING key holding the HIRO accumulator dump for an instrument.
+    """Redis STRING key holding the FLUX accumulator dump for an instrument.
 
-    Worker writes a JSON dump of ``HiroState.to_dict()`` once per minute (TTL
+    Worker writes a JSON dump of ``FluxState.to_dict()`` once per minute (TTL
     :data:`HIRO_STATE_TTL_S`). On worker restart within the same RTH session the
-    state is restored to preserve cumulative-HIRO parity with the offline
-    generator (see ``docs/architecture/hiro-unification.md`` §4.4).
+    state is restored to preserve cumulative-FLUX parity with the offline
+    generator (see ``docs/architecture/flux-unification.md`` §4.4).
     """
     return HIRO_STATE_KEY.format(instrument=instrument)
 
@@ -210,23 +210,23 @@ class StateStore:
         """Return a Subscription async-context-manager for the WS layer."""
         return Subscription(self._client, instrument)
 
-    # -- HIRO accumulator durability (worker restart recovery) ------------- #
-    async def set_hiro_state(self, instrument: str, payload: Mapping[str, Any]) -> None:
-        """Persist the worker's HIRO accumulator dump (JSON, TTL bounded).
+    # -- FLUX accumulator durability (worker restart recovery) ------------- #
+    async def set_flux_state(self, instrument: str, payload: Mapping[str, Any]) -> None:
+        """Persist the worker's FLUX accumulator dump (JSON, TTL bounded).
 
         Called by :class:`MinuteWorker` once per produced LIVE tick. Stores the
-        ``HiroState.to_dict()`` payload at :func:`hiro_state_key` with TTL
+        ``FluxState.to_dict()`` payload at :func:`hiro_state_key` with TTL
         :data:`HIRO_STATE_TTL_S` so the next worker start can resume cumulative
-        HIRO instead of re-priced-from-scratch (see
-        ``docs/architecture/hiro-unification.md`` §4.4 Tier 1).
+        FLUX instead of re-priced-from-scratch (see
+        ``docs/architecture/flux-unification.md`` §4.4 Tier 1).
         """
         encoded = json.dumps(dict(payload), separators=(",", ":"))
         await self._client.set(
             hiro_state_key(instrument), encoded, ex=HIRO_STATE_TTL_S
         )
 
-    async def get_hiro_state(self, instrument: str) -> dict[str, Any] | None:
-        """Return the persisted HIRO accumulator dump, or ``None`` if absent.
+    async def get_flux_state(self, instrument: str) -> dict[str, Any] | None:
+        """Return the persisted FLUX accumulator dump, or ``None`` if absent.
 
         Returns ``None`` for missing key, expired TTL, or malformed JSON — the
         worker treats all three as "no Tier-1 cache" and falls back to a fresh

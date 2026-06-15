@@ -59,7 +59,7 @@ class FakeClock:
 class FakeLiveClient:
     """Stand-in for a databento.Live subscription.
 
-    Returns a fixed OptionChainMinute / forward / hiro tuple. Tests use
+    Returns a fixed OptionChainMinute / forward / flux tuple. Tests use
     this to verify the adapter's public API shape without touching the
     network. Set ``raise_on_get`` to simulate a downstream error.
     """
@@ -80,7 +80,7 @@ class FakeLiveClient:
         self.calls += 1
         return 5000.0
 
-    def get_hiro_trades(self, instrument: str, ts: datetime) -> list:
+    def get_flux_trades(self, instrument: str, ts: datetime) -> list:
         return []
 
 
@@ -109,7 +109,7 @@ def test_get_hiro_trades_refuses_without_arming(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.delenv("LIVE_FEED_ARMED", raising=False)
     adapter = LiveAdapter(client_factory=lambda **_: FakeLiveClient())
     with pytest.raises(LiveFeedNotArmed):
-        adapter.get_hiro_trades(INSTRUMENT, TS)
+        adapter.get_flux_trades(INSTRUMENT, TS)
 
 
 def test_armed_path_uses_factory_not_real_client(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -185,7 +185,7 @@ def test_breaker_open_persists_across_calls(monkeypatch: pytest.MonkeyPatch) -> 
     with pytest.raises(LiveFeedDegraded):
         adapter.get_forward(INSTRUMENT, TS)
     with pytest.raises(LiveFeedDegraded):
-        adapter.get_hiro_trades(INSTRUMENT, TS)
+        adapter.get_flux_trades(INSTRUMENT, TS)
 
 
 def test_breaker_window_drops_old_failures() -> None:

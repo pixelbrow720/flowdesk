@@ -57,7 +57,7 @@ flowdesk/
 - **Dealer:** long calls / short puts. GEX_strike = gamma*VOL*M*F^2*0.01; VOL kumulatif sejak RTH open. Net GEX>0->pinning(turquoise), <0->volatile(crimson).
 - **Levels:** Call/Put Wall by GAMMA-DOLLAR (gamma*OI per sisi) STATIK Top 3 (Divergensi #2 -> opsi B; menggantikan aturan raw-OI lama); Gamma Flip + Largest GEX/DEX by VOL dinamis.
 - **Day-count 0DTE:** jam-riil ke settlement 16:00 ET via `t_expiry_from_clock` (Divergensi #3 -> opsi A; worker hitung per menit; `0.5/365` lama hanya dipakai bila `t_expiry` di-pin eksplisit, mis. di test).
-- **HIRO:** cumulative dealer delta-notional sejak RTH open (`engine.hiro`), sebagai field Snapshot OPSIONAL `hiro` (Divergensi #5 -> opsi A; aditif seperti `ohlc`, TANPA bump schema_version). Garis intraday direkonstruksi FE dari urutan frame per-menit.
+- **FLUX:** cumulative dealer delta-notional sejak RTH open (`engine.flux`), sebagai field Snapshot OPSIONAL `flux` (Divergensi #5 -> opsi A; aditif seperti `ohlc`, TANPA bump schema_version). Garis intraday direkonstruksi FE dari urutan frame per-menit.
 - **Auth:** Discord OAuth2 scopes `identify guilds.members.read`. Snapshot schema_version 1.
 - **ENV (12 terkunci):** DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_GUILD_ID, DISCORD_DESK_ROLE_ID, SESSION_SECRET, CORS_ORIGINS, FEED_MODE, DATABENTO_API_KEY, DATA_DIR, TIMESCALE_DSN, REDIS_URL, SOFR_RATE. JANGAN tambah key wajib ke-13. (Toggle dev opsional non-locked: PUBLIC_BASE_URL, COOKIE_INSECURE, DISCORD_JOIN_URL.)
 - **Akurasi:** GLBX-ES != SpotGamma-SPX (semesta opsi beda) -> validasi STRUKTURAL (arah rezim, urutan ordinal level, timing), bukan match angka-per-angka. Level by VOL boleh beda <= 1-2 strike.
@@ -98,7 +98,7 @@ Jangan mulai sub-fase sebelum dependensinya ter-overlay & lolos verifikasi.
 ## 5. Wiring antarmuka
 
 ### 5.1 Snapshot (engine -> API -> FE)
-- schema_version 1; field: instrument, session_date, ts, minute_index, state, stale, expired, forward, rate, axis{strike_min,strike_max,step}, regime{net_gamma,sign,stability_pct}, profile[]{strike,net_gex,net_dex,interpolated}, field{price_grid[],gamma[],delta[]}, levels{call_walls[],put_walls[],gamma_flip,largest_gex,largest_dex}, ohlc?{o,h,l,c}|null, hiro?{total,calls,puts,zerodte,retail}|null. (ohlc & hiro OPSIONAL/aditif, tanpa bump schema_version.)
+- schema_version 1; field: instrument, session_date, ts, minute_index, state, stale, expired, forward, rate, axis{strike_min,strike_max,step}, regime{net_gamma,sign,stability_pct}, profile[]{strike,net_gex,net_dex,interpolated}, field{price_grid[],gamma[],delta[]}, levels{call_walls[],put_walls[],gamma_flip,largest_gex,largest_dex}, ohlc?{o,h,l,c}|null, flux?{total,calls,puts,zerodte,retail}|null. (ohlc & flux OPSIONAL/aditif, tanpa bump schema_version.)
 - field.gamma.length == field.price_grid.length. state in PREMARKET|LIVE|STALE|CLOSED|HOLIDAY.
 
 ### 5.2 REST/WS (API -> FE)

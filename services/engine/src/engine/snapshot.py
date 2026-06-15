@@ -7,7 +7,7 @@ canonical :class:`engine.schema.Snapshot` (``schema_version`` 1):
         -> IV solve            (engine.iv.implied_vol / is_iv_reliable)
         -> greeks              (engine.black76.delta / gamma)
         -> per-strike exposure (engine.exposure.build_profile / net_gamma)
-        -> heatmap field       (engine.field.build_field)
+        -> heatmap field       (engine.fog.build_fog)
         -> key levels          (engine.levels.compute_levels)
         -> regime + session stamping
         -> validated Snapshot  (engine.schema)
@@ -40,8 +40,8 @@ from zoneinfo import ZoneInfo
 from engine.black76 import delta as bs_delta
 from engine.black76 import gamma as bs_gamma
 from engine.exposure import ChainRow, build_profile, net_gamma
-from engine.field import Axis as FieldAxis
-from engine.field import build_field
+from engine.fog import Axis as FieldAxis
+from engine.fog import build_fog
 from engine.iv import implied_vol, is_iv_reliable
 from engine.levels import compute_levels
 from engine.schema import (
@@ -51,7 +51,7 @@ from engine.schema import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only (no import-time cycle)
-    from engine.hiro import HiroSnapshot
+    from engine.flux import FluxSnapshot
 
 __all__ = [
     "MULTIPLIER",
@@ -321,7 +321,7 @@ def build_snapshot(
     stale: Optional[bool] = None,
     expired: Optional[bool] = None,
     ohlc: Optional[tuple[float, float, float, float]] = None,
-    hiro: Optional["HiroSnapshot"] = None,
+    flux: Optional["FluxSnapshot"] = None,
     net_flow: Optional["Mapping[tuple[float, bool], float]"] = None,
     net_flow_tiered: Optional["Mapping[tuple[float, bool], float]"] = None,
     net_flow_decay: Optional["Mapping[tuple[float, bool], float]"] = None,
@@ -375,8 +375,8 @@ def build_snapshot(
 
     # Synthetic-OI #4 (EXPERIMENTAL, optional/additive): OI anchor updated by
     # native aggressor flow. Computed only when the caller supplies per-leg signed
-    # flow (the worker aggregates it from the same tape HIRO uses); None otherwise,
-    # mirroring the hiro/ohlc precedent. Does NOT touch the locked VOL-based GEX.
+    # flow (the worker aggregates it from the same tape FLUX uses); None otherwise,
+    # mirroring the flux/ohlc precedent. Does NOT touch the locked VOL-based GEX.
     syn_oi = None
     if net_flow is not None:
         from engine.synthetic_oi import build_synthetic_oi
@@ -437,7 +437,7 @@ def build_snapshot(
     # aggregated on the SAME VOL basis + locked dealer signs as GEX/DEX. Needs no
     # external tape (re-evaluates greeks from the carried per-leg IV + t_expiry),
     # so it is gated by an explicit flag rather than data availability. None unless
-    # requested, mirroring the ohlc/hiro/synthetic_oi precedent. Does NOT touch the
+    # requested, mirroring the ohlc/flux/synthetic_oi precedent. Does NOT touch the
     # locked VOL-based GEX/DEX.
     exp_ext = None
     if with_exposure_ext:
@@ -457,7 +457,7 @@ def build_snapshot(
         if surf_t is not None:
             surface = build_surface(rows, F, surf_t)
 
-    field = build_field(
+    field = build_fog(
         rows, FieldAxis(smin, smax, step), F, M, rate, price_grid,
         smoothing_bw=smoothing_bw,
     )
@@ -488,22 +488,22 @@ def build_snapshot(
             }
             for e in profile
         ],
-        "field": field.to_dict(),
+        "fog": field.to_dict(),
         "levels": levels,
         "ohlc": (
             {"o": ohlc[0], "h": ohlc[1], "l": ohlc[2], "c": ohlc[3]}
             if ohlc is not None
             else None
         ),
-        "hiro": (
+        "flux": (
             {
-                "total": hiro.total,
-                "calls": hiro.calls,
-                "puts": hiro.puts,
-                "zerodte": hiro.zerodte,
-                "retail": hiro.retail,
+                "total": flux.total,
+                "calls": flux.calls,
+                "puts": flux.puts,
+                "zerodte": flux.zerodte,
+                "retail": flux.retail,
             }
-            if hiro is not None
+            if flux is not None
             else None
         ),
         "synthetic_oi": syn_oi.to_dict() if syn_oi is not None else None,

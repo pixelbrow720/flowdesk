@@ -6,7 +6,7 @@ The original phase-by-phase build playbook is preserved at
 
 ## Done (the frame)
 
-- ✅ Engine: Black-76, IV, VOL-based exposure, field grid, levels, optional HIRO.
+- ✅ Engine: Black-76, IV, VOL-based exposure, field grid, levels, optional FLUX.
 - ✅ Snapshot contract (pydantic ↔ zod), golden fixture, contract validate step.
 - ✅ API: worker, session state machine, REST, WebSocket, Discord OAuth + role gate,
   Redis + Timescale repos.

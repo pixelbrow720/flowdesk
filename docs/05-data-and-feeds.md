@@ -8,14 +8,14 @@
 |---|---|
 | `definition` | Instrument definitions: strike, right (C/P), expiry, multiplier, mapping `instrument_id` ↔ contract |
 | `statistics` | Official stats incl. settlement and **open interest (OI)** — used for gamma-dollar walls |
-| `trades` | Per-trade prints incl. **`side`** (aggressor B/A/N) — drives volume and HIRO |
+| `trades` | Per-trade prints incl. **`side`** (aggressor B/A/N) — drives volume and FLUX |
 | `mbp-1` / `bbo-1m` | Top-of-book quotes — mid price for IV; `bbo-1m` is the 1-minute BBO variant |
 
 **Quote schema note:** the engine fixtures and adapter default to `mbp-1`. The
 locked data-contract research (and the session-snapshot generation here) also
 support **`bbo-1m`**, which is sufficient for IV/mids. `bbo-1m` is **not**
-sufficient to build HIRO — HIRO needs per-trade `trades.side`, which is why the
-HIRO path reads `trades`, not quotes. `mbp-10` / deeper book are **not** required.
+sufficient to build FLUX — FLUX needs per-trade `trades.side`, which is why the
+FLUX path reads `trades`, not quotes. `mbp-10` / deeper book are **not** required.
 
 ## Feed adapters
 

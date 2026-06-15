@@ -18,7 +18,7 @@ beta image).
   + Phase 3, see §6 "Commit ledger").
 - The locked Snapshot contract integrity (schema_version, mirror trio).
 - Auth / CORS / rate-limit / finiteness boundary hardening.
-- HIRO unification (worker ↔ offline generator parity).
+- FLUX unification (worker ↔ offline generator parity).
 - LiveAdapter safety rail (the two-key arming gate, circuit breaker,
   test isolation).
 - Secrets posture (.env*, tracked files, env inventory).
@@ -41,13 +41,13 @@ honesty labels intact when the FE is rebuilt.
 - The mirror trio (`schema.py` ↔ `snapshot.ts` ↔ `CONTRACT.md`) was not
   touched by this hardening pass — every Phase 2/3 change is at the
   worker / state-store / feed-adapter layer, behind the Snapshot
-  boundary. (The HIRO cumulative-VOL fix changed *what numbers*
-  populate the existing `hiro` field, never the field's shape.)
+  boundary. (The FLUX cumulative-VOL fix changed *what numbers*
+  populate the existing `flux` field, never the field's shape.)
 - Engine purity preserved: `build_snapshot` still has no clock / IO /
-  calendar dependency. Persistent `HiroState` lives **only** in
+  calendar dependency. Persistent `FluxState` lives **only** in
   `services/api/src/api/worker.py:MinuteWorker`, never in
   `services/engine/src/engine/snapshot.py`. Verified by re-reading the
-  Phase 2 design doc (`docs/architecture/hiro-unification.md`) against
+  Phase 2 design doc (`docs/architecture/flux-unification.md`) against
   the four landed commits.
 
 ### 2.2 Auth / CORS / rate-limit / finiteness ✅ PASS
@@ -62,9 +62,9 @@ honesty labels intact when the FE is rebuilt.
 
 No regressions from these on the engine or contract suites.
 
-### 2.3 HIRO unification ✅ PASS (Phase 2 RESOLVED)
+### 2.3 FLUX unification ✅ PASS (Phase 2 RESOLVED)
 
-- `engine/hiro.py` `HiroState` is the single source of truth for
+- `engine/flux.py` `FluxState` is the single source of truth for
   cumulative dealer delta-notional since RTH open.
 - Worker (`api/worker.py:MinuteWorker._hiro_for`) holds persistent state
   per-instrument; feeds only the NEW suffix at each minute's `F_t`
@@ -131,9 +131,9 @@ No regressions from these on the engine or contract suites.
 | Concurrent collection | known import-collision in `services/engine/test_repo.py` (sys.path issue with `gen_fixture`) | run suites separately — no functional regression |
 
 Coverage of new code:
-- `engine/hiro.py` HiroState round-trip — 12 unit tests in
+- `engine/flux.py` FluxState round-trip — 12 unit tests in
   `test_hiro.py`.
-- `api/worker.py` HiroState wiring — 6 unit tests in
+- `api/worker.py` FluxState wiring — 6 unit tests in
   `test_worker_hiro.py` (Tier-1, Tier-2, daily reset, persistence).
 - `api/worker.py` ↔ `gen_session_snapshots.py` parity — 2 tests in
   `test_hiro_parity.py` (≤1e-9 abs diff).
@@ -158,7 +158,7 @@ Coverage of new code:
 | Engine purity (no clock/IO/calendar) | ✅ | preserved |
 | Locked Snapshot contract (schema_version=1, mirror trio atomic) | ✅ | not touched |
 | Auth / CORS / rate-limit / finiteness | ✅ | hardened in Phase 1 |
-| HIRO bit-equality vs offline generator | ✅ | parity test ≤1e-9 |
+| FLUX bit-equality vs offline generator | ✅ | parity test ≤1e-9 |
 | LiveAdapter cannot accidentally contact real account | ✅ | two-key arming + lazy gated import + breaker |
 | Secrets out of source control | ✅ | `.env*` ignored, no live tokens tracked |
 | Test suites green | ✅ | 415 + 116 |
@@ -196,7 +196,7 @@ This audit is INLINE (no external auditor available). The audit is
 backed by:
 - The four landed Phase 2 commits + the five landed Phase 3 commits
   with full mocked test coverage.
-- The HIRO bit-equality parity test (`test_hiro_parity.py`).
+- The FLUX bit-equality parity test (`test_hiro_parity.py`).
 - The threat-model doc (`docs/architecture/live-feed-threat-model.md`).
 - The operator runbook (`docs/ops/deploy-runbook.md`).
 
@@ -211,13 +211,13 @@ a611ac4 docs(08): mark live feed RESOLVED                     (P3 c5)
 c46cb20 feat(api,engine): refuse-by-default rail FEED_MODE    (P3 c3)
 37e7a03 feat(engine): LiveAdapter arming gate + breaker       (P3 c2)
 dca4e9f docs(architecture): LiveAdapter threat model + rail   (P3 c1)
-bf185cf docs(08): mark HIRO unification RESOLVED              (P2 c5)
-8097228 test(api): HIRO worker<->generator parity             (P2 c4)
-4b97756 feat(api): wire persistent HiroState in MinuteWorker  (P2 c3)
-445e019 feat(engine): HiroState.to_dict/from_dict             (P2 c2)
-604bad5 docs(architecture): HIRO unification design           (P2 c1)
+bf185cf docs(08): mark FLUX unification RESOLVED              (P2 c5)
+8097228 test(api): FLUX worker<->generator parity             (P2 c4)
+4b97756 feat(api): wire persistent FluxState in MinuteWorker  (P2 c3)
+445e019 feat(engine): FluxState.to_dict/from_dict             (P2 c2)
+604bad5 docs(architecture): FLUX unification design           (P2 c1)
 04c29dd feat(api): rate-limit /me/recheck, OAuth, WS          (P1 i2)
 7ef0abc feat(api,engine): CORS validation + Snapshot finite   (P1 i1+i4)
 ```
 
-12 commits. Engine 415 passed (was 401 at HIRO start). API 116 passed.
+12 commits. Engine 415 passed (was 401 at FLUX start). API 116 passed.

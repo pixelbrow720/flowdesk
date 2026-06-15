@@ -16,7 +16,7 @@
 import { z } from "zod";
 
 /** Canonical schema version. Bump on ANY breaking change. */
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 /** Type of the canonical schema version literal. */
 export type SchemaVersion = typeof SCHEMA_VERSION;
 
@@ -78,7 +78,7 @@ export interface ProfileRow {
  * index-aligned and MUST share the same length: `price_grid[i]` corresponds to
  * `gamma[i]` and `delta[i]`. PRD #8 §3 (AC-A2).
  */
-export interface FieldGrid {
+export interface FogGrid {
   /** Price grid (index points) defining the field's price axis. PRD #8 §3. */
   price_grid: number[];
   /** Gamma field value at each `price_grid` point, USD per 1% move. PRD #0 §5. */
@@ -114,28 +114,28 @@ export interface OHLC {
 }
 
 /**
- * Cumulative dealer delta-notional hedging flow since the RTH open (HIRO).
+ * Cumulative dealer delta-notional hedging flow since the RTH open (FLUX).
  * Optional/additive (Divergence #5 -> option A): absent for snapshots produced
- * before HIRO was wired, mirroring the `ohlc` precedent — does NOT bump
+ * before FLUX was wired, mirroring the `ohlc` precedent — does NOT bump
  * `SCHEMA_VERSION`. Units are USD delta-notional; positive = net dealer BUYING
  * pressure (bullish), negative = selling pressure.
  */
-export interface Hiro {
-  /** Cumulative HIRO (all legs), USD delta-notional since RTH open. */
+export interface Flux {
+  /** Cumulative FLUX (all legs), USD delta-notional since RTH open. */
   total: number;
-  /** Cumulative HIRO from call trades only, USD delta-notional. */
+  /** Cumulative FLUX from call trades only, USD delta-notional. */
   calls: number;
-  /** Cumulative HIRO from put trades only, USD delta-notional. */
+  /** Cumulative FLUX from put trades only, USD delta-notional. */
   puts: number;
-  /** Cumulative HIRO from 0DTE trades (T < 1/365), USD delta-notional. */
+  /** Cumulative FLUX from 0DTE trades (T < 1/365), USD delta-notional. */
   zerodte: number;
-  /** Cumulative HIRO from the (heuristic) retail proxy, USD delta-notional. */
+  /** Cumulative FLUX from the (heuristic) retail proxy, USD delta-notional. */
   retail: number;
 }
 
 /**
  * Synthetic-OI #4 positioning lens (EXPERIMENTAL — NOT price-validated).
- * Optional/additive (mirrors `hiro`/`ohlc`): absent when not captured, does NOT
+ * Optional/additive (mirrors `flux`/`ohlc`): absent when not captured, does NOT
  * bump `SCHEMA_VERSION`. Dealer position = carried-in open interest (static
  * long-call/short-put sign) updated by native CME aggressor-signed flow, weighted
  * by `w`. Lives alongside the locked VOL-based GEX; does NOT replace it. Validated
@@ -155,7 +155,7 @@ export interface SyntheticOi {
 /**
  * Extended dealer exposure — VEX (vanna) + CHEX (charm). EXPERIMENTAL.
  *
- * Optional/additive (mirrors `hiro`/`synthetic_oi`): null when not captured, no
+ * Optional/additive (mirrors `flux`/`synthetic_oi`): null when not captured, no
  * schema_version bump. Same VOL basis + locked dealer signs as the product
  * GEX/DEX; lives alongside them, does NOT replace them. FD-validated greeks, but
  * the aggregate is NOT price-validated — treat as experimental, not authoritative.
@@ -294,13 +294,13 @@ export interface Snapshot {
   /** Net GEX/DEX profile rows, ascending by `strike`. PRD #8 §3. */
   profile: ProfileRow[];
   /** Heatmap field projection arrays. */
-  field: FieldGrid;
+  fog: FogGrid;
   /** Key levels overlay. */
   levels: Levels;
   /** Underlying OHLC for this minute (candle view). null when not captured. */
   ohlc?: OHLC | null;
-  /** Cumulative dealer hedging flow (HIRO). null when not captured. */
-  hiro?: Hiro | null;
+  /** Cumulative dealer hedging flow (FLUX). null when not captured. */
+  flux?: Flux | null;
   /** Synthetic-OI #4 positioning lens (EXPERIMENTAL). null when not captured. */
   synthetic_oi?: SyntheticOi | null;
   /** Synthetic-OI #6 size-tiered lens (EXPERIMENTAL, same shape as #4). null when not captured. */
@@ -380,10 +380,10 @@ export const ProfileRowSchema = z
   .strict();
 
 /**
- * Runtime schema for {@link FieldGrid}. Enforces the array-length invariants:
+ * Runtime schema for {@link FogGrid}. Enforces the array-length invariants:
  * `price_grid` defines the grid, so `gamma.length === delta.length === price_grid.length`.
  */
-export const FieldSchema = z
+export const FogSchema = z
   .object({
     price_grid: z.array(finiteNumber),
     gamma: z.array(finiteNumber),
@@ -428,8 +428,8 @@ export const OHLCSchema = z
   })
   .strict();
 
-/** Runtime schema for {@link Hiro}. */
-export const HiroSchema = z
+/** Runtime schema for {@link Flux}. */
+export const FluxSchema = z
   .object({
     total: finiteNumber,
     calls: finiteNumber,
@@ -518,10 +518,10 @@ export const SnapshotSchema = z
     axis: AxisSchema,
     regime: RegimeSchema,
     profile: z.array(ProfileRowSchema),
-    field: FieldSchema,
+    fog: FogSchema,
     levels: LevelsSchema,
     ohlc: OHLCSchema.nullish(),
-    hiro: HiroSchema.nullish(),
+    flux: FluxSchema.nullish(),
     synthetic_oi: SyntheticOiSchema.nullish(),
     synthetic_oi_tiered: SyntheticOiSchema.nullish(),
     synthetic_oi_decay: SyntheticOiSchema.nullish(),
@@ -568,9 +568,9 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof AxisSchema>, Axis>>,
   Expect<Equals<z.infer<typeof RegimeSchema>, Regime>>,
   Expect<Equals<z.infer<typeof ProfileRowSchema>, ProfileRow>>,
-  Expect<Equals<z.infer<typeof FieldSchema>, FieldGrid>>,
+  Expect<Equals<z.infer<typeof FogSchema>, FogGrid>>,
   Expect<Equals<z.infer<typeof OHLCSchema>, OHLC>>,
-  Expect<Equals<z.infer<typeof HiroSchema>, Hiro>>,
+  Expect<Equals<z.infer<typeof FluxSchema>, Flux>>,
   Expect<Equals<z.infer<typeof SyntheticOiSchema>, SyntheticOi>>,
   Expect<Equals<z.infer<typeof ExposureExtSchema>, ExposureExt>>,
   Expect<Equals<z.infer<typeof TotalHedgingSchema>, TotalHedging>>,

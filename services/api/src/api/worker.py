@@ -169,10 +169,10 @@ class MinuteWorker:
         self._build_snapshot = build_snapshot
         self._to_engine_chain = to_engine_chain
         self._stop = asyncio.Event()
-        # Persistent HIRO accumulators per instrument (worker <-> generator
-        # parity, docs/architecture/hiro-unification.md). Populated lazily on
-        # first HIRO-eligible tick; survive worker restarts via Redis Tier-1.
-        self._hiro_states: dict[str, Any] = {}
+        # Persistent FLUX accumulators per instrument (worker <-> generator
+        # parity, docs/architecture/flux-unification.md). Populated lazily on
+        # first FLUX-eligible tick; survive worker restarts via Redis Tier-1.
+        self._flux_states: dict[str, Any] = {}
         self._hiro_consumed: dict[str, int] = {}
         self._hiro_session_date: dict[str, Any] = {}
 
@@ -249,17 +249,17 @@ class MinuteWorker:
     def _fetch_signed_trades(self, instrument: str, ts_utc: datetime) -> Any:
         """The signed per-trade tape for this minute, or ``None`` if unavailable.
 
-        Fetched ONCE per tick and shared by HIRO + synthetic-OI (both consume the
-        same ``get_hiro_trades`` list) to avoid a redundant per-minute scan. The
-        live stub / test fakes lack ``get_hiro_trades`` -> ``None`` -> both fields
+        Fetched ONCE per tick and shared by FLUX + synthetic-OI (both consume the
+        same ``get_flux_trades`` list) to avoid a redundant per-minute scan. The
+        live stub / test fakes lack ``get_flux_trades`` -> ``None`` -> both fields
         degrade to None, mirroring the ``ohlc`` precedent.
         """
-        get_trades = getattr(self._feed, "get_hiro_trades", None)
+        get_trades = getattr(self._feed, "get_flux_trades", None)
         if get_trades is None:
             return None
         return get_trades(instrument, ts_utc)
 
-    # -- HIRO persistent accumulator (worker <-> generator parity) -------- #
+    # -- FLUX persistent accumulator (worker <-> generator parity) -------- #
     @staticmethod
     def _et_date_of(ts_utc: datetime) -> Any:
         """Calendar date in America/New_York for a UTC timestamp.
@@ -274,46 +274,46 @@ class MinuteWorker:
     async def _maybe_restore_hiro(self, instrument: str, ts_utc: datetime) -> None:
         """Tier-1 restore: pull the accumulator dump from Redis on first use.
 
-        Called the first time we touch HIRO for an instrument (state dict miss).
+        Called the first time we touch FLUX for an instrument (state dict miss).
         If the persisted dump's session date matches today's ET date we reseed
-        the in-memory ``HiroState`` and ``_hiro_consumed`` so cumulative HIRO
+        the in-memory ``FluxState`` and ``_hiro_consumed`` so cumulative FLUX
         survives a worker restart within the same RTH session. On any miss
         (no key, expired, malformed, date mismatch, or storage error) we fall
         back to a fresh accumulator — Tier 2 (see
-        ``docs/architecture/hiro-unification.md`` §4.4).
+        ``docs/architecture/flux-unification.md`` §4.4).
         """
-        from engine.hiro import HiroState
+        from engine.flux import FluxState
         from engine.snapshot import MULTIPLIER
 
         today_et = self._et_date_of(ts_utc)
         try:
-            payload = await self._state.get_hiro_state(instrument)
+            payload = await self._state.get_flux_state(instrument)
         except Exception as exc:  # storage hiccup -> Tier 2 fallback (silent)
-            log.warning("hiro restore failed for %s: %s; starting fresh", instrument, exc)
+            log.warning("flux restore failed for %s: %s; starting fresh", instrument, exc)
             payload = None
 
         if payload is not None:
             stored_date = payload.get("date_et")
             if stored_date == today_et.isoformat():
                 try:
-                    state = HiroState.from_dict(payload)
+                    state = FluxState.from_dict(payload)
                     consumed = int(payload.get("consumed", 0))
-                    self._hiro_states[instrument] = state
+                    self._flux_states[instrument] = state
                     self._hiro_consumed[instrument] = consumed
                     self._hiro_session_date[instrument] = today_et
                     log.info(
-                        "hiro restored for %s (consumed=%d, total=%.2f)",
+                        "flux restored for %s (consumed=%d, total=%.2f)",
                         instrument, consumed, state.snapshot().total,
                     )
                     return
                 except Exception as exc:
                     log.warning(
-                        "hiro payload malformed for %s: %s; starting fresh",
+                        "flux payload malformed for %s: %s; starting fresh",
                         instrument, exc,
                     )
 
         # Tier-2 fallback: fresh accumulator.
-        self._hiro_states[instrument] = HiroState(MULTIPLIER[instrument])
+        self._flux_states[instrument] = FluxState(MULTIPLIER[instrument])
         self._hiro_consumed[instrument] = 0
         self._hiro_session_date[instrument] = today_et
 
@@ -326,14 +326,14 @@ class MinuteWorker:
         the previous day is left to expire by TTL (or be overwritten on the
         next persist).
         """
-        from engine.hiro import HiroState
+        from engine.flux import FluxState
         from engine.snapshot import MULTIPLIER
 
         today_et = self._et_date_of(ts_utc)
         if self._hiro_session_date.get(instrument) == today_et:
             return
-        log.info("hiro reset for %s (new session %s)", instrument, today_et.isoformat())
-        self._hiro_states[instrument] = HiroState(MULTIPLIER[instrument])
+        log.info("flux reset for %s (new session %s)", instrument, today_et.isoformat())
+        self._flux_states[instrument] = FluxState(MULTIPLIER[instrument])
         self._hiro_consumed[instrument] = 0
         self._hiro_session_date[instrument] = today_et
 
@@ -344,11 +344,11 @@ class MinuteWorker:
         forward: float,
         trades: Any = None,
     ) -> Any:
-        """Cumulative HIRO snapshot via the **persistent accumulator**.
+        """Cumulative FLUX snapshot via the **persistent accumulator**.
 
         Worker <-> generator parity (see
-        ``docs/architecture/hiro-unification.md``): per session, hold one
-        ``HiroState`` and feed only the NEW suffix of trades each minute at the
+        ``docs/architecture/flux-unification.md``): per session, hold one
+        ``FluxState`` and feed only the NEW suffix of trades each minute at the
         **current minute's forward**. This freezes each trade's increment at
         its arrival forward — economically correct (hedging happens at the
         price prevailing then) and identical to ``gen_session_snapshots.py``.
@@ -362,12 +362,12 @@ class MinuteWorker:
             return None
 
         # Tier-1 restore on first touch this process for this instrument.
-        if instrument not in self._hiro_states:
+        if instrument not in self._flux_states:
             await self._maybe_restore_hiro(instrument, ts_utc)
         # Daily reset at RTH-open rollover.
         self._maybe_reset_hiro_for_session(instrument, ts_utc)
 
-        state = self._hiro_states[instrument]
+        state = self._flux_states[instrument]
         consumed = self._hiro_consumed[instrument]
         # Defensive: if the upstream window shrank (replay restart, timezone
         # quirk, fixture rebuild) the suffix index is stale — start over from
@@ -375,14 +375,14 @@ class MinuteWorker:
         # increments at the current forward.
         if consumed > len(trades):
             log.warning(
-                "hiro consumed (%d) > trade window (%d) for %s; resetting accumulator",
+                "flux consumed (%d) > trade window (%d) for %s; resetting accumulator",
                 consumed, len(trades), instrument,
             )
-            from engine.hiro import HiroState
+            from engine.flux import FluxState
             from engine.snapshot import MULTIPLIER
 
-            state = HiroState(MULTIPLIER[instrument])
-            self._hiro_states[instrument] = state
+            state = FluxState(MULTIPLIER[instrument])
+            self._flux_states[instrument] = state
             consumed = 0
 
         # Feed only the NEW suffix at the current minute's forward.
@@ -395,22 +395,22 @@ class MinuteWorker:
         payload["consumed"] = float(self._hiro_consumed[instrument])
         payload["date_et"] = self._hiro_session_date[instrument].isoformat()
         try:
-            await self._state.set_hiro_state(instrument, payload)
+            await self._state.set_flux_state(instrument, payload)
         except Exception as exc:
-            log.warning("hiro persist failed for %s: %s", instrument, exc)
+            log.warning("flux persist failed for %s: %s", instrument, exc)
 
         return state.snapshot()
 
     def _net_flow_for(self, trades: Any) -> Any:
         """Per-(strike, is_call) net aggressor-signed flow for synthetic-OI, or None.
 
-        Aggregates ``Sum(aggressor_sign * size)`` from the SAME ``trades`` tape HIRO
+        Aggregates ``Sum(aggressor_sign * size)`` from the SAME ``trades`` tape FLUX
         consumes (B=+1, A=-1, N=0). Returns ``None`` when no signed tape is available
-        (live stub / fakes) so ``synthetic_oi`` degrades to None like ``hiro``.
+        (live stub / fakes) so ``synthetic_oi`` degrades to None like ``flux``.
         """
         if trades is None:
             return None
-        from engine.hiro import aggressor_sign
+        from engine.flux import aggressor_sign
 
         flow: dict[tuple[float, bool], float] = {}
         for tr in trades:
@@ -431,7 +431,7 @@ class MinuteWorker:
         """
         if trades is None:
             return None
-        from engine.hiro import aggressor_sign
+        from engine.flux import aggressor_sign
         from engine.synthetic_oi import BLOCK_MIN_SIZE, tier_weight
 
         block_min = BLOCK_MIN_SIZE.get(instrument, 50.0)
@@ -458,7 +458,7 @@ class MinuteWorker:
         """
         if trades is None:
             return None
-        from engine.hiro import aggressor_sign
+        from engine.flux import aggressor_sign
         from engine.synthetic_oi import decay_weight
 
         flow: dict[tuple[float, bool], float] = {}
@@ -524,7 +524,7 @@ class MinuteWorker:
         except Exception as exc:
             log.debug("feed.get_ohlc unavailable for %s @ %s: %s", instrument, ts_utc, exc)
             ohlc = None
-        # Fetch the signed tape ONCE; HIRO and synthetic-OI both consume it.
+        # Fetch the signed tape ONCE; FLUX and synthetic-OI both consume it.
         trades = self._fetch_signed_trades(instrument, ts_utc)
         snapshot = build_snapshot(
             instrument,
@@ -538,7 +538,7 @@ class MinuteWorker:
             stale=False,
             expired=False,
             ohlc=ohlc,
-            hiro=await self._hiro_for(instrument, ts_utc, forward, trades),
+            flux=await self._hiro_for(instrument, ts_utc, forward, trades),
             net_flow=self._net_flow_for(trades),
             net_flow_tiered=self._net_flow_tiered_for(trades, instrument),
             net_flow_decay=self._net_flow_decay_for(trades, ts_utc),

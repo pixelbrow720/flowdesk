@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "instrument": "ES",
   "session_date": "2026-06-10",
   "ts": "2026-06-10T13:31:00Z",
@@ -33,7 +33,7 @@
       "interpolated": false
     }
   ],
-  "field": {
+  "fog": {
     "price_grid": [
       4995.0,
       5000.0
@@ -66,7 +66,7 @@
     "l": 4999.0,
     "c": 5000.25
   },
-  "hiro": {
+  "flux": {
     "total": 1500000.0,
     "calls": 1000000.0,
     "puts": 500000.0,

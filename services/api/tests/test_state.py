@@ -29,7 +29,7 @@ from api.state import (
 )
 
 SAMPLE: dict[str, Any] = {
-    "schema_version": 1,
+    "schema_version": 2,
     "instrument": "ES",
     "session_date": "2026-06-10",
     "ts": "2026-06-10T13:31:00Z",
@@ -42,7 +42,7 @@ SAMPLE: dict[str, Any] = {
     "axis": {"strike_min": 4950, "strike_max": 5050, "step": 5},
     "regime": {"net_gamma": -9718772.87, "sign": -1, "stability_pct": 4.1708},
     "profile": [{"strike": 5000, "net_gex": 1.0, "net_dex": 2.0, "interpolated": False}],
-    "field": {"price_grid": [5000.0], "gamma": [1.0], "delta": [2.0]},
+    "fog": {"price_grid": [5000.0], "gamma": [1.0], "delta": [2.0]},
     "levels": {
         "call_walls": [5010],
         "put_walls": [4990],

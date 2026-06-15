@@ -152,7 +152,7 @@ def test_chain_is_consumable_by_engine() -> None:
         session_state="LIVE",
         axis={"strike_min": 4990, "strike_max": 5010, "step": 5},
     )
-    assert snap.schema_version == 1
+    assert snap.schema_version == 2
     assert snap.instrument == "ES"
     assert snap.minute_index == 1
     assert snap.forward == 5000.0
@@ -164,28 +164,28 @@ def test_chain_is_consumable_by_engine() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# HIRO signed-trade path (additive; does not disturb TRACE volume prefix-sums).
+# FLUX signed-trade path (additive; does not disturb TRACE volume prefix-sums).
 # --------------------------------------------------------------------------- #
 def test_get_hiro_trades_signed_and_priced() -> None:
-    from engine.hiro import hiro_series
+    from engine.flux import flux_series
 
     adapter = _adapter()
-    trades = adapter.get_hiro_trades(INSTRUMENT, TS)
+    trades = adapter.get_flux_trades(INSTRUMENT, TS)
     # 5 calls (side B) + 5 puts (side A) within RTH; the 13:00Z pre-open trade
-    # is excluded (HIRO resets at the open).
+    # is excluded (FLUX resets at the open).
     assert len(trades) == 10
     assert all(t.t_expiry > 0.0 for t in trades)
     sides = {t.side for t in trades}
     assert sides == {"B", "A"}
     # Calls bought + puts sold => both push dealer hedging the SAME way:
     # buy call (s=+1, d>0) -> +, sell put (s=-1, d<0) -> + . Net positive.
-    series = hiro_series(trades, 5000.0, 50.0, math.log(1.0531))
+    series = flux_series(trades, 5000.0, 50.0, math.log(1.0531))
     assert series.final.total > 0.0
     assert series.skipped == 0
 
 
 def test_get_hiro_trades_excludes_pre_open() -> None:
     adapter = _adapter()
-    trades = adapter.get_hiro_trades(INSTRUMENT, TS)
+    trades = adapter.get_flux_trades(INSTRUMENT, TS)
     # The size-999 pre-open call trade must not appear.
     assert all(t.size != 999.0 for t in trades)

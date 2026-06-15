@@ -48,7 +48,7 @@ A. SHAKEDOWN 2 riset agent (BARU, belum pernah jalan): jalankan quant-research-c
    ide; expert=verifikasi fakta). Kalau overlap → lapor user untuk pertajam deskripsi.
 B. quant-research-expert: verifikasi klaim commit f4d614c/6be20ff — DDOI flat vs VOL
    (49.2/50.8), cross-day 0DTE mustahil, definisi proprietary dari riset-spotgamma.md,
-   HiroTrade.ts, FD vanna/charm. (Tertunda sesi lalu karena agent belum ke-load.)
+   FluxTrade.ts, FD vanna/charm. (Tertunda sesi lalu karena agent belum ke-load.)
 C. Tindak lanjuti temuan audit non-blocking (PROGRESS.md): label open/close DDOI
    relatif-snapshot; risiko laten mutasi rows in-place. Putuskan: perbaiki
    (delegasi ke coder→test-author→auditor) atau dokumentasikan sebagai batasan

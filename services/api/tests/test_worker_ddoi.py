@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 
-from engine.hiro import HiroTrade
+from engine.flux import FluxTrade
 
 from api.session import SessionState, StaticCMECalendar
 from api.worker import MinuteWorker
@@ -63,8 +63,8 @@ def _ts(minute: int) -> datetime:
     return datetime(2026, 6, 10, 14, minute, tzinfo=timezone.utc)
 
 
-def _trade(size: float, side: str, ts, strike: float = 5000.0, is_call: bool = True) -> HiroTrade:
-    return HiroTrade(
+def _trade(size: float, side: str, ts, strike: float = 5000.0, is_call: bool = True) -> FluxTrade:
+    return FluxTrade(
         strike=strike, is_call=is_call, price=1.0, size=size, side=side,
         t_expiry=T_EXPIRY, ts=ts,
     )

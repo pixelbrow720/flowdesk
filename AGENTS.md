@@ -35,7 +35,7 @@ revolves around the `Snapshot` data contract (`schema_version` 1).
    the same commit, or the contract validators fail.
 3. **Additive, non-breaking by default.** Add new functions/modules; do not
    rip out behaviour that already passes the T-01…T-10 gate. New Snapshot data
-   follows the `ohlc` / `hiro` precedent: an **optional** field, no version bump.
+   follows the `ohlc` / `flux` precedent: an **optional** field, no version bump.
 4. **Engine `build_snapshot` is pure, deterministic, and calendar-free.** Keep
    it that way. Identical inputs must always produce an identical Snapshot. The
    caller supplies the resolved `session_state`; the engine owns no calendar.
@@ -58,7 +58,7 @@ revolves around the `Snapshot` data contract (`schema_version` 1).
 
 ```
 services/engine/   flowdesk-engine  — Python compute core (Black-76, IV, exposure,
-                   field, levels, snapshot, hiro, surface, feed adapters, ingest)
+                   field, levels, snapshot, flux, surface, feed adapters, ingest)
 services/api/      flowdesk-api     — FastAPI REST+WS, Discord OAuth, worker,
                    Redis/Timescale repos, session state machine
 packages/contracts @flowdesk/contracts — zod mirror of Snapshot + /api/me
@@ -100,8 +100,8 @@ Full rationale + the heavy unbuilt items: `docs/reference/methodology-decisions.
 | 1 | GEX basis | **VOL** (`gamma·VOL·M·F²·0.01`), cumulative since RTH open. DDOI is a v3 parallel layer — **not built**, do not rip out VOL-GEX. |
 | 2 | Call/Put walls | **Gamma-dollar** (`gamma·OI` per side), static, Top-3. |
 | 3 | 0DTE day-count | **Real wall-clock** to 16:00 ET via `t_expiry_from_clock` (worker default). Fixed `0.5/365` only when `t_expiry` is pinned (tests). |
-| 4 | HIRO data source | **`trades.side`** aggressor (B/A/N). No `tbbo` needed. |
-| 5 | HIRO in Snapshot | **Optional** `hiro` field, **no** `schema_version` bump (follows `ohlc`). |
+| 4 | FLUX data source | **`trades.side`** aggressor (B/A/N). No `tbbo` needed. |
+| 5 | FLUX in Snapshot | **Optional** `flux` field, **no** `schema_version` bump (follows `ohlc`). |
 
 ## 6. When you touch the Snapshot or data
 
@@ -118,7 +118,7 @@ Full rationale + the heavy unbuilt items: `docs/reference/methodology-decisions.
 
 - Explanations may be in Indonesian; **code, identifiers, and docstrings in English**.
 - Engine math modules are stdlib-only on the hot path where practical (Black-76,
-  IV, exposure, levels, hiro, surface). `field.py` is the deliberate exception
+  IV, exposure, levels, flux, surface). `field.py` is the deliberate exception
   (numpy + scipy for the vectorized grid projection).
 - Every module already carries a thorough docstring stating its locked formula
   and PRD references — match that bar when adding modules.

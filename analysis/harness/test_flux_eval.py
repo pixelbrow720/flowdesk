@@ -1,14 +1,14 @@
-"""Unit tests for analysis.harness.hiro_eval — the PREDICTIVE HIRO eval core.
+"""Unit tests for analysis.harness.flux_eval — the PREDICTIVE FLUX eval core.
 
-These LOCK the behaviour of the look-ahead-free t->t+k HIRO discriminator against
+These LOCK the behaviour of the look-ahead-free t->t+k FLUX discriminator against
 the agreed spec. They are PURE and deterministic: every EvalTrade list and every
 ``minute_forwards`` array is hand-built with chosen values, and every expected
 number is computed by hand in the comments. No databento, no disk — only the math
-plus the locked engine pricing core (``engine.hiro`` / ``engine.black76`` /
+plus the locked engine pricing core (``engine.flux`` / ``engine.black76`` /
 ``engine.iv``) the runner also uses.
 
 WHY THIS FILE EXISTS — the load-bearing concern: the real-data run produced a NULL
-(HIRO shows no directional edge over the shuffled control, hit-rate ~0.50). A null
+(FLUX shows no directional edge over the shuffled control, hit-rate ~0.50). A null
 is only trustworthy if the harness can be PROVEN to DETECT a signal when one
 genuinely exists. A metric that returns ~0.5 regardless of input would manufacture
 a false null and is worthless. The single most important test here is therefore the
@@ -20,8 +20,8 @@ null rather than a dead-harness artefact.
 
 Style mirrors test_ddoi_divergence.py / test_provenance.py: namespace import (no
 __init__.py), no test classes, ``-> None`` functions, run via the repo-root .venv
-python. Importing ``analysis.harness.hiro_eval`` first puts the engine ``src`` on
-``sys.path`` (its import side-effect), so the subsequent ``engine.hiro`` import
+python. Importing ``analysis.harness.flux_eval`` first puts the engine ``src`` on
+``sys.path`` (its import side-effect), so the subsequent ``engine.flux`` import
 resolves without extra path wiring.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ from collections import Counter
 
 import pytest
 
-from analysis.harness.hiro_eval import (
+from analysis.harness.flux_eval import (
     EvalTrade,
     contemporaneous_sign_agreement,
     lead_lag_sign_agreement,
@@ -39,8 +39,8 @@ from analysis.harness.hiro_eval import (
     signed_volume_series,
 )
 
-# hiro_eval's import added the engine src to sys.path; this now resolves.
-from engine.hiro import HiroTrade, aggressor_sign  # noqa: E402
+# flux_eval's import added the engine src to sys.path; this now resolves.
+from engine.flux import FluxTrade, aggressor_sign  # noqa: E402
 
 # Instrument multiplier (/ES = 50) and a flat zero rate keep the hand arithmetic
 # clean. The exact greek MAGNITUDE never enters a sign test; only that the trade
@@ -64,11 +64,11 @@ def _trade(
 ) -> EvalTrade:
     """A single EvalTrade. Default = an ~ATM /ES call priced well inside the
     no-arb band (lower=disc·max(F-K,0), upper=disc·F) for any forward near 5000,
-    so :func:`engine.hiro.signed_delta_notional` always solves an IV and returns a
+    so :func:`engine.flux.signed_delta_notional` always solves an IV and returns a
     non-None increment whose SIGN equals the aggressor sign (call δ > 0)."""
     return EvalTrade(
         minute,
-        HiroTrade(
+        FluxTrade(
             strike=strike,
             is_call=is_call,
             price=price,

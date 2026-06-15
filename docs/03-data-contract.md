@@ -31,7 +31,7 @@ It is defined twice and the two definitions must stay identical:
     { "strike": 5300, "net_gex": 1.1e8, "net_dex": -4.2e7, "interpolated": false }
   ],
 
-  "field": {                     // price × strike projection grid
+  "fog": {                     // price × strike projection grid
     "price_grid": [ 5300.0, 5301.0 ],
     "gamma":      [ /* len == price_grid */ ],
     "delta":      [ /* len == price_grid */ ]
@@ -46,7 +46,7 @@ It is defined twice and the two definitions must stay identical:
   },
 
   "ohlc": { "o": 5310, "h": 5315, "l": 5308, "c": 5312.25 },   // optional
-  "hiro": { "total": 1234, "calls": 800, "puts": -200,         // optional
+  "flux": { "total": 1234, "calls": 800, "puts": -200,         // optional
             "zerodte": 1100, "retail": 50 }
 }
 ```
@@ -69,15 +69,15 @@ It is defined twice and the two definitions must stay identical:
 - **`levels`** — call/put walls (gamma-dollar, Top-3), gamma flip, largest
   GEX/DEX strikes.
 - **`ohlc?`** — optional candle for the underlying that minute.
-- **`hiro?`** — optional signed order-flow aggregate (see [`04-engine.md`](04-engine.md)).
-  Absence is valid; consumers must treat it as "no HIRO this minute."
+- **`flux?`** — optional signed order-flow aggregate (see [`04-engine.md`](04-engine.md)).
+  Absence is valid; consumers must treat it as "no FLUX this minute."
 
 ## Rules for changing the contract
 
 1. Edit **both** `schema.py` and `snapshot.ts` in the same change.
 2. Keep `CONTRACT.md` accurate.
 3. New data → prefer an **optional** field (no version bump), following the
-   `ohlc` / `hiro` precedent.
+   `ohlc` / `flux` precedent.
 4. Regenerate the golden fixture (`tests/gen_golden.py`) and the FE session JSON
    (`scripts/gen_session_snapshots.py`).
 5. Run `pnpm --filter @flowdesk/contracts validate` (accepts the example,

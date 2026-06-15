@@ -59,7 +59,7 @@ def main(argv: list[str]) -> int:
 
     from engine.feed import to_engine_chain
     from engine.feed.historical import HistoricalSimAdapter
-    from engine.hiro import HiroState
+    from engine.flux import FluxState
     from engine.snapshot import MULTIPLIER, build_snapshot, t_expiry_from_clock
 
     adapter = HistoricalSimAdapter(args.data_dir, quote_schema=args.quote_schema)
@@ -72,12 +72,12 @@ def main(argv: list[str]) -> int:
     for instrument in args.instruments:
         frames: list[dict] = []
         ok = fail = 0
-        # One HIRO accumulator per session, fed each minute's NEW trades only
+        # One FLUX accumulator per session, fed each minute's NEW trades only
         # (the adapter returns the chronological [open, ts] window, so the new
         # trades are the suffix past the count already consumed). This keeps the
-        # per-minute `hiro` scalar O(1) instead of re-pricing the whole day.
-        hiro_state = HiroState(MULTIPLIER[instrument])
-        hiro_consumed = 0
+        # per-minute `flux` scalar O(1) instead of re-pricing the whole day.
+        flux_state = FluxState(MULTIPLIER[instrument])
+        flux_consumed = 0
         for minute in range(RTH_MINUTES):
             ts = (session_open_ny + timedelta(minutes=minute)).astimezone(timezone.utc)
             try:
@@ -102,18 +102,18 @@ def main(argv: list[str]) -> int:
                 get_ohlc = getattr(adapter, "get_ohlc", None)
                 if get_ohlc is not None:
                     ohlc = get_ohlc(instrument, ts)
-                # HIRO: cumulative signed dealer delta-notional since the RTH
+                # FLUX: cumulative signed dealer delta-notional since the RTH
                 # open (Divergence #5 -> option A; optional snapshot field).
                 # Feed only this minute's NEW trades into the running accumulator.
-                trades = adapter.get_hiro_trades(instrument, ts)
-                for tr in trades[hiro_consumed:]:
-                    hiro_state.add(tr, forward, args.rate)
-                hiro_consumed = len(trades)
-                hiro = hiro_state.snapshot()
+                trades = adapter.get_flux_trades(instrument, ts)
+                for tr in trades[flux_consumed:]:
+                    flux_state.add(tr, forward, args.rate)
+                flux_consumed = len(trades)
+                flux = flux_state.snapshot()
                 snap = build_snapshot(
                     instrument, ts, quotes, forward, args.rate,
                     "LIVE", axis, t_expiry=t_expiry, stale=False, expired=False,
-                    ohlc=ohlc, hiro=hiro, with_exposure_ext=True, with_surface=True,
+                    ohlc=ohlc, flux=flux, with_exposure_ext=True, with_surface=True,
                     with_proprietary=True,
                 )
                 frames.append(json.loads(snap.model_dump_json()))

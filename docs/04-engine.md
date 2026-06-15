@@ -15,7 +15,7 @@ chain + forward + rate + session_state
    ├─ exposure.py   per-strike net GEX / net DEX (VOL-based, dealer-signed)
    ├─ field.py      price×strike projection grid (numpy + scipy)
    ├─ levels.py     call/put walls, gamma flip, largest GEX/DEX
-   ├─ hiro.py       optional signed order-flow aggregate
+   ├─ flux.py       optional signed order-flow aggregate
    ├─ synthetic_oi.py  optional OI-anchored + flow-update GEX lens (EXPERIMENTAL)
    ├─ exposure_ext.py  optional VEX/CHEX (vanna/charm) aggregation (EXPERIMENTAL)
    ├─ total_hedging.py optional #7 gamma+charm+vanna on the synthetic-OI Q base (EXPERIMENTAL)
@@ -65,15 +65,15 @@ Extracts the headline levels:
 - **Gamma flip** — the strike/price where net gamma crosses zero.
 - **Largest GEX / largest DEX** — by VOL-based magnitude.
 
-### `hiro.py` (optional output)
-Per-trade **signed order flow**, HIRO-style:
+### `flux.py` (optional output)
+Per-trade **signed order flow**, FLUX-style:
 
 ```
 HIRO_t = Σ s·δ·q·M·F   with aggressor s: B=+1, A=−1, N=0 (from trades.side)
 ```
 
 Aggregated into `total / calls / puts / zerodte / retail`. Emitted as the
-**optional** `hiro` Snapshot field (decision #5, no version bump). Uses
+**optional** `flux` Snapshot field (decision #5, no version bump). Uses
 `trades.side` (decision #4) — **no `tbbo` required**.
 
 ### `synthetic_oi.py` (optional output — EXPERIMENTAL)
@@ -89,7 +89,7 @@ GEX       = Σ Γ·Q·M·F²·0.01
 `w=1` = full flow update). Thin strikes whose gamma is unsolved upstream are
 **skipped, not fabricated**. Reuses the locked dealer signs and `GEX_PCT_SCALE`.
 Emitted as the **optional** `synthetic_oi` Snapshot field (additive, no version
-bump — follows the `hiro`/`ohlc` precedent), computed only when signed flow is
+bump — follows the `flux`/`ohlc` precedent), computed only when signed flow is
 supplied. **This lives ALONGSIDE the locked VOL-GEX (`exposure.py`) and does NOT
 replace it.** It is **EXPERIMENTAL / not price-validated** — structurally checked
 on a 4-day sample only. See
@@ -105,7 +105,7 @@ tier weights = 1 it reduces exactly to #4.
 **Synthetic-OI #5 (decay-weighted)** is the same module: `decay_weight(age)` scales
 each trade's signed flow by `exp(−ln2·age/half_life)` (recent flow > old, mitigating
 intraday round-trip double-count; `DEFAULT_HALF_LIFE_MIN`, **UNVALIDATED**) before
-the worker sums it into a third flow map. Needs the per-trade timestamp — `HiroTrade`
+the worker sums it into a third flow map. Needs the per-trade timestamp — `FluxTrade`
 now carries an optional `ts` (the feed already had it; it was dropped at the
 boundary). Emitted as `synthetic_oi_decay`. With decay disabled it reduces to #4.
 
@@ -267,7 +267,7 @@ reviewed contract/behaviour change** — an accidental golden diff is a red flag
 ## Testing
 
 ~92 engine tests cover Black-76 vs. references, IV convergence, exposure signs,
-field invariants, level extraction, HIRO signing, and the golden snapshot. Run:
+field invariants, level extraction, FLUX signing, and the golden snapshot. Run:
 
 ```bash
 cd services/engine && pytest && ruff check . && mypy

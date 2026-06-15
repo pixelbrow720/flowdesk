@@ -12,7 +12,7 @@ the **methodologically weakest version of the core signal** and is
   validate step that accepts the example and rejects malformed input.
 - **Good test coverage** of the plumbing: ~92 engine tests, ~75 API tests,
   closed-form Black-76 checks, IV convergence, exposure signs, field invariant,
-  level extraction, HIRO signing, auth/entitlement/state.
+  level extraction, FLUX signing, auth/entitlement/state.
 - **Clean separation**: engine is calendar-free; the API owns time/state.
 - **Locked design system** enforced in code via tokens.
 
@@ -86,18 +86,18 @@ they do **not** close gap #1.
 > bit-for-bit** (documented; only `charm_hedge`/`vanna_hedge` are novel).
 > **RESIDUAL RESOLVED (2026-06-14) — the window IS cumulative-since-RTH-open,
 > NOT per-minute.** FACT (read-only, the-advisor + coder): the worker's
-> `_fetch_signed_trades` delegates to `feed.get_hiro_trades`, whose window is
+> `_fetch_signed_trades` delegates to `feed.get_flux_trades`, whose window is
 > `[rth_open, ts+1min)` — `historical.py:229-260` filters every tape event with
 > `if event < rth_open or event >= end: continue` and the docstring states "over
-> the RTH window `[open, ts]`". So the synthetic-OI flow maps (and HIRO, and the
+> the RTH window `[open, ts]`". So the synthetic-OI flow maps (and FLUX, and the
 > #5 decay-age math) all accumulate over the same cumulative-since-open basis the
 > docs already describe. The residual is **closed** (confirmed behaviour, not a
 > bug).
 >
 > **SECOND PARITY GAP — synthetic-OI absent from FE JSON is DEFERRED (couples to
 > Gap #4).** The FACT above (worker computes `net_flow*`, the offline generator at
-> `gen_session_snapshots.py:113-118` passes only `ohlc`/`hiro`) is the **same
-> worker/generator divergence class** as the HIRO defect in Gap #4 — a second,
+> `gen_session_snapshots.py:113-118` passes only `ohlc`/`flux`) is the **same
+> worker/generator divergence class** as the FLUX defect in Gap #4 — a second,
 > knowingly-left parity gap. **DEFER rationale:** wiring `gen_session_snapshots`
 > to emit `net_flow`/`net_flow_tiered`/`net_flow_decay` only matters once the
 > dashboard renders these lenses, which is the Gap #4 decision — no point
@@ -135,7 +135,7 @@ they do **not** close gap #1.
 > build a regime-kernel eval vs gather more data.** INFERENCE (advisor): synthetic-OI/GEX
 > is a **volatility-regime** predictor (net-GEX sign → dealer gamma posture), NOT a
 > directional up/down predictor — a predictive eval must score a vol/mean-reversion
-> outcome, NOT `sign(return)`, and a flow-only arm would ~duplicate the already-null HIRO
+> outcome, NOT `sign(return)`, and a flow-only arm would ~duplicate the already-null FLUX
 > directional eval; the new content is the **prior-OI-anchored regime predictor**.
 > **AGGREGATOR ANCHOR verified
 > (load-bearing):** the new sign-free `synthetic_gex_by_strike` sums EXACTLY to the
@@ -151,7 +151,7 @@ they do **not** close gap #1.
 > UNDETERMINED** — a prior "YES (exploratory)" was a **single-day artefact** (06-05's
 > +1.017 is ~245% of the signed sum; excluding it the mean is −0.201; sign 2+/2−
 > inconsistent); the **red-team caught it** and the verdict logic was fixed to require
-> per-day sign consistency (mirroring the HIRO pooling defect class), so **NQ now reads
+> per-day sign consistency (mirroring the FLUX pooling defect class), so **NQ now reads
 > UNDETERMINED, never YES.** **Verdict: NOT a demonstrated edge, NOT a demonstrated
 > absence.** **#4 and #6 are now both evaluated.** **#6 SIZE-TIERED arm (added
 > 2026-06-14, code `23fdbfa`):** tests whether size-tiering the flow adds per-strike
@@ -176,7 +176,7 @@ they do **not** close gap #1.
 > now EXISTS: `analysis/harness/synthetic_oi_regime_eval.py` (pure core) +
 > `run_synthetic_oi_regime_eval.py` (runner) + 2 test files; **109 harness tests
 > pass**, run through the tenor-provenance guard. It scores synthetic-OI as a
-> **VOLATILITY-REGIME** predictor (NOT directional — the HIRO directional kernel was
+> **VOLATILITY-REGIME** predictor (NOT directional — the FLUX directional kernel was
 > deliberately NOT reused): predictor = per-minute `sign(Σ synthetic-GEX)` from
 > `Q = prior-session-OI-anchor + cumulative_signed_flow(≤t)` (long-gamma=+ ⇒
 > vol-suppression; short-gamma=− ⇒ vol-amplification); outcome = the SIGN-FREE move
@@ -348,7 +348,7 @@ to defend against the F1–F7 failure modes catalogued in
 - `build_worker_from_env` logs a loud WARNING with `feed_mode` /
   `live_armed` at boot so an operator can spot a misconfigured live flip
   in stdout's first line.
-- Public surface (`get_chain` / `get_forward` / `get_hiro_trades`) is
+- Public surface (`get_chain` / `get_forward` / `get_flux_trades`) is
   shape-identical to `HistoricalSimAdapter`, so the engine, datastore,
   and locked Snapshot contract stay byte-for-byte unchanged when the
   mode flips.
@@ -373,51 +373,51 @@ Commits: `dca4e9f` (threat model) → `37e7a03` (adapter + breaker) →
 `c46cb20` (refuse-by-default rail) → `69d7893` (mocked tests).
 
 ### 4. Frontend — DELETED 2026-06-15 (pending redesign) 🟡
-The original frontend (`apps/web/`, `@flowdesk/tokens`, all heatmap/profile/HIRO/
+The original frontend (`apps/web/`, `@flowdesk/tokens`, all heatmap/profile/FLUX/
 auth components) was deleted on 2026-06-15 to be rebuilt from scratch. Locked
 design rules (TURQUOISE/CRIMSON, Space Grotesk + JetBrains Mono) remain in
 `02-locked-contract.md` and any future FE must honor them. See PROGRESS.md
 2026-06-15 checkpoint.
 
-The HIRO-related backend findings below remain valid (they are about
-`engine/hiro.py` and the worker, not about the deleted FE):
+The FLUX-related backend findings below remain valid (they are about
+`engine/flux.py` and the worker, not about the deleted FE):
 
-> **AUDIT (2026-06-14, quant-greeks-auditor) — HIRO: DOWNGRADE (consistency
-> defect, NOT look-ahead). MUST fix before the FE renders HIRO.** `hiro.py` is
+> **AUDIT (2026-06-14, quant-greeks-auditor) — FLUX: DOWNGRADE (consistency
+> defect, NOT look-ahead). MUST fix before the FE renders FLUX.** `flux.py` is
 > dimensionally sound (greek-weighted dealer delta-notional USD, properly delta-
 > dollarized `×M×F`), the aggressor sign `B/A/N -> +1/-1/0` is correct with no
 > double-sign, and it is **strictly t-causal** — window `[rth_open, ts+60s)`, real
 > daily reset, per-trade `ts` threaded, **no look-ahead**. THE DEFECT: the live
 > worker (`worker.py:264`) **re-prices the entire day's tape at the single current
-> forward `F_t` every minute**, so cumulative HIRO drifts even on zero-trade minutes
+> forward `F_t` every minute**, so cumulative FLUX drifts even on zero-trade minutes
 > and **DIVERGES** from the offline generator (`gen_session_snapshots.py:75-112`),
 > which **freezes each trade's increment at its arrival-minute forward** via a
-> persistent `HiroState`. Result: the worker and the generator render **DIFFERENT
-> HIRO lines for the same session**. **FIX (record, do not perform):** unify
-> accumulation — the worker should also use a persistent `HiroState` fed only NEW
+> persistent `FluxState`. Result: the worker and the generator render **DIFFERENT
+> FLUX lines for the same session**. **FIX (record, do not perform):** unify
+> accumulation — the worker should also use a persistent `FluxState` fed only NEW
 > trades at each trade's arrival forward, so the line is stable + identical across
-> both paths. This is a prerequisite before the FE renders HIRO.
+> both paths. This is a prerequisite before the FE renders FLUX.
 >
 > **STATUS (2026-06-15) — RESOLVED.** Phase 2 Item 3 implementation landed in
 > commits `604bad5` (design doc), `445e019` (engine), `4b97756` (api worker),
 > `8097228` (parity test). The api-layer worker now holds a persistent
-> per-instrument `HiroState` and feeds only the NEW suffix of trades each minute
+> per-instrument `FluxState` and feeds only the NEW suffix of trades each minute
 > at that minute's forward — economically correct (hedging happens at the price
 > prevailing then) and BIT-IDENTICAL to `gen_session_snapshots.py:75-112` per
 > the parity test (`services/api/tests/test_hiro_parity.py`, asserts ≤1e-9 abs
 > diff per minute on a 6-minute scripted session including zero-trade
 > minutes). Restart safety is provided by a two-tier scheme — Tier 1 reseeds
-> from a Redis dump (`flowdesk:hiro:{instrument}`, TTL 90m, written each LIVE
+> from a Redis dump (`flowdesk:flux:{instrument}`, TTL 90m, written each LIVE
 > tick); Tier 2 falls back to a fresh accumulator on any miss / wrong date /
 > malformed payload / Redis hiccup. Daily reset is keyed off the ET session
 > date; defensive shrunken-window detection guards against fixture rebuilds.
-> Engine purity preserved: `HiroState.to_dict/from_dict` are plain scalars and
-> `HiroState` is never pushed into `build_snapshot`. Snapshot contract bytes
+> Engine purity preserved: `FluxState.to_dict/from_dict` are plain scalars and
+> `FluxState` is never pushed into `build_snapshot`. Snapshot contract bytes
 > unchanged (no mirror-trio change). The originally-proposed `degraded` flag
-> from `docs/architecture/hiro-unification.md` §4.5 was descoped — it would
+> from `docs/architecture/flux-unification.md` §4.5 was descoped — it would
 > touch the locked Snapshot contract and the existing WARNING log on feed
 > gaps already provides the operational signal until a UX layer needs it.
-> Design lives in `docs/architecture/hiro-unification.md`. Full historical
+> Design lives in `docs/architecture/flux-unification.md`. Full historical
 > context (the original DEFERRED rationale and the advisor's design
 > direction) preserved below for traceability.
 >
@@ -428,27 +428,27 @@ The HIRO-related backend findings below remain valid (they are about
 > (`worker.py:264`) re-prices the entire day's tape at the single current-minute
 > forward `F_t`, while the generator (`gen_session_snapshots.py:75-112`) freezes
 > each trade's increment at its arrival-minute forward via a persistent
-> `HiroState`. The generator's **frozen-increment** semantics is the
+> `FluxState`. The generator's **frozen-increment** semantics is the
 > economically-correct one (hedging happens at the price prevailing then). **DEFER
-> rationale:** HIRO's only consumer is the FE render, which is **not** being built
+> rationale:** FLUX's only consumer is the FE render, which is **not** being built
 > now (this gap); and the naive "make the worker persistent" fix would TRADE a
 > cosmetic numeric-parity bug for a **restart-correctness bug** — the current
 > stateless rebuild-from-`[open, ts]` is restart-safe and gap/STALE-safe by
-> construction (`worker.py:203-208`), whereas a persistent `HiroState` needs
+> construction (`worker.py:203-208`), whereas a persistent `FluxState` needs
 > explicit reset-at-RTH-open, mid-session-restart recovery, and feed-gap handling
 > the worker does not have today. **DESIGN DIRECTION (record for when this gap is
-> built):** keep the accumulator in the api-layer worker (NEVER push `HiroState`
+> built):** keep the accumulator in the api-layer worker (NEVER push `FluxState`
 > into `build_snapshot` — engine purity is locked); feed only NEW trades at each
 > minute's forward; design the reset/restart/gap behaviour explicitly; lock
 > both-paths-equal with an independent test. Before that fix, grep the golden
-> fixture + worker tests for pinned HIRO values (a worker change will legitimately
+> fixture + worker tests for pinned FLUX values (a worker change will legitimately
 > move `.final` on every minute after the first). Stays DEFERRED, not fixed.
 >
-> **UPDATE (2026-06-14) — HIRO now HAS a 0DTE-valid, look-ahead-free PREDICTIVE
+> **UPDATE (2026-06-14) — FLUX now HAS a 0DTE-valid, look-ahead-free PREDICTIVE
 > eval; result is exploratory null / underpowered-hint, NOT an edge.**
-> `analysis/harness/hiro_eval.py` (+ runner + 8 tests; full harness suite = 58
+> `analysis/harness/flux_eval.py` (+ runner + 8 tests; full harness suite = 58
 > pass) scores `sign(delta_hiro_t)` against `sign(F_{t+k}−F_t)`. Unlike DDOI, this
-> is **legitimately predictive**: HIRO is strictly t-causal
+> is **legitimately predictive**: FLUX is strictly t-causal
 > (`Σ_{trades≤t} sign·δ·size·M·F`), so the predictor (`≤t`) and outcome (`>t`)
 > information sets never overlap — no whole-day normalization to contaminate it.
 > The headline is the CONTROL GAP `real − mean(shuffled-aggressor-sign)`, never the
@@ -463,12 +463,12 @@ The HIRO-related backend findings below remain valid (they are about
 > resolve). **Verdict: NOT a demonstrated edge, NOT a demonstrated absence.** The
 > forward is an OPTION-DERIVED parity forward (NOT a futures price); only
 > k∈{5,15,30}min tested; the ~90-day forward run was dropped by the user, so this
-> stays exploratory. The live-worker HIRO accumulation fix above is **now
+> stays exploratory. The live-worker FLUX accumulation fix above is **now
 > RESOLVED** (Phase 2 Item 3, 2026-06-15) — see the RESOLVED block at the top
 > of this gap. This predictive eval still runs on the offline/generator path,
 > but the worker line is now bit-identical so the same conclusions apply
 > end-to-end. See
-> [`research/empirical/hiro-predictive-eval.md`](research/empirical/hiro-predictive-eval.md).
+> [`research/empirical/flux-predictive-eval.md`](research/empirical/flux-predictive-eval.md).
 
 ### 5. Surface / vanna / charm — WIRED ✅ (EXPERIMENTAL)
 `black76` vanna/charm and `surface.py` are no longer isolated — all are now
@@ -541,8 +541,8 @@ See `reference/methodology-decisions.md` for full rationale.
 | 1 | GEX basis | VOL-based, cumulative | ✅ (DDOI alternative ❌, deferred v3) |
 | 2 | Walls | gamma-dollar Top-3 | ✅ |
 | 3 | Day-count | real wall-clock to 16:00 ET | ✅ |
-| 4 | HIRO source | `trades.side` aggressor | ✅ |
-| 5 | HIRO in Snapshot | optional field, no version bump | ✅ |
+| 4 | FLUX source | `trades.side` aggressor | ✅ |
+| 5 | FLUX in Snapshot | optional field, no version bump | ✅ |
 
 ## One-line summary
 

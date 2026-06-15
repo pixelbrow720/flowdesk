@@ -1,22 +1,22 @@
-"""HIRO t->t+k PREDICTIVE-eval runner (reads data/raw/zerodte/ directly, zero API).
+"""FLUX t->t+k PREDICTIVE-eval runner (reads data/raw/zerodte/ directly, zero API).
 
 ADDITIVE sibling of ``run_validation.py`` / ``run_ddoi_divergence.py``: it does NOT touch
 either file's metric path. It answers ONE controlled, look-ahead-free question (see
-``hiro_eval.py``): does the SIGN of per-minute HIRO flow (``delta_hiro_t``) lead the SIGN
+``flux_eval.py``): does the SIGN of per-minute FLUX flow (``delta_hiro_t``) lead the SIGN
 of the future forward return ``F_{t+k} − F_t`` — and crucially, does it do so BEYOND the
 sign-shuffled / signed-volume / contemporaneous / persistence controls?
 
-Why read the dbn DIRECTLY (and not get_hiro_trades)
+Why read the dbn DIRECTLY (and not get_flux_trades)
 ===================================================
-``engine.hiro``'s ``get_hiro_trades`` is welded to ``HistoricalSimAdapter``, which reads
+``engine.flux``'s ``get_flux_trades`` is welded to ``HistoricalSimAdapter``, which reads
 DECODED CSVs that do not exist for these days. So this runner reads the trades
 ``.dbn.zst`` directly, exactly the way ``run_validation`` already streams dbn (same
 ``DBNStore.from_file`` loop, ``ts_event``/``size``/``side``/``price`` fields, ``price/1e9``
 fixed-point per ``analysis/decode.py``), and reuses run_validation's ``load_defs`` /
 ``_flat_def_map_all`` / ``_raw_*_iids`` / ``quotes_at`` machinery verbatim (no duplication,
 no edits there). The per-trade greek notional + aggressor sign come from the LOCKED engine
-core (``engine.hiro.signed_delta_notional`` / ``aggressor_sign``) via the pure
-``hiro_eval`` module — no greek re-implementation.
+core (``engine.flux.signed_delta_notional`` / ``aggressor_sign``) via the pure
+``flux_eval`` module — no greek re-implementation.
 
 The OPTION-DERIVED parity forward (NOT a futures price)
 -------------------------------------------------------
@@ -32,7 +32,7 @@ strictly later than the predictor's information set — no leakage).
 
 Provenance guard: this separate entry calls ``assert_session_iids_0dte`` ITSELF (the same
 fail-closed 0DTE chokepoint ``run_validation.run_day`` uses), on the RAW traded∪settled id
-population resolved against the full ES+NQ definition map, BEFORE any HIRO/return number.
+population resolved against the full ES+NQ definition map, BEFORE any FLUX/return number.
 
 EXPLORATORY: 4 correlated 0DTE days, OPTION-DERIVED parity forward (NOT futures price),
 descriptive only, NOT predictive-validated. The control GAP is the headline, NOT the raw
@@ -55,7 +55,7 @@ sys.path.insert(0, ".")  # so `analysis.harness.*` imports when run as a script
 
 import databento as db  # noqa: E402
 
-from analysis.harness.hiro_eval import (  # noqa: E402
+from analysis.harness.flux_eval import (  # noqa: E402
     DEFAULT_SHUFFLE_SEEDS,
     EvalTrade,
     eval_controls,
@@ -75,7 +75,7 @@ from analysis.harness.run_validation import (  # noqa: E402
     load_defs,
     quotes_at,
 )
-from engine.hiro import HiroTrade  # noqa: E402
+from engine.flux import FluxTrade  # noqa: E402
 from engine.snapshot import MULTIPLIER, t_expiry_from_clock  # noqa: E402
 
 try:
@@ -176,12 +176,12 @@ def load_eval_trades(path: str, legs: dict, rth_open_sec: int) -> list:
     Mirrors ``run_validation.flow_and_vol`` / ``run_ddoi_divergence.leg_trades_full_day``
     (same ``DBNStore.from_file`` loop, ``ts_event``/``size``/``side`` fields, ``ts >=
     rth_open`` filter), but ALSO carries the trade ``price`` (``/1e9`` fixed-point, per
-    ``analysis/decode.py``) and builds the locked-engine :class:`HiroTrade` so the pure
-    metric can price each trade with ``engine.hiro.signed_delta_notional`` (no greek
+    ``analysis/decode.py``) and builds the locked-engine :class:`FluxTrade` so the pure
+    metric can price each trade with ``engine.flux.signed_delta_notional`` (no greek
     re-impl). Each trade is tagged with its 0-based RTH minute index. Per-trade
     ``t_expiry`` is the real wall-clock tenor at the trade (``t_expiry_from_clock``),
     matching the worker default (methodology decision #3). Missing file -> []. UNLIKE
-    DDOI, the aggressor ``side`` IS retained — HIRO is a directional flow.
+    DDOI, the aggressor ``side`` IS retained — FLUX is a directional flow.
     """
     if not os.path.exists(path):
         return []
@@ -204,7 +204,7 @@ def load_eval_trades(path: str, legs: dict, rth_open_sec: int) -> list:
         otype, k, _ed = legs[iid]
         ts_dt = datetime.fromtimestamp(ts_sec, tz=timezone.utc)
         t_exp = t_expiry_from_clock(ts_dt)
-        tr = HiroTrade(
+        tr = FluxTrade(
             strike=float(k), is_call=(otype == "call"), price=px, size=sz,
             side=side, t_expiry=t_exp,
         )
@@ -214,10 +214,10 @@ def load_eval_trades(path: str, legs: dict, rth_open_sec: int) -> list:
 
 
 def run_day(instr: str, day: str, defs: dict) -> dict | None:
-    """One (day, instrument) HIRO predictive-eval row, or None when skipped."""
+    """One (day, instrument) FLUX predictive-eval row, or None when skipped."""
     d = datetime.strptime(day, "%Y-%m-%d")
 
-    # ---- TENOR PROVENANCE GUARD (fail-closed, BEFORE any HIRO/return number) ----
+    # ---- TENOR PROVENANCE GUARD (fail-closed, BEFORE any FLUX/return number) ----
     # SAME chokepoint as run_validation.run_day: resolve the RAW traded∪settled id
     # population (no iidset filter) against the COMBINED ES+NQ definition map; a
     # non-session/unresolved id raises. Empty population -> loud skip (data absent).
@@ -294,10 +294,10 @@ def main() -> int:
               f"This harness needs the gitignored data/raw/ pull on disk.")
         return 2
 
-    print("====== HIRO t->t+k PREDICTIVE EVAL — CONTROLLED, look-ahead-free (offline) ======")
+    print("====== FLUX t->t+k PREDICTIVE EVAL — CONTROLLED, look-ahead-free (offline) ======")
     print("*** EXPLORATORY, n=4 correlated days, OPTION-DERIVED put-call-parity forward")
     print("    (NOT a futures price), descriptive only, NOT predictive-validated. ***")
-    print("HIRO is strictly t-causal (Σ_{trades<=t} sign·δ·size·M·F); delta_hiro_t -> "
+    print("FLUX is strictly t-causal (Σ_{trades<=t} sign·δ·size·M·F); delta_hiro_t -> "
           "sign(F_{t+k}-F_t)")
     print("is look-ahead-free by construction (predictor uses <=t, outcome uses >t).")
     print("THE CONTROL-GAP IS THE HEADLINE, NOT THE RAW HIT-RATE: a raw hit-rate is")
@@ -510,7 +510,7 @@ def main() -> int:
     print("\n  READ: these are the numbers the code produced and a verdict DERIVED from the")
     print("  printed thresholds — NOT a validated finding. 4 correlated days is far too")
     print("  small; the forward is OPTION-DERIVED parity (NOT a traded futures price).")
-    print("  EXPLORATORY, n=4, look-ahead-free, control-gap is the headline. HIRO is NOT")
+    print("  EXPLORATORY, n=4, look-ahead-free, control-gap is the headline. FLUX is NOT")
     print("  claimed to predict anything — only the control gaps the numbers actually show.")
     return 0
 

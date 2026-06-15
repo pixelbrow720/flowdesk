@@ -31,7 +31,7 @@ SECRET = "test-secret-please-change"  # test-only, not from prod
 # A valid Snapshot per engine/schema.py (axis.step; regime.sign is int; levels
 # are lists of floats / null). Mirrors the 0.8 golden shape.
 SAMPLE: dict[str, Any] = {
-    "schema_version": 1,
+    "schema_version": 2,
     "instrument": "ES",
     "session_date": "2026-06-10",
     "ts": "2026-06-10T13:31:00Z",
@@ -46,7 +46,7 @@ SAMPLE: dict[str, Any] = {
     "profile": [
         {"strike": 5000.0, "net_gex": 1.0, "net_dex": 2.0, "interpolated": False}
     ],
-    "field": {"price_grid": [5000.0], "gamma": [1.0], "delta": [2.0]},
+    "fog": {"price_grid": [5000.0], "gamma": [1.0], "delta": [2.0]},
     "levels": {
         "call_walls": [5010.0, 5015.0, 5005.0],
         "put_walls": [4990.0, 4985.0, 4995.0],
@@ -160,7 +160,7 @@ def test_snapshot_200_for_desk() -> None:
     res = client.get("/api/snapshot", params={"instrument": "ES"})
     assert res.status_code == 200
     assert res.json()["instrument"] == "ES"
-    assert res.json()["schema_version"] == 1
+    assert res.json()["schema_version"] == 2
 
 
 def test_snapshot_403_for_revoked_stale_session() -> None:  # CRITICAL #1 regression

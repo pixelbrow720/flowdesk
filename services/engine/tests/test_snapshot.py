@@ -104,7 +104,7 @@ def test_validates_under_pydantic() -> None:
     snap = produce_snapshot()
     # Round-trip through the validator from a plain dict.
     reparsed = parse_snapshot(json.loads(snap.to_json()))
-    assert reparsed.schema_version == 1
+    assert reparsed.schema_version == 2
     assert reparsed.instrument == "ES"
 
 
@@ -113,7 +113,7 @@ _ISO_DT_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
 _SNAPSHOT_KEYS = {
     "schema_version", "instrument", "session_date", "ts", "minute_index",
     "state", "stale", "expired", "forward", "rate", "axis", "regime",
-    "profile", "field", "levels", "ohlc", "hiro", "synthetic_oi",
+    "profile", "fog", "levels", "ohlc", "flux", "synthetic_oi",
     "synthetic_oi_tiered", "synthetic_oi_decay", "exposure_ext",
     "total_hedging", "surface", "ddoi", "proprietary",
 }
@@ -128,7 +128,7 @@ def _assert_zod_compatible(d: dict) -> None:
     field array-length invariant).
     """
     assert set(d) == _SNAPSHOT_KEYS                      # .strict(): no extra/missing
-    assert d["schema_version"] == 1
+    assert d["schema_version"] == 2
     assert d["instrument"] in ("ES", "NQ")
     assert _ISO_DATE.match(d["session_date"])
     assert _ISO_DT_Z.match(d["ts"])                      # z.string().datetime()
@@ -148,7 +148,7 @@ def _assert_zod_compatible(d: dict) -> None:
         assert set(row) == {"strike", "net_gex", "net_dex", "interpolated"}
         assert isinstance(row["interpolated"], bool)
         assert all(math.isfinite(row[k]) for k in ("strike", "net_gex", "net_dex"))
-    f = d["field"]
+    f = d["fog"]
     assert set(f) == {"price_grid", "gamma", "delta"}
     assert len(f["price_grid"]) == len(f["gamma"]) == len(f["delta"])   # invariant
     assert all(math.isfinite(v) for v in f["price_grid"] + f["gamma"] + f["delta"])
@@ -161,7 +161,7 @@ def _assert_zod_compatible(d: dict) -> None:
     assert oh is None or set(oh) == {"o", "h", "l", "c"}
     if oh is not None:
         assert all(math.isfinite(oh[k]) for k in ("o", "h", "l", "c"))
-    hr = d["hiro"]
+    hr = d["flux"]
     assert hr is None or set(hr) == {"total", "calls", "puts", "zerodte", "retail"}
     if hr is not None:
         assert all(math.isfinite(hr[k]) for k in ("total", "calls", "puts", "zerodte", "retail"))
@@ -267,7 +267,7 @@ def test_regime_sign_matches_net_gamma() -> None:
 # --------------------------------------------------------------------------- #
 def test_field_and_profile_invariants() -> None:
     snap = produce_snapshot()
-    f = snap.field
+    f = snap.fog
     assert len(f.price_grid) == len(f.gamma) == len(f.delta) == 9
     assert f.price_grid == [4980, 4985, 4990, 4995, 5000, 5005, 5010, 5015, 5020]
     assert all(math.isfinite(v) for v in f.gamma + f.delta)
@@ -305,34 +305,34 @@ def test_thin_strike_interpolated_and_validates() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Divergence #5 -> option A: optional `hiro` field (additive, no version bump).
+# Divergence #5 -> option A: optional `flux` field (additive, no version bump).
 # --------------------------------------------------------------------------- #
 def test_hiro_field_optional_absent_by_default() -> None:
     snap = produce_snapshot()
     # Absent when not supplied (mirrors the ohlc precedent) -> contract-valid.
-    assert snap.hiro is None
+    assert snap.flux is None
     d = json.loads(snap.to_json())
-    assert d["hiro"] is None
+    assert d["flux"] is None
 
 
 def test_hiro_field_round_trips_through_contract() -> None:
-    from engine.hiro import hiro_series
+    from engine.flux import flux_series
     from engine.snapshot import MULTIPLIER
-    from engine.hiro import HiroTrade
+    from engine.flux import FluxTrade
 
     # Two signed 0DTE trades: buy a call (bullish) + sell a put (bullish).
     trades = [
-        HiroTrade(strike=5000.0, is_call=True, price=25.0, size=10.0, side="B", t_expiry=T_EXPIRY),
-        HiroTrade(strike=4990.0, is_call=False, price=12.0, size=8.0, side="A", t_expiry=T_EXPIRY),
+        FluxTrade(strike=5000.0, is_call=True, price=25.0, size=10.0, side="B", t_expiry=T_EXPIRY),
+        FluxTrade(strike=4990.0, is_call=False, price=12.0, size=8.0, side="A", t_expiry=T_EXPIRY),
     ]
-    series = hiro_series(trades, FORWARD, MULTIPLIER[INSTRUMENT], RATE)
+    series = flux_series(trades, FORWARD, MULTIPLIER[INSTRUMENT], RATE)
     snap = build_snapshot(
         INSTRUMENT, TS_UTC, _fixture_chain(), FORWARD, RATE, STATE, AXIS,
-        hiro=series.final,
+        flux=series.final,
     )
-    assert snap.hiro is not None
-    assert math.isclose(snap.hiro.total, series.final.total, rel_tol=1e-12)
-    assert snap.hiro.calls > 0.0  # bought call -> positive dealer-buy pressure
+    assert snap.flux is not None
+    assert math.isclose(snap.flux.total, series.final.total, rel_tol=1e-12)
+    assert snap.flux.calls > 0.0  # bought call -> positive dealer-buy pressure
     _assert_zod_compatible(json.loads(snap.to_json()))
 
 
@@ -382,8 +382,8 @@ def test_matches_golden_within_tolerances() -> None:
 
     # Field arrays within tolerance.
     for arr in ("price_grid", "gamma", "delta"):
-        assert len(got["field"][arr]) == len(gold["field"][arr])
-        for a, b in zip(got["field"][arr], gold["field"][arr]):
+        assert len(got["fog"][arr]) == len(gold["fog"][arr])
+        for a, b in zip(got["fog"][arr], gold["fog"][arr]):
             assert _isclose(a, b), arr
 
 

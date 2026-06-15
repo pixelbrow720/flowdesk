@@ -389,7 +389,7 @@ def main() -> int:
                  if v is not None and not (isinstance(v, float) and math.isnan(v))]
         return sum(clean) / len(clean) if clean else float("nan")
 
-    # ---- PER-INSTRUMENT aggregate (NOT pooled — the HIRO lesson: pooling masks both) ----
+    # ---- PER-INSTRUMENT aggregate (NOT pooled — the FLUX lesson: pooling masks both) ----
     INSTRS = ("ES", "NQ")
 
     # HONEST-VERDICT THRESHOLDS (all printed; the verdict is DERIVED from the numbers).

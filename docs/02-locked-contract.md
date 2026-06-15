@@ -44,13 +44,13 @@ No other instruments. 0DTE focus.
   `net_gex = (sign_c·γ_c·vol_c + sign_p·γ_p·vol_p) · M · F² · 0.01`.
 - **Walls = gamma-dollar** (`gamma·OI` per side), static, Top-3.
 - **Gamma flip / largest GEX / largest DEX** computed from the VOL-based profile.
-- **HIRO** (optional): per-trade signed flow `Σ s·δ·q·M·F`, aggressor side from
+- **FLUX** (optional): per-trade signed flow `Σ s·δ·q·M·F`, aggressor side from
   `trades.side` (B=+1, A=−1, N=0).
 
 ## Schema
 
 - **`SCHEMA_VERSION = 1`.** Adding an **optional** field (precedent: `ohlc`,
-  `hiro`) does **not** bump the version. Any breaking change does — and that's a
+  `flux`) does **not** bump the version. Any breaking change does — and that's a
   human decision, not an agent one.
 - Snapshot is mirrored in `schema.py` (pydantic) and `snapshot.ts` (zod); they
   must remain identical.

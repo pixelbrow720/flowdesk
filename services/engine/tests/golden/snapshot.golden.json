@@ -7,7 +7,7 @@
   "ddoi": null,
   "expired": false,
   "exposure_ext": null,
-  "field": {
+  "fog": {
     "delta": [
       1855692866.7553365,
       1856387268.2756174,
@@ -43,7 +43,7 @@
     ]
   },
   "forward": 5000.0,
-  "hiro": null,
+  "flux": null,
   "instrument": "ES",
   "levels": {
     "call_walls": [
@@ -125,7 +125,7 @@
     "sign": -1,
     "stability_pct": 4.170769153833563
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "session_date": "2026-06-10",
   "stale": false,
   "state": "LIVE",

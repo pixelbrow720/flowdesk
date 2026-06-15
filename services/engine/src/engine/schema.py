@@ -25,7 +25,7 @@ from pydantic import (
 )
 
 #: Canonical schema version. Bump on ANY breaking change.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # ---------------------------------------------------------------------------
 # Finiteness hardening (Phase 1 Item 4)
@@ -124,7 +124,7 @@ class ProfileRow(BaseModel):
     """True if this strike's values were interpolated (synthetic). PRD #8 §3."""
 
 
-class FieldGrid(BaseModel):
+class FogGrid(BaseModel):
     """Heatmap field projection arrays (index-aligned, equal length). PRD #8 §3."""
 
     model_config = ConfigDict(extra="forbid")
@@ -137,7 +137,7 @@ class FieldGrid(BaseModel):
     """Delta field value at each grid point, USD notional. PRD #8 §3."""
 
     @model_validator(mode="after")
-    def _check_lengths(self) -> FieldGrid:
+    def _check_lengths(self) -> FogGrid:
         """Enforce: price_grid defines the grid; gamma == delta == price_grid."""
         if len(self.gamma) != len(self.delta):
             raise ValueError(
@@ -188,34 +188,34 @@ class OHLC(BaseModel):
 
 
 class Hiro(BaseModel):
-    """Cumulative dealer delta-notional hedging flow since the RTH open (HIRO).
+    """Cumulative dealer delta-notional hedging flow since the RTH open (FLUX).
 
     Optional/additive (Divergence #5 -> option A): ``None`` for snapshots
-    produced before HIRO was wired, mirroring the ``ohlc`` precedent — absence is
+    produced before FLUX was wired, mirroring the ``ohlc`` precedent — absence is
     contract-valid and does NOT bump ``schema_version``. Units are USD
     delta-notional; positive = net dealer BUYING pressure (bullish), negative =
     selling pressure. These are the *current* cumulative values for this minute;
-    the intraday HIRO line is reconstructed from the per-minute frame sequence
-    (like the forward price line), not embedded per frame. See ``engine.hiro``."""
+    the intraday FLUX line is reconstructed from the per-minute frame sequence
+    (like the forward price line), not embedded per frame. See ``engine.flux``."""
 
     model_config = ConfigDict(extra="forbid")
 
     total: FiniteFloat
-    """Cumulative HIRO (all legs), USD delta-notional since RTH open."""
+    """Cumulative FLUX (all legs), USD delta-notional since RTH open."""
     calls: FiniteFloat
-    """Cumulative HIRO from call trades only, USD delta-notional."""
+    """Cumulative FLUX from call trades only, USD delta-notional."""
     puts: FiniteFloat
-    """Cumulative HIRO from put trades only, USD delta-notional."""
+    """Cumulative FLUX from put trades only, USD delta-notional."""
     zerodte: FiniteFloat
-    """Cumulative HIRO from 0DTE trades (T < 1/365), USD delta-notional."""
+    """Cumulative FLUX from 0DTE trades (T < 1/365), USD delta-notional."""
     retail: FiniteFloat
-    """Cumulative HIRO from the (heuristic) retail proxy, USD delta-notional."""
+    """Cumulative FLUX from the (heuristic) retail proxy, USD delta-notional."""
 
 
 class SyntheticOi(BaseModel):
     """Synthetic-OI #4 positioning lens (EXPERIMENTAL — NOT price-validated).
 
-    Optional/additive (mirrors ``hiro``/``ohlc``): ``None`` when not captured, no
+    Optional/additive (mirrors ``flux``/``ohlc``): ``None`` when not captured, no
     ``schema_version`` bump. Dealer position = carried-in open interest (static
     long-call/short-put sign) UPDATED by native CME aggressor-signed flow, weighted
     by ``w``. ``gex`` is the synthetic GEX at ``w``; ``gex_static`` is the ``w=0``
@@ -239,7 +239,7 @@ class SyntheticOi(BaseModel):
 class ExposureExt(BaseModel):
     """Extended dealer exposure — VEX (vanna) + CHEX (charm) (EXPERIMENTAL).
 
-    Optional/additive (mirrors ``hiro``/``synthetic_oi``): ``None`` when not
+    Optional/additive (mirrors ``flux``/``synthetic_oi``): ``None`` when not
     captured, no ``schema_version`` bump. Same VOL basis + locked dealer signs as
     the product GEX/DEX; lives ALONGSIDE them and does NOT replace them. The
     higher-order greeks are FD-validated, but the aggregate has never been checked
@@ -369,8 +369,8 @@ class Snapshot(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1]
-    """Schema version. MUST equal SCHEMA_VERSION (1). PRD #8 §3."""
+    schema_version: Literal[2]
+    """Schema version. MUST equal SCHEMA_VERSION (2). PRD #8 §3."""
     instrument: Instrument
     """Instrument: "ES" | "NQ". PRD #0 §4."""
     session_date: str
@@ -393,12 +393,12 @@ class Snapshot(BaseModel):
     regime: Regime
     profile: list[ProfileRow]
     """Net GEX/DEX profile rows, ascending by strike. PRD #8 §3."""
-    field: FieldGrid
+    fog: FogGrid
     levels: Levels
     ohlc: OHLC | None = None
     """Underlying OHLC for this minute (candle view). None when not captured."""
-    hiro: Hiro | None = None
-    """Cumulative dealer hedging flow (HIRO). None when not captured. PRD FlowGreeks."""
+    flux: Hiro | None = None
+    """Cumulative dealer hedging flow (FLUX). None when not captured. PRD FlowGreeks."""
     synthetic_oi: SyntheticOi | None = None
     """Synthetic-OI #4 positioning lens (EXPERIMENTAL). None when not captured."""
     synthetic_oi_tiered: SyntheticOi | None = None

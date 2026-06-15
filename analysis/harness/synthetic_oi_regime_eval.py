@@ -3,7 +3,7 @@
 This is the *provable* half of a 0DTE, EXPLORATORY evaluation of synthetic-OI as a
 VOLATILITY-REGIME predictor — NOT a directional one (the data-loading half is the
 sibling runner ``run_synthetic_oi_regime_eval.py``, a separate later step). It mirrors
-the ``hiro_eval.py`` (pure) + ``run_hiro_eval.py`` (runner) + ``test_*`` pattern exactly:
+the ``flux_eval.py`` (pure) + ``run_hiro_eval.py`` (runner) + ``test_*`` pattern exactly:
 every function here is deterministic, does NO file IO, and is built from small stdlib
 primitives (the per-minute synthetic-GEX *profile* is built UPSTREAM by the runner via
 ``analysis.harness.synthetic_oi_eval.synthetic_gex_by_strike`` — the sign-free aggregator —
@@ -68,7 +68,7 @@ __all__ = [
 ]
 
 #: A small, FIXED panel of seeds for the regime-label-shuffle null. Base seed matches
-#: analysis/ddoi.py / hiro_eval.py / synthetic_oi_eval.py so the falsification control is
+#: analysis/ddoi.py / flux_eval.py / synthetic_oi_eval.py so the falsification control is
 #: the same reproducible family used elsewhere in the analysis tree.
 DEFAULT_SHUFFLE_SEEDS = (20260612, 20260613, 20260614, 1, 7)
 
@@ -95,14 +95,14 @@ def regime_sign(profile_gex_by_strike: Mapping[float, float]) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# pure return / move primitives (mirror hiro_eval._window_return semantics)
+# pure return / move primitives (mirror flux_eval._window_return semantics)
 # --------------------------------------------------------------------------- #
 def _window_return(forwards: Sequence[Optional[float]], a: int, b: int) -> Optional[float]:
     """Forward return ``forwards[b] − forwards[a]``; None if an endpoint is OOB/missing.
 
-    Byte-for-byte the same semantics as :func:`analysis.harness.hiro_eval._window_return`
+    Byte-for-byte the same semantics as :func:`analysis.harness.flux_eval._window_return`
     (re-declared locally so this module stays stdlib-only and self-contained, the same way
-    ``hiro_eval`` and ``synthetic_oi_eval`` each carry their own tiny ``_sign`` primitive).
+    ``flux_eval`` and ``synthetic_oi_eval`` each carry their own tiny ``_sign`` primitive).
     """
     n = len(forwards)
     if a < 0 or b < 0 or a >= n or b >= n:
@@ -214,7 +214,7 @@ def regime_separation(
 def shuffle_regimes(regimes: Sequence[int], seed: int) -> List[int]:
     """Deterministic permutation of the regime LABELS (the regime-label-shuffle null).
 
-    Mirrors :func:`analysis.harness.hiro_eval.shuffle_signs` (a single seeded
+    Mirrors :func:`analysis.harness.flux_eval.shuffle_signs` (a single seeded
     :class:`random.Random`). The multiset of regime labels ``{-1, 0, +1}`` over the day is
     PRESERVED but reassigned to different minutes, so the moves series and the per-day
     counts of long/short/flat minutes are invariant while the ALIGNMENT between regime and

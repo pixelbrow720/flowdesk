@@ -42,7 +42,7 @@ HEAD `1131d9b`. Engine 172 pass, API 78 pass, harness 17 pass, contracts tsc+val
 | 2 | **SVI / expected-move** wiring (gap #5 remainder) | heavy | ✅ DONE (commit pending) |
 | 3 | **OI-aware wall-validation** pass in harness (gap #1 remainder) | heavy | ✅ DONE (commit pending) |
 | 4 | Synthetic-OI **#6 size-tiered** (needs per-trade-tape refactor) | heavy | ✅ DONE (commit pending) |
-| 5 | Synthetic-OI **#5 decay-weighted** (needs HiroTrade.ts + #6 refactor) | heavy | ✅ DONE (commit pending) |
+| 5 | Synthetic-OI **#5 decay-weighted** (needs FluxTrade.ts + #6 refactor) | heavy | ✅ DONE (commit pending) |
 | 6 | **Baseline lint/type cleanup** (gap #6) | light | ✅ DONE (commit pending) |
 | D | **DDOI engine** — same-session, EXPERIMENTAL, alongside VOL-GEX (NOT cross-day; proven impossible on 0DTE) | heavy | ✅ DONE (commit pending) |
 | P | **Proprietary metrics** (Volatility Trigger / Hedge Wall / Risk Pivot etc.) — reverse-engineered, labelled approximation | heavy | ✅ DONE (commit pending) |
@@ -69,11 +69,11 @@ a611ac4 docs(08): mark live feed RESOLVED                      (P3 c5)
 c46cb20 feat(api,engine): refuse-by-default rail FEED_MODE     (P3 c3)
 37e7a03 feat(engine): LiveAdapter arming gate + breaker        (P3 c2)
 dca4e9f docs(architecture): LiveAdapter threat model + rail    (P3 c1)
-bf185cf docs(08): mark HIRO unification RESOLVED               (P2 c5)
-8097228 test(api): HIRO worker<->generator parity              (P2 c4)
-4b97756 feat(api): wire persistent HiroState in MinuteWorker   (P2 c3)
-445e019 feat(engine): HiroState.to_dict/from_dict              (P2 c2)
-604bad5 docs(architecture): HIRO unification design            (P2 c1)
+bf185cf docs(08): mark FLUX unification RESOLVED               (P2 c5)
+8097228 test(api): FLUX worker<->generator parity              (P2 c4)
+4b97756 feat(api): wire persistent FluxState in MinuteWorker   (P2 c3)
+445e019 feat(engine): FluxState.to_dict/from_dict              (P2 c2)
+604bad5 docs(architecture): FLUX unification design            (P2 c1)
 04c29dd feat(api): rate-limit /me/recheck, OAuth, WS           (P1 i2)
 7ef0abc feat(api,engine): CORS validation + Snapshot finite    (P1 i1+i4)
 ```
@@ -86,8 +86,8 @@ bf185cf docs(08): mark HIRO unification RESOLVED               (P2 c5)
 - Snapshot finiteness: pydantic ingress + zod egress validators reject
   NaN/Inf at both boundaries.
 
-**Phase 2 — HIRO unification (5 commits, RESOLVED):**
-- `engine/hiro.py` `HiroState.to_dict`/`from_dict` round-trip (12 unit
+**Phase 2 — FLUX unification (5 commits, RESOLVED):**
+- `engine/flux.py` `FluxState.to_dict`/`from_dict` round-trip (12 unit
   tests).
 - `api/worker.py` `MinuteWorker` holds persistent state per-instrument,
   feeds only the NEW suffix at each minute's `F_t`. Two-tier Redis
@@ -123,7 +123,7 @@ bf185cf docs(08): mark HIRO unification RESOLVED               (P2 c5)
   verification, the live-feed arm procedure (does not apply in beta),
   rollback, retention, and incident triage.
 
-**Test status:** engine **415 passed** (was 401 at HIRO start, +14 from
+**Test status:** engine **415 passed** (was 401 at FLUX start, +14 from
 Phases 2+3 new tests). api **116 passed**. `schema_version=1` and the
 mirror trio untouched throughout.
 
@@ -158,8 +158,8 @@ authoritative).
 Built the predictive synthetic-OI eval that the prior checkpoint had relayed as a
 PENDING USER DECISION (UNBUILT, runnable look-ahead-free, underpowered). It scores
 synthetic-OI as a **VOLATILITY-REGIME** predictor — explicitly **NOT directional**
-(the advisor's standing constraint; the HIRO directional kernel was deliberately NOT
-reused, since a flow-only directional arm would ~duplicate the already-null HIRO eval).
+(the advisor's standing constraint; the FLUX directional kernel was deliberately NOT
+reused, since a flow-only directional arm would ~duplicate the already-null FLUX eval).
 **This validated NOTHING** — it is an honest UNDERPOWERED UNDETERMINED with a correct,
 leak-free, reusable harness. UNDETERMINED stays UNDETERMINED.
 
@@ -222,7 +222,7 @@ price-validated.
 `docs/08-status-and-gaps.md` (gap #2 synthetic-OI: predictive-eval BUILT UPDATE — gap is
 now POWER not method), this checkpoint. **NO non-markdown touched.**
 
-**NEXT — mega deep review.** All planned synthetic-OI / HIRO / DDOI / VT evals are now
+**NEXT — mega deep review.** All planned synthetic-OI / FLUX / DDOI / VT evals are now
 built or closed; the next step is a mega deep review across the whole experimental-lens
 research tree. Nothing validated; only the dropped ~90-day forward run validates any lens.
 
@@ -251,7 +251,7 @@ is WRONG. Corrected facts:
   — that is the *whole reason* synthetic-OI exists (reconstructs intraday positioning
   from real-time signed FLOW + an OI anchor). Designed to work without real-time OI.
 - **FACT:** synthetic-OI's method is **t-causal** — `Q = anchor_OI +
-  cumulative_signed_flow(≤t)` (`synthetic_oi.py:139-141`); same ≤t flow the HIRO eval used.
+  cumulative_signed_flow(≤t)` (`synthetic_oi.py:139-141`); same ≤t flow the FLUX eval used.
 - **FACT:** a clean, non-zero, t-causal **OI ANCHOR exists on disk** — prior session's
   settle OI carried as `stat_type 9` with `ts_ref = D-1` inside each day-D file,
   observable **pre-open** (~02:00 UTC, before the 13:30 UTC open), non-zero for the day's
@@ -269,7 +269,7 @@ is WRONG. Corrected facts:
   predictor (net-GEX sign → dealer gamma posture: long-gamma=vol-suppress/mean-revert vs
   short-gamma=amplify/trend; gamma-flip = where it flips), **NOT directional**. A proper
   predictive eval must score a vol/mean-reversion outcome, NOT `sign(return)`; a flow-only
-  synthetic arm ~duplicates the already-null HIRO eval — the new content is the
+  synthetic arm ~duplicates the already-null FLUX eval — the new content is the
   **prior-OI-anchored regime predictor**.
 
 **VERIFIED:** #6 tiered result + 81 harness tests passing (code `23fdbfa`); the four
@@ -286,7 +286,7 @@ touched.**
 
 **NEXT — PENDING USER DECISION (nothing predictive built this turn; the orchestrator
 deliberately did NOT over-action — relayed as a choice):** build a **t-causal predictive
-synthetic-OI eval** (prior-OI-anchored, **regime kernel** — NOT the HIRO directional
+synthetic-OI eval** (prior-OI-anchored, **regime kernel** — NOT the FLUX directional
 kernel), which will be **UNDETERMINED at n=4** by the hard cap, **OR** stop at
 documentation and gather more data first.
 
@@ -341,9 +341,9 @@ irrelevant here.) VT investigation CLOSED — data-backed NOT-VALIDATED negative
 `oi_gamma_flip` section — added the distinctness-gate UPDATE), this checkpoint. **NO
 non-markdown touched.**
 
-**NEXT:** the three agreed steps (HIRO predictive eval, synthetic-OI #4 flow-term eval,
+**NEXT:** the three agreed steps (FLUX predictive eval, synthetic-OI #4 flow-term eval,
 VT gamma-concentration) are now ALL DONE/closed. Remaining OPEN items are the DEFERRED
-backend chores — the live-worker HIRO accumulation unify (Gap #4) and synthetic-OI
+backend chores — the live-worker FLUX accumulation unify (Gap #4) and synthetic-OI
 #5/#6/#7 evals + FE-wiring (couples to Gap #4) — which are separate and AWAIT USER
 DIRECTION. Nothing here was built; nothing was validated.
 
@@ -362,7 +362,7 @@ off the confounded "synthetic vs VOL" (which mixes the LOCKED OI-vs-VOL basis de
 **`gex` (w=1) vs `gex_static` (w=0)** → coder built → **test-author** anchored the new
 sign-free aggregator → **red-team** caught a single-day-artefact "NQ YES" + a missing
 sign-consistency gate → coder sign-gate fix → **74 tests pass** (16 provenance + 20
-metrics + 14 divergence + 8 hiro_eval + 16 synthetic_oi_eval).
+metrics + 14 divergence + 8 flux_eval + 16 synthetic_oi_eval).
 
 **Built (NOT touched by doc-scribe — built this session by the coder):**
 - `analysis/harness/synthetic_oi_eval.py` (pure core) + `run_synthetic_oi_eval.py`
@@ -393,7 +393,7 @@ metrics + 14 divergence + 8 hiro_eval + 16 synthetic_oi_eval).
 gate**, so the NQ magnitude-mean (dominated by one thin-profile day) read "YES
 (exploratory)". The red-team caught it; fixed by adding the per-day sign tally +
 single-day-domination check (`run_synthetic_oi_eval.py:115-151`, `455-473`) — the
-**same defect CLASS** as the earlier HIRO ES+NQ-pooling defect. Structural lesson: a
+**same defect CLASS** as the earlier FLUX ES+NQ-pooling defect. Structural lesson: a
 magnitude-mean dominated by one high-variance thin-profile day must never override a
 coin-flip per-day sign.
 
@@ -414,9 +414,9 @@ whether a τ-concentration "faithful VT" is buildable, vs the relabeled OI-basis
 `oi_gamma_flip` already shipped (gap #2 proprietary notes). Plus the DEFERRED #5/#6/#7
 follow-ups + synthetic-OI FE-wiring (couples to Gap #4).
 
-### 2026-06-14 — HIRO t→t+k PREDICTIVE eval built (controlled, look-ahead-free) — exploratory NULL / underpowered-hint, validated NOTHING
-The first *predictive* eval of any FlowDesk lens. HIRO earns it (DDOI did not):
-HIRO is strictly t-causal (`Σ_{trades≤t} sign·δ·size·M·F`), so a `delta_hiro_t →
+### 2026-06-14 — FLUX t→t+k PREDICTIVE eval built (controlled, look-ahead-free) — exploratory NULL / underpowered-hint, validated NOTHING
+The first *predictive* eval of any FlowDesk lens. FLUX earns it (DDOI did not):
+FLUX is strictly t-causal (`Σ_{trades≤t} sign·δ·size·M·F`), so a `delta_hiro_t →
 sign(F_{t+k}−F_t)` test is **legitimately look-ahead-free** (predictor uses `≤t`,
 outcome `>t`) — unlike DDOI, whose whole-day-normalized `Σw=0` weight is look-ahead-
 contaminated per-minute. **This validated NOTHING** — it is an honest exploratory
@@ -425,10 +425,10 @@ could validate.
 
 **Built (markdown-adjacent code, NOT touched by doc-scribe — built earlier this
 session by the coder):**
-- `analysis/harness/hiro_eval.py` (pure core) + `run_hiro_eval.py` (dbn runner,
+- `analysis/harness/flux_eval.py` (pure core) + `run_hiro_eval.py` (dbn runner,
   through the fail-closed tenor-provenance guard) + `test_hiro_eval.py` (8 tests).
   Full harness suite = **58 tests pass** (16 provenance + 20 metrics + 14 divergence
-  + 8 hiro_eval).
+  + 8 flux_eval).
 - THE CONTROL GAP IS THE HEADLINE, never the raw hit-rate: `real − mean(shuffled-
   aggressor-sign)` + signed-volume / contemporaneous / persistence controls. Verdict
   line DERIVED from computed gaps, never hardcoded.
@@ -458,22 +458,22 @@ three-state classifier; "underpowered" NEVER collapsed into "null") → 58 tests
 NQ coverage-underpowered; only k∈{5,15,30}min tested (sub-minute / >30min unmeasured).
 
 **DEFERRED / NOT validated:** the ~90-day forward run was **dropped by the user** ⇒
-the ES k=5 hint stays a flag, not a finding. The **live-worker HIRO accumulation fix
+the ES k=5 hint stays a flag, not a finding. The **live-worker FLUX accumulation fix
 remains DEFERRED** (separate backend chore; this eval runs on the offline/generator-
 correct path, not the worker). Nothing was price-validated.
 
-**Docs changed (markdown only):** `docs/research/empirical/hiro-predictive-eval.md`
+**Docs changed (markdown only):** `docs/research/empirical/flux-predictive-eval.md`
 (NEW), `docs/08-status-and-gaps.md` gap #4 (predictive-eval UPDATE), this checkpoint.
 **NO non-markdown touched.**
 
 **NEXT:** synthetic-OI eval (same controlled pattern — pure core + dbn runner +
 positive-control + shuffle/contemporaneous controls + three-state per-instrument
-verdict); the DEFERRED live-worker HIRO fix + synthetic-OI FE-wiring chores (both
+verdict); the DEFERRED live-worker FLUX fix + synthetic-OI FE-wiring chores (both
 couple to the not-yet-built Gap #4 dashboard).
 
-### 2026-06-14 — Audit follow-ups: surface honesty fix DONE; #4 residual RESOLVED; HIRO #2 + synthetic-OI #3 DEFERRED (advisor-revised plan)
+### 2026-06-14 — Audit follow-ups: surface honesty fix DONE; #4 residual RESOLVED; FLUX #2 + synthetic-OI #3 DEFERRED (advisor-revised plan)
 Resolution of the 4 open follow-ups from the prior audit checkpoint. **the-advisor's
-SECOND gate run materially revised the plan** — it showed the naive HIRO
+SECOND gate run materially revised the plan** — it showed the naive FLUX
 "make-persistent" fix would trade a cosmetic parity bug for a restart-correctness
 bug, and that follow-up #4 was already answerable from the code — so the orchestrator
 REVERSED course: deferred #2 rather than rushing a live-worker rewrite for a
@@ -490,43 +490,43 @@ but validated NOTHING — only the ~90-day forward run validates any lens.**
    no committed fixture carried `arb_free` => zero regen / zero data pull).
    contract-guardian: **MIRROR CONSISTENT** (10/10 Surface fields). engine 199 pass,
    tsc + validate clean.
-2. **HIRO worker/generator divergence — DEFERRED with design direction.** FACT +
+2. **FLUX worker/generator divergence — DEFERRED with design direction.** FACT +
    the-advisor: NOT an accumulation-method bug — both paths accumulate the same trade
    set `[open, ts]`. The real gap is the FORWARD per trade: the live worker
    (`worker.py:264`) re-prices the whole day's tape at the single current-minute
    forward `F_t`; the generator (`gen_session_snapshots.py:75-112`) freezes each
-   trade's increment at its arrival-minute forward via a persistent `HiroState`
-   (the economically-correct semantics). DEFER: HIRO's only consumer is the FE render
+   trade's increment at its arrival-minute forward via a persistent `FluxState`
+   (the economically-correct semantics). DEFER: FLUX's only consumer is the FE render
    (Gap #4, not being built now); and the naive fix would trade the parity bug for a
    RESTART-correctness bug — the current stateless rebuild-from-`[open, ts]` is
-   restart/gap/STALE-safe (`worker.py:203-208`), a persistent `HiroState` is not
+   restart/gap/STALE-safe (`worker.py:203-208`), a persistent `FluxState` is not
    without explicit reset/recovery/gap handling. DESIGN DIRECTION recorded: keep the
-   accumulator in the api-layer worker (NEVER push `HiroState` into `build_snapshot`
+   accumulator in the api-layer worker (NEVER push `FluxState` into `build_snapshot`
    — engine purity locked); feed only NEW trades at each minute's forward; design
    reset/restart/gap explicitly; lock both-paths-equal with an independent test;
-   grep golden + worker tests for pinned HIRO values first.
+   grep golden + worker tests for pinned FLUX values first.
 3. **synthetic-OI absent from FE JSON — DEFERRED.** FACT: #4/#5/#6/#7 are wired in
    the live worker (`worker.py:394-397`) but NOT in `gen_session_snapshots.py`
-   (`:113-118` passes only `ohlc`/`hiro`), so they are absent from committed FE
+   (`:113-118` passes only `ohlc`/`flux`), so they are absent from committed FE
    session JSON. SAME worker/generator parity class as #2. DEFER: couples to the Gap
    #4 dashboard decision — no point generating data the FE does not render. When Gap
    #4 is built, wire the generator to pass `net_flow`/`net_flow_tiered`/
    `net_flow_decay` for whichever lenses the dashboard shows.
 4. **`_fetch_signed_trades` window — RESOLVED.** FACT: the window IS
    cumulative-since-RTH-open, NOT per-minute. `_fetch_signed_trades` ->
-   `feed.get_hiro_trades`; `historical.py:229-260` window = `[rth_open, ts+1min)`
+   `feed.get_flux_trades`; `historical.py:229-260` window = `[rth_open, ts+1min)`
    with filter `if event < rth_open or event >= end: continue`, docstring "over the
-   RTH window `[open, ts]`". So the #5 decay-age math and HIRO accumulation rest on
+   RTH window `[open, ts]`". So the #5 decay-age math and FLUX accumulation rest on
    the documented cumulative-since-open basis. Residual closed (confirmed, not a bug).
 
 **VERIFIED this session:** surface rename (commit `d4f24e8`, code grep +
 contract-guardian CONSISTENT); follow-up #4 (read-only, `historical.py:229-260`);
 the-advisor read-only gate + coder + contract-guardian. **DEFERRED / NOT validated:**
-HIRO #2 + synthetic-OI #3 (both couple to the not-yet-built Gap #4 FE); nothing was
+FLUX #2 + synthetic-OI #3 (both couple to the not-yet-built Gap #4 FE); nothing was
 price-validated — only the ~90-day forward run (Gap #1) validates any lens.
 
 **Docs changed (markdown only):** `docs/08-status-and-gaps.md` (gap #2 residual
-RESOLVED + synthetic-OI FE-wiring DEFERRED; gap #4 HIRO DEFERRED-with-design-direction;
+RESOLVED + synthetic-OI FE-wiring DEFERRED; gap #4 FLUX DEFERRED-with-design-direction;
 gap #5 surface `variance_nonneg` DONE), this checkpoint. **NO non-markdown touched.**
 
 **NEXT:** await user decision on Gap #1 forward-run / Gap #4 frontend.
@@ -542,7 +542,7 @@ found defects to FIX but validated NOTHING — only the ~90-day forward run vali
 - Caught a **PHANTOM `schema_version` HOLD** on the `volatility_trigger -> oi_gamma_flip`
   rename: it is a key-string change with no wire/shape change, so it is non-breaking
   and `schema_version` stays **1**. (contract-guardian: **CONSISTENT**.)
-- Caught **HIRO missing from the audit scope** — added it; HIRO then surfaced a real
+- Caught **FLUX missing from the audit scope** — added it; FLUX then surfaced a real
   DOWNGRADE (below).
 - Moved `total_hedging` into the synthetic-OI group (it is #7 on the Q base, not a
   standalone lens).
@@ -575,18 +575,18 @@ found defects to FIX but validated NOTHING — only the ~90-day forward run vali
    DOES NOT EXIST. So a steep `b·(1+|ρ|)` slice can pass `arb_free=True` yet carry
    butterfly arb. FIX (record, do not perform): implement Durrleman `g(k)>=0`, OR
    rename to `variance_nonneg` + downgrade the wording.
-4. **hiro.py — DOWNGRADE (consistency defect, NOT look-ahead).** Dimensionally sound
+4. **flux.py — DOWNGRADE (consistency defect, NOT look-ahead).** Dimensionally sound
    (greek-weighted dealer delta-notional USD, `×M×F`). Aggressor sign `B/A/N->+1/-1/0`
    correct, no double-sign. **Strictly t-causal** — window `[rth_open, ts+60s)`, real
    daily reset, per-trade ts threaded; NO look-ahead. THE DOWNGRADE: the live worker
    (`worker.py:264`) RE-PRICES the whole day's tape at the single current forward
-   `F_t` every minute -> cumulative HIRO drifts on zero-trade minutes and DIVERGES
+   `F_t` every minute -> cumulative FLUX drifts on zero-trade minutes and DIVERGES
    from the offline generator (`gen_session_snapshots.py:75-112`), which FREEZES each
-   trade's increment at its arrival-minute forward via a persistent `HiroState`.
-   Worker and generator render DIFFERENT HIRO lines for the same session. FIX (record,
-   do not perform): unify accumulation — worker should use a persistent `HiroState`
+   trade's increment at its arrival-minute forward via a persistent `FluxState`.
+   Worker and generator render DIFFERENT FLUX lines for the same session. FIX (record,
+   do not perform): unify accumulation — worker should use a persistent `FluxState`
    fed only NEW trades at each trade's arrival forward. **Must fix before the FE
-   renders HIRO.**
+   renders FLUX.**
 
 **The rename (committed):** `volatility_trigger -> oi_gamma_flip` is commit
 **`e022fd7`** — honestly names the method (a gamma flip on the OI basis, NOT
@@ -602,14 +602,14 @@ validates any lens. The audit's job was correctness/consistency, not edge.
 **OPEN FOLLOW-UPS (need a HUMAN decision):**
 - **surface `arb_free`** — implement Durrleman `g(k)>=0` OR rename to
   `variance_nonneg` + downgrade docstring/schema. (Markdown-only here; no code change.)
-- **HIRO accumulation** — unify worker to a persistent `HiroState` so worker == generator;
-  prerequisite before the FE renders HIRO.
+- **FLUX accumulation** — unify worker to a persistent `FluxState` so worker == generator;
+  prerequisite before the FE renders FLUX.
 - **synthetic-OI FE wiring** — `gen_session_snapshots.py` passes no `net_flow*`, so the
   family is absent from committed FE sessions; decide whether to wire it.
 - **`_fetch_signed_trades` window** — confirm cumulative-since-RTH-open vs per-minute.
 
 **Docs changed (markdown only):** `docs/08-status-and-gaps.md` (gap #2 synthetic-OI
-live-only + rename note; gap #4 HIRO divergence DOWNGRADE; gap #5 VEX/CHEX caveat +
+live-only + rename note; gap #4 FLUX divergence DOWNGRADE; gap #5 VEX/CHEX caveat +
 surface `arb_free` DOWNGRADE), this checkpoint. **NO non-markdown touched.**
 
 **NEXT:** await user decision on the 4 open follow-ups above + Gap #1 forward-run.
@@ -841,7 +841,7 @@ all 8 built points (NOT a rebuild):
   template to a per-leg synthetic-ΔOI basis instead of VOL. Non-circular, orthogonal
   to VOL. Skips thin strikes. Reuses analysis/ddoi.py's validated open/close heuristic.
 - worker.py: `_net_flow_ddoi_for(trades)` groups per leg, sorts chronologically (uses
-  the point-5 HiroTrade.ts), sums `ddoi_time_weight·|size|` (direction-agnostic).
+  the point-5 FluxTrade.ts), sums `ddoi_time_weight·|size|` (direction-agnostic).
   Passed as new `net_flow_ddoi` param.
 - snapshot.py: `net_flow_ddoi` -> build_ddoi -> new field `ddoi`. NEW Ddoi model
   {gex, sign} (not a SyntheticOi reuse — different shape). schema_version stays 1.
@@ -876,8 +876,8 @@ all 8 built points (NOT a rebuild):
 ### 2026-06-13 — Point 5 DONE: synthetic-OI #5 decay-weighted
 - `engine/synthetic_oi.py`: added `decay_weight(age_minutes)` = exp(-ln2*age/half_life)
   + `DEFAULT_HALF_LIFE_MIN=30` (UNVALIDATED). half_life<=0 disables -> reduces to #4.
-- `engine/hiro.py`: `HiroTrade` gains optional `ts: datetime|None` (HIRO unaffected).
-- `feed/historical.py`: `get_hiro_trades` now passes `ts=event` (the timestamp was
+- `engine/flux.py`: `FluxTrade` gains optional `ts: datetime|None` (FLUX unaffected).
+- `feed/historical.py`: `get_flux_trades` now passes `ts=event` (the timestamp was
   already paired at line 264, just dropped at the return — now carried through).
 - `worker.py`: `_net_flow_decay_for(trades, ts_utc)` weights each trade by
   decay_weight(age at the snapshot eval time) BEFORE summing; trades w/o ts skipped.
@@ -908,10 +908,10 @@ all 8 built points (NOT a rebuild):
 - tests: 3 new tier_weight tests in test_synthetic_oi.py; _SNAPSHOT_KEYS + zod-compat
   block updated. NOTE the per-trade tiering lives in the WORKER (the engine still
   takes a summed map), so #5 (decay) will need the SAME worker-side per-trade pattern
-  + a trade timestamp on HiroTrade (currently absent) + an eval time.
+  + a trade timestamp on FluxTrade (currently absent) + an eval time.
 - VERIFIED: engine 183 pass, api 78 pass, contracts tsc exit 0 + validate ok.
 - docs: 04-engine.md, roadmap header (#6+#7 BUILT), CONTRACT.md, PROGRESS.md.
-- Next: Point 5 (synthetic-OI #5 decay-weighted) — needs HiroTrade timestamp.
+- Next: Point 5 (synthetic-OI #5 decay-weighted) — needs FluxTrade timestamp.
 
 ### 2026-06-13 — Point 3 DONE: cross-day OI-wall validation in harness
 - `analysis/harness/metrics.py`: added pure `oi_walls` (top-N raw-OI call/put walls

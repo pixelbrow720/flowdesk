@@ -1,14 +1,14 @@
-"""HIRO t->t+k PREDICTIVE evaluation — PURE core (stdlib + locked engine pricing).
+"""FLUX t->t+k PREDICTIVE evaluation — PURE core (stdlib + locked engine pricing).
 
-This is the *provable* half of a CONTROLLED look-ahead-free predictive test of HIRO
+This is the *provable* half of a CONTROLLED look-ahead-free predictive test of FLUX
 on 0DTE option flow (the data-loading half is the sibling runner ``run_hiro_eval.py``).
 It mirrors the ``ddoi_divergence.py`` (pure) + ``run_ddoi_divergence.py`` (runner)
 pattern exactly: every function here is deterministic, does NO file IO, and reuses the
-locked engine pricing core (``engine.hiro``) rather than re-deriving any greek math.
+locked engine pricing core (``engine.flux``) rather than re-deriving any greek math.
 
-Why a HIRO t->t+k test is LEGITIMATELY look-ahead-free
+Why a FLUX t->t+k test is LEGITIMATELY look-ahead-free
 ======================================================
-HIRO is, by construction, strictly *t-causal*:
+FLUX is, by construction, strictly *t-causal*:
 
     HIRO_t = Σ_{trade k <= t}  sign(aggressor_k) · δ_k · size_k · M · F_k
 
@@ -20,7 +20,7 @@ predictor built from information available by the close of minute ``t`` and an o
 realized strictly later (minute ``t+k``). There is no leakage by construction — the
 split is asserted in :func:`lead_lag_sign_agreement` (predictor uses ``<= t``, outcome
 uses ``> t``). Contrast DDOI, whose ``Σw=0`` whole-day time weight is look-ahead-
-contaminated per-minute; HIRO has no such normalization.
+contaminated per-minute; FLUX has no such normalization.
 
 Why a RAW hit-rate is meaningless (the controls are the headline)
 -----------------------------------------------------------------
@@ -28,12 +28,12 @@ A coin-flip predictor scores ~0.5; momentum/persistence alone can push a naive h
 well above 0.5 on trending 0DTE sessions with NO information in the predictor. So the
 INFORMATIVE quantities are the GAPS against controls, NOT the raw real hit-rate:
 
-  * SHUFFLED-sign HIRO — same sizes/greeks/timing, aggressor signs permuted (directional
+  * SHUFFLED-sign FLUX — same sizes/greeks/timing, aggressor signs permuted (directional
     content destroyed). ``real − mean(shuffle)`` is the directional edge over a predictor
-    that has HIRO's magnitude structure but no real direction.
+    that has FLUX's magnitude structure but no real direction.
   * SIGNED-VOLUME (no greek) — Σ sign·size; isolates whether the greek (δ) weighting adds
     anything over plain signed order flow.
-  * CONTEMPORANEOUS arm — ``delta_hiro_t`` vs the PAST return ``F_t − F_{t−k}``; if HIRO
+  * CONTEMPORANEOUS arm — ``delta_hiro_t`` vs the PAST return ``F_t − F_{t−k}``; if FLUX
     merely *reflects* the move that already happened, this scores high while the
     predictive arm does not. ``predictive − contemporaneous`` isolates lead from lag.
   * PERSISTENCE floor — ``sign(F_t − F_{t−k})`` vs ``sign(F_{t+k} − F_t)``; the pure
@@ -64,8 +64,8 @@ _ENGINE_SRC = os.path.abspath(
 if _ENGINE_SRC not in sys.path:
     sys.path.insert(0, _ENGINE_SRC)
 
-from engine.hiro import (  # noqa: E402  (locked aggressor sign + per-trade greek notional)
-    HiroTrade,
+from engine.flux import (  # noqa: E402  (locked aggressor sign + per-trade greek notional)
+    FluxTrade,
     aggressor_sign,
     signed_delta_notional,
 )
@@ -92,18 +92,18 @@ class EvalTrade:
     """One option trade tagged with its RTH MINUTE INDEX (the look-ahead-free clock).
 
     ``minute`` is the 0-based RTH minute the trade printed in (minute 0 == the bar
-    [09:30, 09:31) ET). ``trade`` is the locked-engine :class:`engine.hiro.HiroTrade`
+    [09:30, 09:31) ET). ``trade`` is the locked-engine :class:`engine.flux.FluxTrade`
     carrying ``strike``/``is_call``/``price``/``size``/``side``/``t_expiry`` — i.e. the
-    pricing core consumes it directly via :func:`engine.hiro.signed_delta_notional`,
+    pricing core consumes it directly via :func:`engine.flux.signed_delta_notional`,
     no greek re-implementation here.
     """
 
     minute: int
-    trade: HiroTrade
+    trade: FluxTrade
 
 
 # --------------------------------------------------------------------------- #
-# 1. Per-minute incremental HIRO (the t-causal predictor)
+# 1. Per-minute incremental FLUX (the t-causal predictor)
 # --------------------------------------------------------------------------- #
 def per_minute_hiro(
     eval_trades: Sequence[EvalTrade],
@@ -111,7 +111,7 @@ def per_minute_hiro(
     M: float,
     rate: float,
 ) -> dict:
-    """Per-minute cumulative HIRO and its per-minute increment, built INCREMENTALLY.
+    """Per-minute cumulative FLUX and its per-minute increment, built INCREMENTALLY.
 
     LOOK-AHEAD-FREE CONTRACT (load-bearing): a trade that printed in minute ``m``
     contributes ONLY to minute ``m``'s increment and, cumulatively, to every minute
@@ -121,7 +121,7 @@ def per_minute_hiro(
     the trade), so the increment ``delta[m]`` is fully determined by information
     available at the end of minute ``m``. No future forward ever enters ``delta[m]``.
 
-    HIRO is an additive sum, so the within-minute trade order does not change either the
+    FLUX is an additive sum, so the within-minute trade order does not change either the
     end-of-minute cumulative value or the per-minute increment (commutative).
 
     Parameters
@@ -131,7 +131,7 @@ def per_minute_hiro(
     minute_forwards  : per-minute forward grid (``None`` where no clean forward exists);
                        its length defines the number of RTH minutes ``n``.
     M, rate          : instrument multiplier and continuous rate, passed straight to
-                       :func:`engine.hiro.signed_delta_notional` (no hardcoding).
+                       :func:`engine.flux.signed_delta_notional` (no hardcoding).
 
     Returns a dict:
       * ``cumulative`` — ``HIRO_t`` (delta-notional, USD) at the END of each minute.
@@ -200,14 +200,14 @@ def signed_volume_series(
     """Per-minute signed order-flow controls that use NO greek (the δ-free baseline).
 
     Two predictors, both built minute-causally (a trade contributes only to its own
-    minute's increment), reusing the locked :func:`engine.hiro.aggressor_sign`:
+    minute's increment), reusing the locked :func:`engine.flux.aggressor_sign`:
 
       * ``signed_vol``    = Σ sign(aggressor)·size       — plain signed order flow. Its
-        per-minute delta isolates whether the Black-76 δ weighting in HIRO adds anything
+        per-minute delta isolates whether the Black-76 δ weighting in FLUX adds anything
         over raw signed volume.
       * ``sign_dir_vol``  = Σ sign(aggressor)·size·dir   — where ``dir = +1`` for a call,
         ``−1`` for a put. A cheap directional proxy (buying calls is bullish, buying puts
-        bearish) that mimics the SIGN of HIRO's δ weighting without its magnitude.
+        bearish) that mimics the SIGN of FLUX's δ weighting without its magnitude.
 
     Returns a dict with the per-minute cumulative and delta arrays for both predictors:
     ``cum_signed_vol`` / ``delta_signed_vol`` and ``cum_sign_dir_vol`` /
@@ -322,7 +322,7 @@ def contemporaneous_sign_agreement(
     """CONTEMPORANEOUS (lag) arm: ``sign(predictor_delta_t)`` vs the PAST return.
 
     Scores the predictor at minute ``t`` against ``sign(F_t − F_{t−k})`` — the move that
-    ALREADY happened. This is deliberately NOT predictive: if HIRO merely *reflects* the
+    ALREADY happened. This is deliberately NOT predictive: if FLUX merely *reflects* the
     realized move (dealers hedging after the fact), this arm scores high while the
     forward-looking :func:`lead_lag_sign_agreement` does not. ``predictive −
     contemporaneous`` therefore isolates genuine lead from mechanical lag.
@@ -341,7 +341,7 @@ def shuffle_signs(eval_trades: Sequence[EvalTrade], seed: int) -> List[EvalTrade
     multiset of aggressor signs over the day is PRESERVED but reassigned to different
     trades, so every trade keeps its own ``size``/greek inputs (``strike``/``is_call``/
     ``price``/``t_expiry``) and its ``minute`` — only the DIRECTION is randomized. This
-    destroys the alignment between flow direction and the option's δ while leaving HIRO's
+    destroys the alignment between flow direction and the option's δ while leaving FLUX's
     magnitude structure intact, so ``real − mean(shuffle)`` measures the directional edge
     specifically. Signs are re-encoded back to CME side codes (``+1->"B"``, ``−1->"A"``,
     ``0->"N"``) so the shuffled trades feed the SAME locked pricing path unchanged.

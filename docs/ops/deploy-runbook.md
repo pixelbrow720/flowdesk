@@ -160,8 +160,8 @@ arrived, abnormal subscription pattern reported by Databento):
 
 - Snapshots: TimescaleDB hypertable, 90-day retention via compression
   policy (per PRD #8 §11).
-- HiroState: Redis snapshot per tick, TTL 5400s
-  (`flowdesk:hiro:{instrument}`). Loss → graceful Tier-2 fresh
+- FluxState: Redis snapshot per tick, TTL 5400s
+  (`flowdesk:flux:{instrument}`). Loss → graceful Tier-2 fresh
   accumulator on the next tick.
 - Session cookies: HMAC-signed, 7d TTL, no server-side store needed.
 - Cached Databento exports (`DATA_DIR=/data/raw`): regenerable via
@@ -172,7 +172,7 @@ arrived, abnormal subscription pattern reported by Databento):
 
 | Symptom | First thing to check |
 |---------|----------------------|
-| Users see `state="STALE"` for >2 min | check worker pod logs for HIRO restore errors or feed gap WARNING |
+| Users see `state="STALE"` for >2 min | check worker pod logs for FLUX restore errors or feed gap WARNING |
 | `/api/me` 401 storm | Discord OAuth app settings; `DISCORD_CLIENT_SECRET` rotated? |
 | WS close 4429 storm | rate-limit Redis health; `RATE_LIMIT_*` env tuned too tight? |
 | Snapshot reject (zod boundary) | check egress for unexpected NaN/Inf — signals an engine bug, not an ops issue |

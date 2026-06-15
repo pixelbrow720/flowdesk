@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "instrument": "ES",
   "session_date": "2026-06-10",
   "ts": "2026-06-10T13:31:00Z",
@@ -26,7 +26,7 @@
     { "strike": 5005, "net_gex": 210000000.0, "net_dex": 18000000.0, "interpolated": true },
     { "strike": 5010, "net_gex": -330000000.0, "net_dex": 9000000.0, "interpolated": false }
   ],
-  "field": {
+  "fog": {
     "price_grid": [4990, 4995, 5000, 5005, 5010],
     "gamma": [-21000000.0, -8000000.0, 33000000.0, 12000000.0, -19000000.0],
     "delta": [11000000.0, 10500000.0, 10000000.0, 9500000.0]

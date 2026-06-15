@@ -422,10 +422,10 @@ ACCEPTANCE: shell renders in dark+light; primitives match tokens exactly; mock s
 ```text
 [TEMPEL MASTER PREAMBLE DI SINI]
 
-TASK: Build the core WebGL heatmap component (apps/web) that renders snapshot.field as a TRACE-style gamma/delta field. This is the centerpiece — it must look like premium data-art, not a chart library default.
+TASK: Build the core WebGL heatmap component (apps/web) that renders snapshot.fog as a TRACE-style gamma/delta field. This is the centerpiece — it must look like premium data-art, not a chart library default.
 
 REQUIREMENTS:
-- Input: snapshot.field {price_grid[], gamma[], delta[]} + axis. X = intraday time, Y = price/strike, color = exposure magnitude/sign.
+- Input: snapshot.fog {price_grid[], gamma[], delta[]} + axis. X = intraday time, Y = price/strike, color = exposure magnitude/sign.
 - Color ramp from tokens: dark turquoise->black->crimson, light turquoise->white->crimson, interpolated in OKLab/LCH inside the shader (implement the conversion in GLSL; document it). Smooth (interpolated) rendering with an optional block toggle.
 - Use regl or raw WebGL2 (pin version). Upload field as a texture; fragment shader maps value->ramp. 60fps target; handle resize + devicePixelRatio.
 - Basis toggle Gamma/Delta switches which array is rendered.

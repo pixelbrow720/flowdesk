@@ -1,7 +1,7 @@
-"""HIRO — Hedging Impact of Real-time Options (FlowGreeks flow module).
+"""FLUX — Hedging Impact of Real-time Options (FlowGreeks flow module).
 
 Cumulative dealer **delta-notional** hedging flow, accumulated per trade since
-the RTH open (reset daily). Where TRACE/GEX is *stock* (positioning), HIRO is
+the RTH open (reset daily). Where TRACE/GEX is *stock* (positioning), FLUX is
 *flow* (what the dealer is being forced to do right now), so it leads.
 
 Core formula (mega-riset §B3)
@@ -19,7 +19,7 @@ Core formula (mega-riset §B3)
 Sign reading (mega-riset §B5): a customer BUYING a call (``s=+1``, ``δ>0``) makes
 the term positive -> the dealer must BUY the underlying to stay hedged (upward
 hedging pressure). A customer buying a PUT (``s=+1``, ``δ<0``) makes it negative
--> the dealer SELLS the underlying. So positive cumulative HIRO == net dealer
+-> the dealer SELLS the underlying. So positive cumulative FLUX == net dealer
 buying pressure (bullish), negative == selling pressure (bearish).
 
 Breakdown (mega-riset §B8): Total, Calls, Puts, 0DTE (``T < 1/365``) and Retail.
@@ -29,10 +29,10 @@ and treat the retail line as indicative only (TODO: refine with block/multi-leg
 filters).
 
 This module is PURE and **isolated**: it does NOT touch the Snapshot contract
-(``schema_version`` 1) — output lives in :class:`HiroSnapshot` / :class:`HiroSeries`
+(``schema_version`` 1) — output lives in :class:`FluxSnapshot` / :class:`FluxSeries`
 until a schema decision is taken (Divergence #5). The delta is priced with the
 sibling :mod:`engine.black76` / :mod:`engine.iv` (IV solved from the trade price
-unless an explicit per-trade IV is supplied), so HIRO reuses the exact same
+unless an explicit per-trade IV is supplied), so FLUX reuses the exact same
 pricing core as the rest of the engine.
 
 Only the standard library + sibling ``engine`` modules are used.
@@ -53,12 +53,12 @@ __all__ = [
     "RETAIL_MAX_SIZE",
     "AggressorSide",
     "aggressor_sign",
-    "HiroTrade",
-    "HiroSnapshot",
-    "HiroSeries",
+    "FluxTrade",
+    "FluxSnapshot",
+    "FluxSeries",
     "signed_delta_notional",
-    "HiroState",
-    "hiro_series",
+    "FluxState",
+    "flux_series",
 ]
 
 #: Year-fraction below which a contract counts as 0DTE for the breakdown line
@@ -89,8 +89,8 @@ def aggressor_sign(side: str) -> int:
 
 
 @dataclass(frozen=True)
-class HiroTrade:
-    """One option trade off the tape (engine input for HIRO).
+class FluxTrade:
+    """One option trade off the tape (engine input for FLUX).
 
     ``t_expiry`` is the year-fraction to expiry at the trade; ``iv`` may be
     supplied (e.g. from the per-minute surface) to skip the per-trade IV solve.
@@ -105,12 +105,12 @@ class HiroTrade:
     iv: Optional[float] = None
     ts: Optional[datetime] = None
     """Trade timestamp (UTC). Optional; carried for time-decay-weighted lenses
-    (synthetic-OI #5). HIRO itself does not use it."""
+    (synthetic-OI #5). FLUX itself does not use it."""
 
 
 @dataclass(frozen=True)
-class HiroSnapshot:
-    """Cumulative HIRO at one instant (USD delta-notional), with breakdown."""
+class FluxSnapshot:
+    """Cumulative FLUX at one instant (USD delta-notional), with breakdown."""
 
     total: float
     calls: float
@@ -129,15 +129,15 @@ class HiroSnapshot:
 
 
 @dataclass(frozen=True)
-class HiroSeries:
-    """A HIRO run: the final cumulative state plus the per-trade cumulative path.
+class FluxSeries:
+    """A FLUX run: the final cumulative state plus the per-trade cumulative path.
 
     ``cumulative`` is the running ``total`` after each accepted trade (the line
     drawn on the chart); ``skipped`` counts trades whose delta could not be
     priced (IV unsolved) or that were neutral (``side == N``).
     """
 
-    final: HiroSnapshot
+    final: FluxSnapshot
     cumulative: List[float]
     skipped: int
 
@@ -150,7 +150,7 @@ class HiroSeries:
 
 
 def signed_delta_notional(
-    trade: HiroTrade,
+    trade: FluxTrade,
     F: float,
     M: float,
     rate: float,
@@ -174,8 +174,8 @@ def signed_delta_notional(
     return s * d * float(trade.size) * M * F
 
 
-class HiroState:
-    """Mutable accumulator for cumulative HIRO since the RTH open (reset daily).
+class FluxState:
+    """Mutable accumulator for cumulative FLUX since the RTH open (reset daily).
 
     Feed trades in chronological order via :meth:`add`; read the running totals
     via :meth:`snapshot`. ``F`` (forward) and ``rate`` are taken per-trade so the
@@ -192,7 +192,7 @@ class HiroState:
         self._retail = 0.0
         self.skipped = 0
 
-    def add(self, trade: HiroTrade, F: float, rate: float) -> Optional[float]:
+    def add(self, trade: FluxTrade, F: float, rate: float) -> Optional[float]:
         """Accumulate one trade; return its delta-notional increment (or None)."""
         dn = signed_delta_notional(trade, float(F), self._M, rate)
         if dn is None:
@@ -209,9 +209,9 @@ class HiroState:
             self._retail += dn
         return dn
 
-    def snapshot(self) -> HiroSnapshot:
-        """Current cumulative HIRO with the full breakdown."""
-        return HiroSnapshot(
+    def snapshot(self) -> FluxSnapshot:
+        """Current cumulative FLUX with the full breakdown."""
+        return FluxSnapshot(
             total=self._total,
             calls=self._calls,
             puts=self._puts,
@@ -240,13 +240,13 @@ class HiroState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, float]) -> "HiroState":
+    def from_dict(cls, data: dict[str, float]) -> "FluxState":
         """Reseed an accumulator from a :meth:`to_dict` payload.
 
-        Used by the api-layer worker to restore HIRO state after a pod restart
-        within the same RTH session (see ``docs/architecture/hiro-unification.md``
+        Used by the api-layer worker to restore FLUX state after a pod restart
+        within the same RTH session (see ``docs/architecture/flux-unification.md``
         §4.4 Tier 1). Missing/bad fields default to ``0.0`` / sentinel — callers
-        that detect a malformed payload should fall back to a fresh ``HiroState``.
+        that detect a malformed payload should fall back to a fresh ``FluxState``.
         """
         state = cls(
             M=float(data.get("M", 0.0)),
@@ -261,24 +261,24 @@ class HiroState:
         return state
 
 
-def hiro_series(
-    trades: Sequence[HiroTrade],
+def flux_series(
+    trades: Sequence[FluxTrade],
     F: float,
     M: float,
     rate: float,
     *,
     retail_max_size: float = RETAIL_MAX_SIZE,
-) -> HiroSeries:
-    """Accumulate HIRO over a (chronological) trade sequence at a single ``F``.
+) -> FluxSeries:
+    """Accumulate FLUX over a (chronological) trade sequence at a single ``F``.
 
-    Convenience wrapper around :class:`HiroState` for offline/demo use where one
+    Convenience wrapper around :class:`FluxState` for offline/demo use where one
     forward is representative for the window (e.g. one RTH minute). For full
-    fidelity (forward moving trade-to-trade) drive :class:`HiroState` directly,
-    passing the per-trade forward to :meth:`HiroState.add`.
+    fidelity (forward moving trade-to-trade) drive :class:`FluxState` directly,
+    passing the per-trade forward to :meth:`FluxState.add`.
     """
-    state = HiroState(M, retail_max_size=retail_max_size)
+    state = FluxState(M, retail_max_size=retail_max_size)
     cumulative: List[float] = []
     for tr in trades:
         state.add(tr, F, rate)
         cumulative.append(state.snapshot().total)
-    return HiroSeries(final=state.snapshot(), cumulative=cumulative, skipped=state.skipped)
+    return FluxSeries(final=state.snapshot(), cumulative=cumulative, skipped=state.skipped)

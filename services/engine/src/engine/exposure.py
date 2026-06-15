@@ -112,7 +112,7 @@ class ChainRow:
     multiplier: float | None = None
     forward: float | None = None
     # Per-leg IV + year-fraction, carried so the TRACE-style field projection
-    # (engine.field.build_field) can RE-EVALUATE Black-76 gamma/delta at each
+    # (engine.fog.build_fog) can RE-EVALUATE Black-76 gamma/delta at each
     # hypothetical spot. None when the leg is thin / IV unsolved -> contributes 0.
     call_iv: float | None = None
     put_iv: float | None = None

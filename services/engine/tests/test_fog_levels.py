@@ -1,4 +1,4 @@
-"""Unit tests for engine.field and engine.levels (PRD #12, T-05 & T-06).
+"""Unit tests for engine.fog and engine.levels (PRD #12, T-05 & T-06).
 
 T-05: gamma-flip zero-crossing interpolation correctness.
 T-06: Call/Put walls Top-3 above/below forward, exact vs a golden fixture.
@@ -12,11 +12,11 @@ from collections import namedtuple
 
 from engine.black76 import gamma as bs_gamma
 from engine.exposure import ChainRow
-from engine.field import (
+from engine.fog import (
     Axis,
     CLIP_PERCENTILE,
-    FieldArrays,
-    build_field,
+    FogArrays,
+    build_fog,
     normalize_signed,
     percentile_abs,
     price_grid_from_axis,
@@ -56,8 +56,8 @@ def _one_call_chain(strike=5000.0, iv=0.2, T=0.01, vol=1000.0):
 
 def test_field_invariants_default_grid() -> None:
     axis = Axis(4990.0, 5010.0, 5.0)
-    f = build_field(_one_call_chain(), axis, 5000.0, M_ES, RATE)
-    assert isinstance(f, FieldArrays)
+    f = build_fog(_one_call_chain(), axis, 5000.0, M_ES, RATE)
+    assert isinstance(f, FogArrays)
     assert f.price_grid == [4990.0, 4995.0, 5000.0, 5005.0, 5010.0]
     # contract: equal length, all finite
     assert len(f.price_grid) == len(f.gamma) == len(f.delta)
@@ -70,7 +70,7 @@ def test_field_reevaluates_bs_gamma_at_each_price() -> None:
     # the locked dealer sign (+ call) and notional scaling — not a profile sample.
     K, iv, T, vol = 5000.0, 0.2, 0.01, 1000.0
     axis = Axis(4990.0, 5010.0, 5.0)
-    f = build_field(_one_call_chain(K, iv, T, vol), axis, 5000.0, M_ES, RATE)
+    f = build_fog(_one_call_chain(K, iv, T, vol), axis, 5000.0, M_ES, RATE)
     for sy, g in zip(f.price_grid, f.gamma):
         expected = bs_gamma(sy, K, T, RATE, iv) * vol * M_ES * sy * sy * 0.01
         assert math.isclose(g, expected, rel_tol=1e-9)
@@ -81,7 +81,7 @@ def test_field_nonstrike_node_nonzero() -> None:
     # its gamma bell reaches neighbouring prices. Proof of re-evaluation, not
     # discrete-profile interpolation (which would be flat between nodes).
     axis = Axis(4990.0, 5010.0, 5.0)
-    f = build_field(_one_call_chain(5000.0), axis, 5000.0, M_ES, RATE)
+    f = build_fog(_one_call_chain(5000.0), axis, 5000.0, M_ES, RATE)
     i = f.price_grid.index(4995.0)
     assert f.gamma[i] != 0.0
 
@@ -91,7 +91,7 @@ def test_field_bell_peaks_near_strike() -> None:
     # node nearest the strike — the topographic ridge.
     K = 5000.0
     axis = Axis(4950.0, 5050.0, 5.0)
-    f = build_field(_one_call_chain(K), axis, 5000.0, M_ES, RATE)
+    f = build_fog(_one_call_chain(K), axis, 5000.0, M_ES, RATE)
     peak_i = max(range(len(f.gamma)), key=lambda i: abs(f.gamma[i]))
     assert abs(f.price_grid[peak_i] - K) <= 5.0
 
@@ -107,14 +107,14 @@ def test_field_thin_legs_contribute_zero() -> None:
         )
     ]
     axis = Axis(4990.0, 5010.0, 5.0)
-    f = build_field(rows, axis, 5000.0, M_ES, RATE)
+    f = build_fog(rows, axis, 5000.0, M_ES, RATE)
     assert all(v == 0.0 for v in f.gamma)
     assert all(v == 0.0 for v in f.delta)
 
 
 def test_field_empty_chain_is_zero() -> None:
     axis = Axis(4990.0, 5000.0, 5.0)
-    f = build_field([], axis, 4995.0, M_ES, RATE)
+    f = build_fog([], axis, 4995.0, M_ES, RATE)
     assert f.price_grid == [4990.0, 4995.0, 5000.0]
     assert f.gamma == [0.0, 0.0, 0.0]
     assert f.delta == [0.0, 0.0, 0.0]
@@ -123,7 +123,7 @@ def test_field_empty_chain_is_zero() -> None:
 def test_field_finite_with_smoothing() -> None:
     axis = Axis(4990.0, 5010.0, 5.0)
     grid = [4980.0, 5000.0, 5020.0]  # ends outside the strike range
-    f = build_field(
+    f = build_fog(
         _one_call_chain(), axis, 5000.0, M_ES, RATE, grid, smoothing_bw=5.0
     )
     assert len(f.price_grid) == len(f.gamma) == len(f.delta) == 3

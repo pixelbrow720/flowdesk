@@ -6,7 +6,7 @@
 > references are HISTORICAL.
 
 > **STATUS (2026-06-12): kelima keputusan SUDAH DIPUTUSKAN user & DIEKSEKUSI.**
-> Keputusan: **#1→A** (VOL-GEX tetap), **#2→B** (wall gamma-$), **#3→A** (day-count jam-riil, default di-flip), **#4→A** (trades.side), **#5→A** (field `hiro` opsional, tanpa bump schema_version).
+> Keputusan: **#1→A** (VOL-GEX tetap), **#2→B** (wall gamma-$), **#3→A** (day-count jam-riil, default di-flip), **#4→A** (trades.side), **#5→A** (field `flux` opsional, tanpa bump schema_version).
 > Engine + API + contracts hijau; golden fixture di-rebaseline; JSON sesi FE 2026-06-09 diregen. Doc di bawah dipertahankan sebagai rekaman opsi/tradeoff + rencana item berat (§4.B) yang BELUM dibangun (DDOI, metrik proprietary).
 
 > Dokumen keputusan untuk user. Tiap poin: (a) status kode sekarang, (b) apa kata
@@ -17,11 +17,11 @@
 
 Status verifikasi saat dokumen ditulis:
 - engine: **157 passed**, ruff **All checks passed**, mypy modul baru (`surface.py`,
-  `hiro.py`) **no issues**.
+  `flux.py`) **no issues**.
 - api: **75 passed**.
 - mypy `engine` package menampilkan ~16 error **pre-existing** di file yang TIDAK
   disentuh sesi ini (`snapshot.py`, `feed/__init__.py`, `field.py:48` scipy-stub,
-  `field.py:103` `FieldArrays.to_dict`). Sengaja tidak diutak-atik (locked core,
+  `field.py:103` `FogArrays.to_dict`). Sengaja tidak diutak-atik (locked core,
   risiko T-01..T-10). Lihat catatan di akhir.
 
 ---
@@ -98,7 +98,7 @@ mengganti default**. Default lama tetap `0.5/365`. Tinggal user approve flip.
 **(e) Opsi.**
 - **A (rekomendasi):** flip default ke `t_expiry_from_clock` SETELAH regen golden + verifikasi
   T-01..T-10 di-rebaseline secara sadar.
-- **B:** pertahankan `0.5/365` (status quo), `t_expiry_from_clock` hanya untuk modul v3 (HIRO/surface).
+- **B:** pertahankan `0.5/365` (status quo), `t_expiry_from_clock` hanya untuk modul v3 (FLUX/surface).
 - **C:** flip hanya untuk pricing intraday live, golden test tetap pakai konstanta (dua jalur).
 
 ---
@@ -108,14 +108,14 @@ mengganti default**. Default lama tetap `0.5/365`. Tinggal user approve flip.
 **(a) Kode sekarang.** Adapter baca `trades` (size) + `bbo-1m` (quote). `trades.side`
 (aggressor) tersedia di CSV tapi sebelumnya diabaikan.
 
-**(b) Riset.** Untuk HIRO, `trades.side` (B/A/N) **sudah cukup** untuk signing aggressor.
+**(b) Riset.** Untuk FLUX, `trades.side` (B/A/N) **sudah cukup** untuk signing aggressor.
 `tbbo` (trade+book-at-trade) cuma "nice to have" untuk verifikasi quote-at-trade.
 
 **(c) Tradeoff.** tbbo = 1 schema ingest tambahan (biaya Databento + storage) untuk
 marginal akurasi. `trades.side` sudah memberi sign langsung dari CME.
 
 **(d) Rekomendasi & STATUS.** **Pakai `trades.side`, tidak perlu tbbo.** Sudah
-diimplementasikan: `get_hiro_trades` mengonsumsi `side`+`price`+`size` per-leg (§4.A.4).
+diimplementasikan: `get_flux_trades` mengonsumsi `side`+`price`+`size` per-leg (§4.A.4).
 
 **(e) Opsi.**
 - **A (rekomendasi):** `trades.side` only. Selesai, tidak ada aksi lanjutan.
@@ -123,12 +123,12 @@ diimplementasikan: `get_hiro_trades` mengonsumsi `side`+`price`+`size` per-leg (
 
 ---
 
-## KEPUTUSAN #5 (SCHEMA) — Field HIRO di Snapshot
+## KEPUTUSAN #5 (SCHEMA) — Field FLUX di Snapshot
 
-**(a) Kode sekarang.** HIRO hidup **terisolasi** di `engine/hiro.py` (`HiroSnapshot`,
-`HiroSeries`, `.to_dict()`). **Belum** masuk `schema.py`/`snapshot.ts`.
+**(a) Kode sekarang.** FLUX hidup **terisolasi** di `engine/flux.py` (`FluxSnapshot`,
+`FluxSeries`, `.to_dict()`). **Belum** masuk `schema.py`/`snapshot.ts`.
 
-**(b) Konteks.** HIRO perlu ditampilkan FE (garis ungu/biru di `1.png`). Cepat-lambat
+**(b) Konteks.** FLUX perlu ditampilkan FE (garis ungu/biru di `1.png`). Cepat-lambat
 harus sampai ke kontrak. Preseden: field `ohlc` dulu ditambah sebagai **opsional
 non-breaking TANPA bump schema_version**.
 
@@ -139,16 +139,16 @@ non-breaking TANPA bump schema_version**.
   terkunci) → butuh approval + update zod mirror + semua validator.
 
 **(d) Rekomendasi.** **Opsional non-breaking, TANPA bump** (ikuti preseden `ohlc`).
-Bentuk: `hiro?: { total, calls, puts, zerodte, retail, cumulative[] }` di `Snapshot`,
+Bentuk: `flux?: { total, calls, puts, zerodte, retail, cumulative[] }` di `Snapshot`,
 mirror byte-for-byte di `snapshot.ts`. **Tunggu konfirmasi sebelum menyentuh schema.py.**
 
 **(e) Opsi.**
-- **A (rekomendasi):** tambah `hiro` opsional, tanpa bump schema_version (preseden ohlc).
+- **A (rekomendasi):** tambah `flux` opsional, tanpa bump schema_version (preseden ohlc).
 - **B:** bump schema_version→2 (butuh approval; ubah locked contract + semua validator).
-- **C:** HIRO tetap di luar Snapshot — disajikan via endpoint/JSON terpisah (`/hiro`), FE fetch sendiri.
+- **C:** FLUX tetap di luar Snapshot — disajikan via endpoint/JSON terpisah (`/flux`), FE fetch sendiri.
 
 > Setelah #5 disetujui: WAJIB regen JSON sesi FE
-> (`scripts/gen_session_snapshots.py … --date 2026-06-09`) supaya `/preview/real` memuat HIRO.
+> (`scripts/gen_session_snapshots.py … --date 2026-06-09`) supaya `/preview/real` memuat FLUX.
 
 ---
 
@@ -181,6 +181,6 @@ bisa dibangun bila di-approve (tandai jelas sebagai proxy, bukan replika):
 `mypy -p engine` memunculkan ~16 error di file yang TIDAK disentuh sesi ini:
 `snapshot.py` (Axis/AxisLike protocol + arg-type gamma/delta), `feed/__init__.py:62`
 (`quote_schema: str|None`), `field.py:48` (scipy missing stub), `field.py:103`
-(`FieldArrays.to_dict` generic). Modul baru sesi ini (`surface.py`, `hiro.py`) **bersih**.
+(`FogArrays.to_dict` generic). Modul baru sesi ini (`surface.py`, `flux.py`) **bersih**.
 Ini bukan regresi sesi ini; perbaikan menyentuh locked core → diserahkan ke keputusan user
 agar tidak membahayakan gate T-01..T-10.

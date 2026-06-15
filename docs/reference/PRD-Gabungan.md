@@ -292,7 +292,7 @@ TIMESCALE_DSN, REDIS_URL, SOFR_RATE
 | FR-019 | Ingat preferensi terakhir user (theme, basis, metric, instrumen, zoom, walls). | SHOULD |
 
 ### 1.3 Detail perilaku per fitur
-**Heatmap (FR-001–003, 017):** Sumber data = `snapshot.field` (#8 §3). Tiap menit = 1 kolom; heatmap = akumulasi kolom kiri->kanan. Warna: nilai>0 turquoise, <0 crimson, 0 = netral (dark=hitam, light=putih). Skala warna simetris terhadap 0. Colorbar berlabel **"Gamma ($ Notional)"** (atau "Delta"). Zoom mengubah `axis.strike_min/max`.
+**Heatmap (FR-001–003, 017):** Sumber data = `snapshot.fog` (#8 §3). Tiap menit = 1 kolom; heatmap = akumulasi kolom kiri->kanan. Warna: nilai>0 turquoise, <0 crimson, 0 = netral (dark=hitam, light=putih). Skala warna simetris terhadap 0. Colorbar berlabel **"Gamma ($ Notional)"** (atau "Delta"). Zoom mengubah `axis.strike_min/max`.
 
 **Profil garis (FR-004–006):** Sumber = `snapshot.profile[]`. Sumbu Y identik dengan heatmap. Satu garis kontinu menyilang sumbu nol; segmen positif turquoise, negatif crimson. TANPA angka/grid value; TANPA gradient fill.
 
@@ -1020,7 +1020,7 @@ Satu objek per (instrumen, menit). Inilah yang disimpan & dikirim ke frontend.
   "profile": [
     { "strike": 4950, "net_gex": -1.2e8, "net_dex": 3.4e7, "interpolated": false }
   ],
-  "field": {
+  "fog": {
     "price_grid": [4950, 4955, 4960],
     "gamma": [-2.1e7, 0.0, 3.3e7],
     "delta": [1.1e7, 1.0e7, 0.9e7]
@@ -2136,7 +2136,7 @@ stability_pct = clamp(100*net_gamma_total/running_abs_max, 0, 100)   # v1
   "axis": { "strike_min": 4950, "strike_max": 5050, "strike_step": 5 },
   "regime": { "net_gamma": -1.23e9, "sign": "negative", "stability_pct": 42.0 },
   "profile": [ { "strike": 4950, "net_gex": -1.2e8, "net_dex": 3.4e7, "interpolated": false } ],
-  "field": { "price_grid": [4950,4955,4960], "gamma": [-2.1e7,0.0,3.3e7], "delta": [1.1e7,1.0e7,0.9e7] },
+  "fog": { "price_grid": [4950,4955,4960], "gamma": [-2.1e7,0.0,3.3e7], "delta": [1.1e7,1.0e7,0.9e7] },
   "levels": {
     "call_walls": [ { "strike": 5050, "oi": 12345, "rank": 1 } ],
     "put_walls":  [ { "strike": 4950, "oi": 9876,  "rank": 1 } ],

@@ -47,7 +47,7 @@ pydantic models byte-for-byte. `CONTRACT.md` lives here.
 3. It resolves the **session state** and **time-to-expiry** (real wall-clock to
    16:00 ET) and calls `engine.build_snapshot(...)`.
 4. The engine prices the chain (Black-76 → IV → greeks), aggregates exposure,
-   projects the field grid, extracts levels, optionally computes HIRO, and
+   projects the field grid, extracts levels, optionally computes FLUX, and
    returns a `Snapshot`.
 5. The API validates, stores it (Redis hot, Timescale history), and serves the
    Snapshot via REST/WS to authorized consumers.

@@ -1,4 +1,4 @@
-# FlowDesk Snapshot Contract — `schema_version` 1
+# FlowDesk Snapshot Contract — `schema_version` 2
 
 The **Snapshot** is the canonical per-`(instrument, minute)` object produced by the
 compute engine, served by the API, and rendered by the frontend. It has two
@@ -23,7 +23,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 
 | Field | Type | Unit / domain | Meaning | PRD source |
 | --- | --- | --- | --- | --- |
-| `schema_version` | `1` (literal) | — | Schema version tag; MUST equal `1`. | PRD #8 §3 |
+| `schema_version` | `2` (literal) | — | Schema version tag; MUST equal `2`. | PRD #8 §3 |
 | `instrument` | `"ES" \| "NQ"` | enum | Tradable future (/ES M=$50/pt step 5; /NQ M=$20/pt step 10). | PRD #0 §4 |
 | `session_date` | `string` | ISO date `YYYY-MM-DD` (America/New_York) | Trading session day. | PRD #9 |
 | `ts` | `string` | ISO-8601 datetime, UTC (`…Z`) | Snapshot timestamp. | PRD #8 §3 |
@@ -36,11 +36,11 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `axis` | `Axis` | object | Shared strike axis. | PRD #8 §3 |
 | `regime` | `Regime` | object | Regime summary. | PRD #4 |
 | `profile` | `ProfileRow[]` | array | Net GEX/DEX profile (ascending by strike). | PRD #8 §3 |
-| `field` | `FieldGrid` | object | Heatmap field projection arrays. | PRD #8 §3 |
+| `field` | `FogGrid` | object | Heatmap field projection arrays. | PRD #8 §3 |
 | `levels` | `Levels` | object | Key levels overlay. | PRD #0 §2 |
 | `ohlc` | `OHLC \| null` | object (optional) | Underlying futures OHLC for this minute (candle view). Absent/`null` when not captured; additive, no version bump. | PRD #4 |
-| `hiro` | `Hiro \| null` | object (optional) | Cumulative dealer hedging flow (HIRO). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
-| `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `hiro`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
+| `flux` | `Flux \| null` | object (optional) | Cumulative dealer hedging flow (FLUX). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
+| `synthetic_oi` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #4 positioning lens (OI-anchored + flow-update). Absent/`null` when not captured; additive, no version bump (follows `flux`/`ohlc`). Lives ALONGSIDE the locked VOL-GEX, does NOT replace it; not price-validated. | FlowGreeks |
 | `synthetic_oi_tiered` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #6 size-tiered lens — same `SyntheticOi` shape as `synthetic_oi`, but flow is size-weighted (retail odd-lots down, blocks up; thresholds UNVALIDATED). Absent/`null` when not captured; additive, no version bump. Not price-validated. | FlowGreeks |
 | `synthetic_oi_decay` | `SyntheticOi \| null` | object (optional) | **EXPERIMENTAL** synthetic-OI #5 decay-weighted lens — same `SyntheticOi` shape, but flow is time-decayed (recent > old; half-life UNVALIDATED). Absent/`null` when not captured; additive, no version bump. Not price-validated. | FlowGreeks |
 | `exposure_ext` | `ExposureExt \| null` | object (optional) | **EXPERIMENTAL** extended dealer exposure: VEX (vanna) + CHEX (charm), same VOL basis as GEX/DEX. Absent/`null` when not captured; additive, no version bump. Lives ALONGSIDE GEX/DEX, not price-validated. **Units differ from GEX** (see section). | FlowGreeks |
@@ -74,7 +74,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `net_dex` | `number` | USD notional | Net dealer Delta Exposure. | PRD #0 §2 |
 | `interpolated` | `boolean` | — | True if values are synthetic (interpolated), not observed. | PRD #8 §3 |
 
-## `field` (FieldGrid)
+## `field` (FogGrid)
 
 | Field | Type | Unit | Meaning | PRD source |
 | --- | --- | --- | --- | --- |
@@ -108,28 +108,28 @@ Underlying (futures forward) OHLC for this minute. Optional/additive: absent or
 | `l` | `number` | index points | Low: min futures trade price in the minute. | PRD #4 |
 | `c` | `number` | index points | Close: last futures trade price (== forward). | PRD #4 |
 
-## `hiro` (Hiro, optional)
+## `flux` (Flux, optional)
 
-Cumulative dealer **delta-notional hedging flow** since the RTH open (HIRO,
-`engine.hiro`). Optional/additive (Divergence #5 → option A): absent or `null`
+Cumulative dealer **delta-notional hedging flow** since the RTH open (FLUX,
+`engine.flux`). Optional/additive (Divergence #5 → option A): absent or `null`
 when not captured — does **not** bump `schema_version`. Units are USD
 delta-notional; positive = net dealer BUYING pressure (bullish), negative =
 selling pressure. These are the *current* cumulative values for the minute; the
-intraday HIRO line is reconstructed FE-side from the per-minute frame sequence
+intraday FLUX line is reconstructed FE-side from the per-minute frame sequence
 (like the forward-price line), so no per-trade path is embedded per frame.
 
 | Field | Type | Unit | Meaning | PRD source |
 | --- | --- | --- | --- | --- |
-| `total` | `number` | USD delta-notional | Cumulative HIRO, all legs, since RTH open. | FlowGreeks |
-| `calls` | `number` | USD delta-notional | Cumulative HIRO from call trades only. | FlowGreeks |
-| `puts` | `number` | USD delta-notional | Cumulative HIRO from put trades only. | FlowGreeks |
-| `zerodte` | `number` | USD delta-notional | Cumulative HIRO from 0DTE trades (`T < 1/365`). | FlowGreeks |
-| `retail` | `number` | USD delta-notional | Cumulative HIRO from the heuristic retail proxy (odd-lot size; indicative only). | FlowGreeks |
+| `total` | `number` | USD delta-notional | Cumulative FLUX, all legs, since RTH open. | FlowGreeks |
+| `calls` | `number` | USD delta-notional | Cumulative FLUX from call trades only. | FlowGreeks |
+| `puts` | `number` | USD delta-notional | Cumulative FLUX from put trades only. | FlowGreeks |
+| `zerodte` | `number` | USD delta-notional | Cumulative FLUX from 0DTE trades (`T < 1/365`). | FlowGreeks |
+| `retail` | `number` | USD delta-notional | Cumulative FLUX from the heuristic retail proxy (odd-lot size; indicative only). | FlowGreeks |
 
 ## `synthetic_oi` (SyntheticOi, optional) — **EXPERIMENTAL**
 
 Synthetic-OI #4 positioning lens (`engine.synthetic_oi`). Optional/additive
-(mirrors `hiro`/`ohlc`): absent or `null` when not captured — does **not** bump
+(mirrors `flux`/`ohlc`): absent or `null` when not captured — does **not** bump
 `schema_version`. Dealer position per strike = carried-in open interest with the
 static long-call/short-put sign, **updated** by native CME aggressor-signed flow
 weighted by `w`; `gex = Σ Γ·Q·M·F²·0.01`. Thin strikes (gamma unsolved upstream)
@@ -165,7 +165,7 @@ are **skipped, not fabricated**.
 
 Extended dealer exposure: **VEX** (vanna) and **CHEX** (charm), aggregated on the
 SAME VOL basis and locked dealer signs (`+1` call / `-1` put) as the product
-GEX/DEX (`engine.exposure_ext`). Optional/additive (mirrors `hiro`/`synthetic_oi`):
+GEX/DEX (`engine.exposure_ext`). Optional/additive (mirrors `flux`/`synthetic_oi`):
 absent or `null` when not captured — does **not** bump `schema_version`. The
 underlying greeks are finite-difference-validated in `engine.black76`, but the
 aggregate has **never been checked against price**.

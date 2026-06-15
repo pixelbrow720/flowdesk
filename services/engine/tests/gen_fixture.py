@@ -89,7 +89,7 @@ def generate() -> list[Path]:
 
     # -- trades (one trade at 13:30:30Z, inside RTH, <= sample minute) -----
     # ``side`` is the CME aggressor (B=buy-aggressor, A=sell-aggressor) consumed
-    # by HIRO: calls bought (B), puts sold (A) -> net positive dealer hedging.
+    # by FLUX: calls bought (B), puts sold (A) -> net positive dealer hedging.
     trades: list[list[object]] = []
     for k in STRIKES:
         p = _PER_STRIKE[k]

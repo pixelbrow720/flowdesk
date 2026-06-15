@@ -59,7 +59,7 @@ from engine.feed.base import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from engine.hiro import HiroTrade
+    from engine.flux import FluxTrade
 
 __all__ = [
     "NY_TZ",
@@ -226,19 +226,19 @@ class HistoricalSimAdapter(FeedAdapter):
         prices = [px for _, px in window]
         return (prices[0], max(prices), min(prices), prices[-1])
 
-    def get_hiro_trades(
+    def get_flux_trades(
         self, instrument: str, ts: datetime
-    ) -> list["HiroTrade"]:
-        """Signed option trades for HIRO over the RTH window ``[open, ts]``.
+    ) -> list["FluxTrade"]:
+        """Signed option trades for FLUX over the RTH window ``[open, ts]``.
 
         Joins each tape trade's ``(price, size, side)`` with its leg's strike /
         type / expiry from the definition cache and the year-fraction to that
         leg's expiry at the trade time (365-day convention, matching the engine).
-        Chronologically ordered, ready to feed :class:`engine.hiro.HiroState` /
-        :func:`engine.hiro.hiro_series`. Trades before the RTH open are excluded
-        (HIRO resets daily). Local import keeps the feed layer import-light.
+        Chronologically ordered, ready to feed :class:`engine.flux.FluxState` /
+        :func:`engine.flux.flux_series`. Trades before the RTH open are excluded
+        (FLUX resets daily). Local import keeps the feed layer import-light.
         """
-        from engine.hiro import HiroTrade  # local import: no import-time coupling
+        from engine.flux import FluxTrade  # local import: no import-time coupling
 
         instr = self._check_instrument(instrument)
         ts = ensure_utc_minute(ts)
@@ -249,7 +249,7 @@ class HistoricalSimAdapter(FeedAdapter):
         rth_open = self._rth_open_utc(ts)
         end = ts + timedelta(minutes=1)  # include trades within the current minute
 
-        out: list[tuple[datetime, HiroTrade]] = []
+        out: list[tuple[datetime, FluxTrade]] = []
         for iid, series in opt_trades.items():
             d = defs.get(iid)
             if d is None or d.kind not in ("call", "put") or d.strike is None:
@@ -262,7 +262,7 @@ class HistoricalSimAdapter(FeedAdapter):
                 out.append(
                     (
                         event,
-                        HiroTrade(
+                        FluxTrade(
                             strike=float(d.strike),
                             is_call=is_call,
                             price=float(price),
@@ -519,14 +519,14 @@ class HistoricalSimAdapter(FeedAdapter):
         dict[int, list[tuple[datetime, float, float, str]]],
     ]:
         """Per-leg trade volume (sorted ts, prefix sums) + futures trade prices
-        + per-option SIGNED trades for HIRO.
+        + per-option SIGNED trades for FLUX.
 
         ``prefix[k]`` = sum of the first ``k`` trade sizes, so a range sum over
         [lo, hi) is ``prefix[hi] - prefix[lo]`` in O(1) after two bisects. In the
         SAME CSV pass we also collect ``(ts, price)`` for futures instrument_ids
         (``futures_iids``) so the OHLC candle view can be built without re-reading
         the (large) trades file, and ``(ts, price, size, side)`` for option
-        instrument_ids (``option_iids``) so HIRO can consume the aggressor
+        instrument_ids (``option_iids``) so FLUX can consume the aggressor
         ``side`` per trade. The TRACE volume prefix-sums are UNCHANGED — the
         signed path is additive and isolated.
         """

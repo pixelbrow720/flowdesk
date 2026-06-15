@@ -276,13 +276,13 @@ class LiveAdapter(FeedAdapter):
         return self._client.get_forward(instrument, ts)
 
     # Optional method — exposed by the historical adapter; returning None
-    # here keeps the worker's HIRO path on its degraded-feed branch until
+    # here keeps the worker's FLUX path on its degraded-feed branch until
     # the live trade pipe is wired.
-    def get_hiro_trades(self, instrument: str, ts: datetime) -> Optional[list]:
+    def get_flux_trades(self, instrument: str, ts: datetime) -> Optional[list]:
         self._check_instrument(instrument)
         ensure_utc_minute(ts)
         self._connect()
-        getter = getattr(self._client, "get_hiro_trades", None)
+        getter = getattr(self._client, "get_flux_trades", None)
         if getter is None:
             return None
         return getter(instrument, ts)

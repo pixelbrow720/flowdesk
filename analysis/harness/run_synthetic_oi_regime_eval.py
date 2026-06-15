@@ -77,7 +77,7 @@ from analysis.harness.synthetic_oi_regime_eval import (  # noqa: E402
 )
 # Reuse the sibling runners' data-loading machinery VERBATIM (no duplication, no edits there):
 # build_minute_forwards (dense 390-min RTH parity-forward grid), N_MINUTES, K_SET from the
-# HIRO runner; MIN_NONTHIN + the per-day sign / single-day-domination tally from the synth-OI
+# FLUX runner; MIN_NONTHIN + the per-day sign / single-day-domination tally from the synth-OI
 # runner; load_defs / flat-def-map / raw-iid / quotes_at / constants from run_validation.
 from analysis.harness.run_hiro_eval import (  # noqa: E402
     K_SET,

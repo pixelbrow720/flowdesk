@@ -6,7 +6,7 @@ FlowDesk is a **0DTE dealer-positioning terminal** for index futures options. It
 focuses on two instruments only — **/ES** (E-mini S&P 500) and **/NQ** (E-mini
 Nasdaq-100) — and visualizes **gamma/delta exposure (GEX/DEX)**, key **levels**
 (call/put walls, gamma flip, largest GEX/DEX), and an optional intraday
-**HIRO**-style signed order-flow line.
+**FLUX**-style signed order-flow line.
 
 The product answers one operator question, minute by minute: *where are dealers
 likely forced to buy or sell, and how is that map shifting intraday?*
@@ -26,7 +26,7 @@ Databento GLBX.MDP3 (definition, statistics, trades, mbp-1/bbo-1m)
   flowdesk-engine (Python)
    Black-76 → IV → per-strike gamma/delta
    → exposure (GEX/DEX) → field (price×strike grid)
-   → levels (walls/flip) → HIRO (optional)
+   → levels (walls/flip) → FLUX (optional)
         │  emits ONE canonical Snapshot per instrument per minute
         ▼
   flowdesk-api (FastAPI)

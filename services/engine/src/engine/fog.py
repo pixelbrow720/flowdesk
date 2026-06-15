@@ -57,12 +57,12 @@ from engine.exposure import (
 __all__ = [
     "AxisLike",
     "Axis",
-    "FieldArrays",
+    "FogArrays",
     "CLIP_PERCENTILE",
     "price_grid_from_axis",
     "percentile_abs",
     "normalize_signed",
-    "build_field",
+    "build_fog",
 ]
 
 
@@ -85,7 +85,7 @@ class Axis:
 
 #: Percentile used to clip the heatmap colour scale (anti-skew §6G): a single
 #: 0DTE gamma spike must not burn the whole field to neutral. The engine
-#: produces the RAW exposure field (``build_field``); this is the canonical
+#: produces the RAW exposure field (``build_fog``); this is the canonical
 #: clip used for *display normalisation*, mirrored byte-for-byte by the FE
 #: ``apps/web/lib/heatmap/field-2d.ts`` (``CLIP_PERCENTILE``). Kept here so the
 #: normalisation has one tested definition shared across the stack.
@@ -93,7 +93,7 @@ CLIP_PERCENTILE: float = 0.98
 
 
 @dataclass(frozen=True)
-class FieldArrays:
+class FogArrays:
     """Index-aligned projection arrays. Matches the Snapshot ``field`` contract."""
 
     price_grid: List[float]
@@ -179,7 +179,7 @@ def _gaussian_smooth(
     return out
 
 
-def build_field(
+def build_fog(
     rows: Sequence[ChainRow],
     axis: AxisLike,
     F: float,
@@ -188,7 +188,7 @@ def build_field(
     price_grid: Optional[Sequence[float]] = None,
     *,
     smoothing_bw: float = 0.0,
-) -> FieldArrays:
+) -> FogArrays:
     """Project the dealer exposure surface onto the price grid (TRACE B7).
 
     For each hypothetical spot ``S_y`` in the grid, re-evaluate every contract's
@@ -210,7 +210,7 @@ def build_field(
 
     Returns
     -------
-    FieldArrays with ``len(price_grid) == len(gamma) == len(delta)`` and all
+    FogArrays with ``len(price_grid) == len(gamma) == len(delta)`` and all
     values finite — the contract invariants.
     """
     grid = (
@@ -276,4 +276,4 @@ def build_field(
         if any(not math.isfinite(v) for v in seq):
             raise ValueError(f"field.{seq_name} contains non-finite values")
 
-    return FieldArrays(price_grid=grid, gamma=gamma, delta=delta)
+    return FogArrays(price_grid=grid, gamma=gamma, delta=delta)

@@ -65,7 +65,7 @@ FlowKey = Tuple[float, bool]
 # trade's signed flow by a size tier before it enters the synthetic-OI Q. These
 # constants are STARTING GUESSES that MUST be swept on the real tape — do not treat
 # them as calibrated. With all weights == 1.0 the tiered model reduces exactly to #4.
-#: Retail size ceiling (odd-lot proxy); matches engine.hiro.RETAIL_MAX_SIZE.
+#: Retail size ceiling (odd-lot proxy); matches engine.flux.RETAIL_MAX_SIZE.
 RETAIL_MAX_SIZE: float = 5.0
 #: Per-instrument block-size floor (institutional). /NQ trades thinner than /ES.
 BLOCK_MIN_SIZE = {"ES": 50.0, "NQ": 25.0}

@@ -17,12 +17,12 @@
 ## Ringkasan eksekutif
 
 FlowGreeks (visi di dokumen) = **satu mesin greek + state engine** yang melahirkan
-TRACE (heatmap stok), HIRO (flow), vol surface, dan exposure lanjutan (GEX/DEX/VEX/CHEX).
-Roadmap dokumen: **MVP-1/2/3** (engine + GEX/DEX + walls + HIRO) → **v2** (TRACE heatmap + vol) → **v3** (vanna/charm + 3D) → **v4** (alert/backtest).
+TRACE (heatmap stok), FLUX (flow), vol surface, dan exposure lanjutan (GEX/DEX/VEX/CHEX).
+Roadmap dokumen: **MVP-1/2/3** (engine + GEX/DEX + walls + FLUX) → **v2** (TRACE heatmap + vol) → **v3** (vanna/charm + 3D) → **v4** (alert/backtest).
 
-**Posisi FlowDesk sekarang:** sisi **TRACE/stok SELESAI dan kuat** (engine Black-76, IV, GEX/DEX VOL-based, field projection B7 sejati, walls/flip, heatmap topografi + kontur, strike-plot bar, candle OHLC, zoom, key-levels navbar). **Engine HIRO/flow SELESAI** (signed-trade path + akumulator + field `hiro` opsional). Vanna/charm + SVI surface + expected move = **fondasi engine SELESAI** (terisolasi). 3D + modul sistem = belum ada (v3–v4). Sisa besar: **rendering FE** (garis HIRO, dashboard TRACE match 1.png).
+**Posisi FlowDesk sekarang:** sisi **TRACE/stok SELESAI dan kuat** (engine Black-76, IV, GEX/DEX VOL-based, field projection B7 sejati, walls/flip, heatmap topografi + kontur, strike-plot bar, candle OHLC, zoom, key-levels navbar). **Engine FLUX/flow SELESAI** (signed-trade path + akumulator + field `flux` opsional). Vanna/charm + SVI surface + expected move = **fondasi engine SELESAI** (terisolasi). 3D + modul sistem = belum ada (v3–v4). Sisa besar: **rendering FE** (garis FLUX, dashboard TRACE match 1.png).
 
-Kelima keputusan metodologi (di §Divergensi) **sudah diputuskan user (2026-06-12) & dieksekusi**: VOL-GEX tetap (#1A), wall gamma-$ (#2B), day-count jam-riil (#3A), trades.side (#4A), field hiro opsional (#5A).
+Kelima keputusan metodologi (di §Divergensi) **sudah diputuskan user (2026-06-12) & dieksekusi**: VOL-GEX tetap (#1A), wall gamma-$ (#2B), day-count jam-riil (#3A), trades.side (#4A), field flux opsional (#5A).
 
 ---
 
@@ -46,18 +46,18 @@ Kelima keputusan metodologi (di §Divergensi) **sudah diputuskan user (2026-06-1
 
 ---
 
-## BAGIAN 2 — HIRO (hedging flow real-time)
+## BAGIAN 2 — FLUX (hedging flow real-time)
 
 | Item dokumen | Status | Catatan |
 |---|---|---|
-| HIRO delta-notional kumulatif | ✅ | `engine/hiro.py` — `HiroState`/`hiro_series`, `HIRO_t = Σ s·δ·q·M·F` sejak RTH open |
-| Klasifikasi aggressor side (A/B/N) | ✅ | `aggressor_sign`; `HistoricalSimAdapter.get_hiro_trades` signed per-trade per-leg |
-| Breakdown Total/Calls/Puts/0DTE/Retail | ✅ | `HiroSnapshot` (retail = proxy odd-lot heuristik, indikatif) |
-| Field `hiro` opsional di Snapshot | ✅ | `schema.py` + `snapshot.ts` (Divergensi #5 → opsi A, tanpa bump) |
-| Garis kumulatif (FE) | 🟡 | data per-menit tersedia di `hiro.total`; garis direkonstruksi FE dari urutan frame (FE menyusul) |
-| Divergence price-vs-HIRO | ❌ | indikator turunan (FE/analitik), belum |
+| FLUX delta-notional kumulatif | ✅ | `engine/flux.py` — `FluxState`/`flux_series`, `HIRO_t = Σ s·δ·q·M·F` sejak RTH open |
+| Klasifikasi aggressor side (A/B/N) | ✅ | `aggressor_sign`; `HistoricalSimAdapter.get_flux_trades` signed per-trade per-leg |
+| Breakdown Total/Calls/Puts/0DTE/Retail | ✅ | `FluxSnapshot` (retail = proxy odd-lot heuristik, indikatif) |
+| Field `flux` opsional di Snapshot | ✅ | `schema.py` + `snapshot.ts` (Divergensi #5 → opsi A, tanpa bump) |
+| Garis kumulatif (FE) | 🟡 | data per-menit tersedia di `flux.total`; garis direkonstruksi FE dari urutan frame (FE menyusul) |
+| Divergence price-vs-FLUX | ❌ | indikator turunan (FE/analitik), belum |
 
-**Kesimpulan Bagian 2:** engine HIRO **SELESAI** (signed-trade path + akumulator + breakdown + field Snapshot opsional). Sisa: rendering garis di FE + indikator divergence (dikerjakan saat FE dibangun).
+**Kesimpulan Bagian 2:** engine FLUX **SELESAI** (signed-trade path + akumulator + breakdown + field Snapshot opsional). Sisa: rendering garis di FE + indikator divergence (dikerjakan saat FE dibangun).
 
 ---
 
@@ -100,7 +100,7 @@ Kelima keputusan metodologi (di §Divergensi) **sudah diputuskan user (2026-06-1
 | Black-76 (underlying F, tanpa q) | ✅ | `black76.py` |
 | Multiplier $50 ES / $20 NQ | ✅ | `engine/snapshot.py` `MULTIPLIER` |
 | Schema `definition`/`statistics`/`trades`/`bbo-1m` | ✅ | `engine/feed/historical.py` ingest 4 schema |
-| ⚠️ `tbbo` untuk flow | ❌ | Pakai `bbo-1m` + `trades`. Dokumen rekomendasi `tbbo` untuk HIRO (lihat Divergensi #4) |
+| ⚠️ `tbbo` untuk flow | ❌ | Pakai `bbo-1m` + `trades`. Dokumen rekomendasi `tbbo` untuk FLUX (lihat Divergensi #4) |
 | Aggressor side native | ❌ | Field `side` ADA di CSV tapi belum dikonsumsi (cuma volume) |
 | OHLC futures per menit | ✅ | Baru ditambah: `historical.py::get_ohlc`, field `ohlc` opsional di schema |
 
@@ -130,7 +130,7 @@ Mayoritas **selaras**. Divergensi minor:
 | **C. Hedge Wall** | ❌ | Tak ada |
 | **D. Call/Put Wall** | ✅ | by **gamma-$** (`gamma·OI` per sisi) = H-D1 (70%), Divergensi #2 → opsi B dieksekusi |
 | **D. Absolute Gamma** | ❌ | Tak ada (`largest_gex` mendekati tapi by VOL net, bukan total \|gamma\|) |
-| **E. HIRO klasifikasi** | ✅ | = Bagian 2; engine `hiro.py` SELESAI (signed-trade + breakdown + field opsional) |
+| **E. FLUX klasifikasi** | ✅ | = Bagian 2; engine `flux.py` SELESAI (signed-trade + breakdown + field opsional) |
 | **F. IV per kontrak (mid+NR)** | ✅ | `engine/iv.py` = H-F1 (80%) |
 | **F. SVI surface** | ✅ | `engine/surface.py::fit_svi` (raw SVI, no-butterfly guard) = H-F3. Terisolasi (belum di Snapshot) |
 | **F. Expected move** | ✅ | `engine/surface.py::expected_move` (lognormal) + `_from_straddle` (0.85×) = H-F5 |
@@ -157,11 +157,11 @@ Mayoritas **selaras**. Divergensi minor:
 - **Kode:** `api/worker.py` (`_t_expiry_for` per tick) + `scripts/gen_session_snapshots.py`. Golden fixture di-rebaseline.
 
 ### #4 ✅ `trades.side` cukup (opsi A — tanpa tbbo)
-- **Keputusan:** HIRO pakai aggressor `side` dari `trades` CSV; tbbo tidak perlu.
-- **Kode:** `HistoricalSimAdapter.get_hiro_trades` mengonsumsi `side`+`price`+`size` per-leg.
+- **Keputusan:** FLUX pakai aggressor `side` dari `trades` CSV; tbbo tidak perlu.
+- **Kode:** `HistoricalSimAdapter.get_flux_trades` mengonsumsi `side`+`price`+`size` per-leg.
 
-### #5 ✅ Field HIRO opsional di Snapshot (opsi A — tanpa bump)
-- **Keputusan:** `hiro?` ditambah sebagai field opsional non-breaking (preseden `ohlc`), `schema_version` tetap 1.
+### #5 ✅ Field FLUX opsional di Snapshot (opsi A — tanpa bump)
+- **Keputusan:** `flux?` ditambah sebagai field opsional non-breaking (preseden `ohlc`), `schema_version` tetap 1.
 - **Kode:** `engine/schema.py` + `packages/contracts/src/snapshot.ts` (byte-for-byte) + wiring builder/worker/gen. Garis intraday direkonstruksi FE dari urutan frame per-menit (bukan path per-trade di tiap frame).
 
 ---
@@ -171,7 +171,7 @@ Mayoritas **selaras**. Divergensi minor:
 | Fase | Modul | Status FlowDesk |
 |---|---|---|
 | **MVP-1/2** | Black-76 + IV + GEX/DEX + walls/flip + strike plot | ✅ SELESAI (+ B7 field, candle, zoom, key-levels) |
-| **MVP-3** | HIRO flow (aggressor side, delta-notional) | ✅ engine SELESAI (`hiro.py` + field opsional); garis FE menyusul |
+| **MVP-3** | FLUX flow (aggressor side, delta-notional) | ✅ engine SELESAI (`flux.py` + field opsional); garis FE menyusul |
 | **v2** | TRACE heatmap re-eval grid + kontur | ✅ SELESAI (lebih cepat dari roadmap) |
 | **v2** | Vol module (SVI, VIX-proxy, RV/IV, skew, EM) | 🟡 SVI + EM ✅ (`surface.py`, terisolasi); VIX-proxy/RV/skew belum |
 | **v3** | Vanna/Charm exposure + afternoon-drift | 🟡 vanna/charm greek ✅ (`black76`); agregasi VEX/CHEX belum |
@@ -182,10 +182,10 @@ Mayoritas **selaras**. Divergensi minor:
 
 ## Rekomendasi langkah berikut (urut ROI)
 
-**Sudah dikerjakan sesi backend (2026-06-12):** vanna+charm (`black76`), percentile-clip parity (`field`), day-count jam-riil (#3A), HIRO engine + field opsional (#5A), wall gamma-$ (#2B), SVI surface + expected move (`surface.py`). Engine + API + contracts hijau; golden di-rebaseline; JSON sesi FE 2026-06-09 diregen.
+**Sudah dikerjakan sesi backend (2026-06-12):** vanna+charm (`black76`), percentile-clip parity (`field`), day-count jam-riil (#3A), FLUX engine + field opsional (#5A), wall gamma-$ (#2B), SVI surface + expected move (`surface.py`). Engine + API + contracts hijau; golden di-rebaseline; JSON sesi FE 2026-06-09 diregen.
 
 Sisa (urut ROI):
-1. **Frontend TRACE dashboard match `1.png`** — rendering: heatmap + exposure profile + garis HIRO (ungu/biru) dari `hiro.total` per-menit. Pekerjaan FE terbesar yang tersisa.
+1. **Frontend TRACE dashboard match `1.png`** — rendering: heatmap + exposure profile + garis FLUX (ungu/biru) dari `flux.total` per-menit. Pekerjaan FE terbesar yang tersisa.
 2. **VEX/CHEX agregasi + Charm/Vanna Pressure** — fondasi greek (`vanna`/`charm`) sudah ada; tinggal agregasi `Σ vanna·exp·M·F·1%vol` dan afternoon-drift.
 3. **Surface ke Snapshot (bila perlu di FE)** — `surface.py` masih terisolasi; keputusan schema lanjutan bila SVI/EM mau ditampilkan.
 4. **DDOI engine (A)** — paling berat + proprietary; kalibrasi vs ΔOI. Keputusan sadar (Divergensi #1 → v3); JANGAN cabut VOL-GEX.

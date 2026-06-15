@@ -56,7 +56,7 @@ NON_FINITE_VALUES: tuple[float, ...] = (NAN, POS_INF, NEG_INF)
 # ---------------------------------------------------------------------------
 def _base_payload() -> dict[str, Any]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "instrument": "ES",
         "session_date": "2026-06-10",
         "ts": "2026-06-10T13:31:00Z",
@@ -86,7 +86,7 @@ def _base_payload() -> dict[str, Any]:
                 "interpolated": False,
             },
         ],
-        "field": {
+        "fog": {
             "price_grid": [4995.0, 5000.0],
             "gamma": [-8.0e6, 3.3e7],
             "delta": [1.05e7, 1.0e7],
@@ -99,7 +99,7 @@ def _base_payload() -> dict[str, Any]:
             "largest_dex": 4990.0,
         },
         "ohlc": {"o": 5000.0, "h": 5001.5, "l": 4999.0, "c": 5000.25},
-        "hiro": {
+        "flux": {
             "total": 1.5e6,
             "calls": 1.0e6,
             "puts": 5.0e5,
@@ -171,7 +171,7 @@ def _set_path(payload: dict[str, Any], path: tuple[Any, ...], value: Any) -> Non
 def test_base_payload_is_valid_baseline() -> None:
     """Without any mutation, the canonical full payload must round-trip."""
     snap = parse_snapshot(_base_payload())
-    assert snap.schema_version == 1
+    assert snap.schema_version == 2
     # Egress must not raise either — full sanity for the to_json() guard.
     out = snap.to_json()
     reparsed = parse_snapshot(json.loads(out))
@@ -202,12 +202,12 @@ NUMERIC_PATHS: list[tuple[Any, ...]] = [
     ("profile", 1, "net_gex"),
     ("profile", 1, "net_dex"),
     # field arrays (each element is a FiniteFloat — element-level rejection)
-    ("field", "price_grid", 0),
-    ("field", "price_grid", 1),
-    ("field", "gamma", 0),
-    ("field", "gamma", 1),
-    ("field", "delta", 0),
-    ("field", "delta", 1),
+    ("fog", "price_grid", 0),
+    ("fog", "price_grid", 1),
+    ("fog", "gamma", 0),
+    ("fog", "gamma", 1),
+    ("fog", "delta", 0),
+    ("fog", "delta", 1),
     # levels
     ("levels", "call_walls", 0),
     ("levels", "call_walls", 1),
@@ -221,12 +221,12 @@ NUMERIC_PATHS: list[tuple[Any, ...]] = [
     ("ohlc", "h"),
     ("ohlc", "l"),
     ("ohlc", "c"),
-    # hiro
-    ("hiro", "total"),
-    ("hiro", "calls"),
-    ("hiro", "puts"),
-    ("hiro", "zerodte"),
-    ("hiro", "retail"),
+    # flux
+    ("flux", "total"),
+    ("flux", "calls"),
+    ("flux", "puts"),
+    ("flux", "zerodte"),
+    ("flux", "retail"),
     # synthetic_oi (and the two parallel _tiered / _decay shapes)
     ("synthetic_oi", "gex"),
     ("synthetic_oi", "gex_static"),
@@ -313,7 +313,7 @@ def test_pydantic_ingress_accepts_optional_null() -> None:
     must continue to be contract-valid (matches zod `.nullable()`/`.nullish()`).
     """
     payload = _base_payload()
-    for k in ("ohlc", "hiro", "synthetic_oi", "exposure_ext", "ddoi"):
+    for k in ("ohlc", "flux", "synthetic_oi", "exposure_ext", "ddoi"):
         payload[k] = None
     payload["levels"]["gamma_flip"] = None
     payload["levels"]["largest_gex"] = None
@@ -343,14 +343,14 @@ def test_egress_guard_rejects_non_finite_in_nested_array() -> None:
     """Egress walk must descend into arrays (field.gamma[i], etc.)."""
     snap = parse_snapshot(_base_payload())
     dump = snap.model_dump()
-    dump["field"]["gamma"][0] = POS_INF
+    dump["fog"]["gamma"][0] = POS_INF
     poisoned = Snapshot.model_construct(**dump)
     with pytest.raises(ValueError, match="non-finite"):
         poisoned.to_json()
 
 
 def test_egress_guard_rejects_non_finite_in_optional_nested_object() -> None:
-    """Egress walk must descend into optional sub-objects (hiro, surface, …)."""
+    """Egress walk must descend into optional sub-objects (flux, surface, …)."""
     snap = parse_snapshot(_base_payload())
     dump = snap.model_dump()
     dump["surface"]["atm_vol"] = NEG_INF
@@ -395,7 +395,7 @@ _FIXTURES_DIR = (
 
 NAN_FIXTURES: tuple[tuple[str, tuple[Any, ...], float], ...] = (
     ("snapshot.nonfinite_forward_nan.json", ("forward",), NAN),
-    ("snapshot.nonfinite_field_gamma_inf.json", ("field", "gamma", 0), POS_INF),
+    ("snapshot.nonfinite_fog_gamma_inf.json", ("fog", "gamma", 0), POS_INF),
     ("snapshot.nonfinite_regime_stability_neginf.json",
      ("regime", "stability_pct"), NEG_INF),
     ("snapshot.nonfinite_levels_gamma_flip_nan.json",

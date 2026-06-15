@@ -72,7 +72,7 @@ from typing import List, Mapping, Optional, Sequence, Tuple
 # Engine lives outside the pnpm/py package tree; put its src on the path RELATIVE TO
 # THIS FILE (cwd-independent) so the locked position model + GEX scale import cleanly
 # whether this module is imported from the repo root, a test, or the sibling runner.
-# (Same idiom as ddoi_divergence.py / hiro_eval.py.)
+# (Same idiom as ddoi_divergence.py / flux_eval.py.)
 _ENGINE_SRC = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "services", "engine", "src")
 )
@@ -107,7 +107,7 @@ __all__ = [
 FlowKey = Tuple[float, bool]
 
 #: A small, FIXED panel of seeds for the directional-destroying flow-sign shuffle. Base
-#: seed matches analysis/ddoi.py / hiro_eval.py so the falsification control is the same
+#: seed matches analysis/ddoi.py / flux_eval.py so the falsification control is the same
 #: reproducible family used elsewhere in the analysis tree.
 DEFAULT_SHUFFLE_SEEDS = (20260612, 20260613, 20260614, 1, 7)
 
@@ -361,7 +361,7 @@ def flow_term_metrics(
 def shuffle_flow_signs(trades: Sequence[FlowTrade], seed: int) -> dict:
     """Directional-destroying control: permute the aggressor SIGN across trades, re-net.
 
-    PER-TRADE shuffle (the faithful choice, documented): mirrors ``hiro_eval.shuffle_signs``
+    PER-TRADE shuffle (the faithful choice, documented): mirrors ``flux_eval.shuffle_signs``
     — a single seeded :class:`random.Random` permutes the multiset of per-trade aggressor
     signs over the whole (day, instrument) population and reassigns them to trades in order.
     Every trade KEEPS its ``strike``/``is_call``/``size`` and the global sign multiset is
