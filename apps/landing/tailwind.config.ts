@@ -6,10 +6,10 @@ const config: Config = {
     extend: {
       colors: {
         ink: {
-          0: "#0A0A0B",
-          1: "#101012",
-          2: "#16161A",
-          3: "#1F1F25",
+          0: "#000000",
+          1: "#080809",
+          2: "#0F0F12",
+          3: "#16161A",
         },
         bone: {
           0: "#FAFAF7",
@@ -30,20 +30,25 @@ const config: Config = {
           deep: "#8E232C",
           glow: "#D54452",
         },
-        // Secondary accent — deep teal (petrol)
-        // For signal/info/secondary CTAs. NOT cyan, NOT mint.
+        // NO secondary accent. Monochrome brick.
+        // Legacy `teal-*` / `signal-*` classes resolve to brick to keep older
+        // imports compiling — they will be migrated out as sections are rewritten.
         teal: {
-          DEFAULT: "#1F8A8C",
-          deep: "#155C5E",
-          glow: "#3FB0B2",
+          DEFAULT: "#B8333E",
+          deep: "#8E232C",
+          glow: "#D54452",
         },
         signal: {
-          teal: "#1F8A8C",
-          amber: "#D4A445",
+          teal: "#B8333E",
+          amber: "#B8333E",
         },
       },
       fontFamily: {
+        // sans = UI body (Grotesk geometric, neutral)
         sans: ["var(--font-grotesk)", "ui-sans-serif", "system-ui"],
+        // display = editorial headline (Fraunces variable serif — premium, NOT-AI)
+        display: ["var(--font-display)", "ui-serif", "Georgia", "serif"],
+        // mono = numbers, code, operator console
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       letterSpacing: {
@@ -51,9 +56,10 @@ const config: Config = {
         snug: "-0.02em",
       },
       fontSize: {
-        "display-1": ["clamp(4rem, 12vw, 11rem)", { lineHeight: "0.92", letterSpacing: "-0.04em", fontWeight: "600" }],
-        "display-2": ["clamp(3rem, 8vw, 7rem)", { lineHeight: "0.95", letterSpacing: "-0.03em", fontWeight: "600" }],
-        eyebrow: ["0.75rem", { lineHeight: "1", letterSpacing: "0.18em", fontWeight: "500" }],
+        // Display sizes use display family (Fraunces). Tighter line-height for serif gravitas.
+        "display-1": ["clamp(4rem, 12vw, 11rem)", { lineHeight: "0.88", letterSpacing: "-0.035em", fontWeight: "500" }],
+        "display-2": ["clamp(3rem, 8vw, 7rem)", { lineHeight: "0.92", letterSpacing: "-0.025em", fontWeight: "500" }],
+        eyebrow: ["0.75rem", { lineHeight: "1", letterSpacing: "0.22em", fontWeight: "500" }],
       },
       animation: {
         "marquee": "marquee 40s linear infinite",

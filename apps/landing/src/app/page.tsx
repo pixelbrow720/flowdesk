@@ -1,28 +1,34 @@
 import { Nav } from "@/components/layout/nav";
 import { Hero } from "@/components/sections/hero";
-import { Manifesto } from "@/components/sections/manifesto";
-import { Lenses } from "@/components/sections/lenses";
+import { Problem } from "@/components/sections/problem";
 import { System } from "@/components/sections/system";
-import { Marquee } from "@/components/sections/marquee";
-import { Workflows } from "@/components/sections/workflows";
-import { Exhibit } from "@/components/sections/exhibit";
-import { Pricing } from "@/components/sections/pricing";
-import { CTA, Footer } from "@/components/sections/cta";
+import { Lenses } from "@/components/sections/lenses";
+import { Flow } from "@/components/sections/flow";
+import { Honest } from "@/components/sections/honest";
+import { Access } from "@/components/sections/access";
+import { Footer } from "@/components/sections/footer";
 
+/**
+ * Landing — narrative arc:
+ *   Nav → Hero (hook) → Problem (agitate) → System (reveal) →
+ *   Lenses (depth) → Flow (architecture) → Honest (trust) →
+ *   Access (single CTA) → Footer
+ *
+ * Per user direction: NO buttons in hero / nav / cards.
+ * The ONLY Login-with-Discord CTA on the entire page lives in <Access />.
+ */
 export default function Page() {
   return (
     <>
       <Nav />
       <main>
         <Hero />
-        <Manifesto />
-        <Lenses />
+        <Problem />
         <System />
-        <Marquee />
-        <Workflows />
-        <Exhibit />
-        <Pricing />
-        <CTA />
+        <Lenses />
+        <Flow />
+        <Honest />
+        <Access />
       </main>
       <Footer />
     </>

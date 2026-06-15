@@ -975,3 +975,60 @@ all 8 built points (NOT a rebuild):
 - This PROGRESS.md created. Next: start Point 1 (#7 total-hedging).
 - Prior commits this session: `e0be22c` (synthetic_oi docs), `0a5cec1` (VEX/CHEX),
   `733395e` (validation harness), `1131d9b` (#5/#6/#7 plan doc).
+
+---
+
+## 2026-06-15 — Landing round-2 polish + copy de-leak
+
+**Scope:** `apps/landing` only. Visual feedback round on top of the round-1
+brick-aura build. Seven concrete demands, all addressed.
+
+**What changed (one line each)**
+
+1. `ink-0` → pure `#000000` (was `#0A0A0B`).
+2. `<CursorTrigger />` mounted in root layout — viewport-wide brick smoke
+   anchored to the cursor; pointer-events-none, screen-blended, RM-aware.
+3. Static aura brick removed from all seven sections — ambient brick now
+   comes from the cursor only.
+4. Both display headlines per section flipped to `text-bone-0` (white).
+5. `<HoverAura />` atom added in two variants: `stay` (cards) and `sweep`
+   (Honest rows + Access bullets); `aura-sweep` keyframe in `globals.css`.
+6. Display headlines bumped to `leading-[0.92]` (Hero) / `leading-[0.96]`
+   (sections) for descender clearance.
+7. Lenses horizontal scroll re-spaced — `min(720px, 78vw)` per card,
+   `2vw` gap, track translate recomputed flush.
+8. `copy.ts` rewritten outcome-first. `<head>` description de-leaked.
+   Removed: `Black-76`, `Databento`, `GLBX.MDP3`, `Newton→bisection`,
+   `tol 1e-6`, `Raw-SVI`, `Nelder-Mead`, `HIRO_t = Σ s·δ·q·M·F`, `SOFR`,
+   `+1 call · −1 put`, `schema_version=2`, `pydantic ↔ zod`,
+   `flowdesk:now`, Redis/TimescaleDB stack names, instrument multipliers.
+
+**Files**
+
+```
+M apps/landing/tailwind.config.ts
+M apps/landing/src/app/layout.tsx
+M apps/landing/src/app/globals.css
+A apps/landing/src/components/atoms/cursor-trigger.tsx
+A apps/landing/src/components/atoms/hover-aura.tsx
+M apps/landing/src/components/sections/{hero,problem,system,lenses,flow,honest,access}.tsx
+M apps/landing/src/lib/copy.ts
+M docs/design/landing-page-plan.md   (round-2 section appended)
+```
+
+**Verification**
+
+- `next dev -p 4321` → HTTP 200, ~95 KB SSR.
+- Leak grep on rendered HTML (Black-76 / Databento / GLBX / Newton / SVI /
+  tol 1e- / schema_version / Redis / Timescale / HIRO_t / SOFR) — **0/11 hits**.
+- All seven section anchors present.
+- HoverAura spans render with `origin-left scale-x-0 group-hover:scale-x-100`.
+- CursorTrigger radial-gradient div present in body.
+
+**Out of scope (not touched)**
+
+- Page order, single CTA, nav, footer.
+- Backend / engine / contracts (this is landing-only).
+- Color tokens beyond `ink-0`.
+
+**Full rationale + de-leak mapping table:** `docs/design/landing-page-plan.md` §10.

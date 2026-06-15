@@ -181,3 +181,114 @@ Deploy:       Vercel atau Cloudflare Pages (static)
 5. **Beta access form**: email-only atau dengan screening question
    (e.g., "broker prop apa?").
 
+## 10. Round-2 polish (2026-06-15)
+
+Visual feedback round on top of the round-1 brick-aura build. Driven by user
+screenshots and 7 concrete demands.
+
+### 10.1 Decisions
+
+- **BG hitam pekat.** `ink-0` was `#0A0A0B` (slightly grey), reset to pure
+  `#000000`. `themeColor` and the body BG follow.
+- **Cursor smoke (brick).** New `<CursorTrigger />` mounted in the root layout.
+  A fixed full-viewport div carries a radial brick gradient anchored to
+  `--cx/--cy`, blended via `mix-blend-mode: screen`, fading in/out via `--cv`
+  on `mousemove`. Disabled on coarse pointers and `prefers-reduced-motion`.
+- **Static aura brick removed.** Every section that previously painted a fixed
+  brick blob behind the headline lost it. Ambient brick now comes from the
+  cursor trigger only — the page is calm at rest, brick wakes on interaction.
+- **Headline2 white, not brick.** Both display lines are `text-bone-0`. The
+  brick reveal is delivered by the cursor trigger passing across them, not by
+  static color.
+- **Hover aura per card / row.** A reusable `<HoverAura />` atom lives inside a
+  `group`, absolutely positioned with `-z-10`, `origin-left`, and a 600ms
+  transform+opacity transition.
+  - **`stay` variant** — grows on hover and holds. Used on Problem/System/
+    Lenses/Flow cards (the "settles, not just passes through" ask).
+  - **`sweep` variant** — runs the `aura-sweep` keyframe (defined in
+    `globals.css`) once per hover, travelling left → through → off-right and
+    fading. Used on Honest table rows, where a persistent fill would drown the
+    rest of the table.
+- **Typography descender clearance.** Display headlines move from
+  `leading-[0.82..0.86]` to `leading-[0.92]` (Hero) / `leading-[0.96]`
+  (sections). This kills the `p`/`y`/`h` collisions across `options charts` and
+  `yesterday's news`.
+- **Lenses spacing tightened.** Card width `min(720px, 78vw)`, gap `2vw`. Track
+  width and translate are recomputed from `n_cards × (card + gap) + 2 × side
+  padding` so the last card lands flush right.
+
+### 10.2 Copy de-leak (proprietary protection)
+
+The previous copy named exact internals — competitors could rebuild the
+pipeline from the marketing page alone. The pass strips that down to
+**outcome language**, keeping conventions and instrument names intact but
+removing constants, vendor names, schema versions, internal keys, and
+algorithm specifics.
+
+| Removed (leaked) | Replacement (clean) |
+|---|---|
+| `Black-76 on the future · r = ln(1 + SOFR)` | `Futures-correct math · standard risk-free curve` |
+| `Newton → bisection · tol 1e-6` | `Two-stage convergence to floating-point tolerance` |
+| `+1 call · −1 put · hardcoded` | `Industry convention, locked at codepath` |
+| `VOL · cumulative since RTH open` | `Volume-weighted · cumulative since RTH open` |
+| `gamma-dollar Top-3 · static for session` | `Top dealer-gamma levels · fixed at session open` |
+| `HIRO_t = Σ s·δ·q·M·F. Aggressor side from CME trades.side (B=+1, A=−1, N=0)` | `Aggressor-signed flow accumulated since the RTH open` |
+| `Raw-SVI surface fit per expiry (deterministic Nelder-Mead)` | `Per-expiry vol surface, deterministic` |
+| `Databento` (named in flow + node detail) | `Licensed CME feed` |
+| `GLBX.MDP3 · trades · bbo-1m` | `Licensed CME feed · chain + trades` |
+| `schema_version=2 · pydantic ↔ zod byte-for-byte` | `Schema-locked · typed end-to-end` |
+| `flowdesk:now · flowdesk:updates` (Redis keys) | `In-memory · sub-second fanout` |
+| `snapshots hypertable · replay` | `Scrubbable past sessions` |
+| `(M=$50, step=5)` / `(M=$20, step=10)` | `CME /ES and /NQ · standard contract specs` |
+
+What stays on the page (these are not leaks):
+- `/ES`, `/NQ`, `0DTE`, `RTH`, `GEX`, `DEX`, `IV`, `vanna`, `charm`,
+  `gamma walls`, `regime flip`, `ATM`, `expected move`, `skew`.
+- Engine names `FOG`, `FLUX`, `ARC` and the lens labels `Profile`, `Walls`,
+  `Regime`, `Replay`.
+- The `EXPERIMENTAL` flag pattern, advertised on purpose.
+- Cadence claim `one read per minute`, audit claim `worker ↔ generator
+  bit-equal` (stated as "identical bytes / receipts you can audit").
+
+The same de-leak hits `<head>` — `metadata.description` no longer mentions
+Black-76, Snapshot, FOG/FLUX/ARC. Open Graph and Twitter cards are unchanged
+because they were already in outcome-language.
+
+### 10.3 Files touched
+
+```
+apps/landing/tailwind.config.ts                         ink-0 #0A0A0B → #000
+apps/landing/src/app/layout.tsx                         themeColor + meta de-leak + CursorTrigger mount
+apps/landing/src/app/globals.css                        @keyframes aura-sweep + .anim-aura-sweep
+apps/landing/src/components/atoms/cursor-trigger.tsx    NEW — viewport brick smoke
+apps/landing/src/components/atoms/hover-aura.tsx        NEW — group-hover aura (stay | sweep)
+apps/landing/src/components/sections/hero.tsx           leading 0.92, headline2 white, aura removed
+apps/landing/src/components/sections/problem.tsx        leading 0.96, headline2 white, HoverAura(stay) ×3
+apps/landing/src/components/sections/system.tsx         leading 0.96, headline2 white, HoverAura(stay) ×3
+apps/landing/src/components/sections/lenses.tsx         spacing tight, headline2 white, HoverAura per card
+apps/landing/src/components/sections/flow.tsx           leading 0.96, headline2 white, HoverAura per node
+apps/landing/src/components/sections/honest.tsx         leading 0.96, headline2 white, HoverAura(sweep) per row
+apps/landing/src/components/sections/access.tsx         leading 0.96, headline2 white, HoverAura(sweep) per bullet
+apps/landing/src/lib/copy.ts                            de-leak rewrite (full table above)
+```
+
+### 10.4 Verification
+
+- Dev server: `next dev -p 4321`, HTTP 200, ~95 KB SSR HTML.
+- Leak grep on rendered HTML for `Black-76 / Databento / GLBX / Newton / SVI /
+  tol 1e- / schema_version / Redis / Timescale / HIRO_t / SOFR` — all 0.
+- All seven section anchors (`top problem system lenses flow honest access`)
+  present in DOM.
+- `CursorTrigger` SSR-renders the radial-gradient div with brick stops.
+- HoverAura spans render with `origin-left scale-x-0 ... group-hover:scale-x-100`
+  on every targeted card.
+
+### 10.5 What was deliberately NOT changed
+
+- Page order, single Discord CTA, nav, footer.
+- Existing entrance fade+slide animations on headlines (framer-motion).
+- Backend / engine / contracts. This is landing-only.
+- The `lenis-provider`, `magnetic`, and `globals.css` reset (only the
+  `aura-sweep` keyframe block was added).
+- Color tokens beyond `ink-0`: `brick`, `bone-*`, `ink-1..3` are unchanged.
+
