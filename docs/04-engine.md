@@ -202,40 +202,35 @@ caveat below). EXPERIMENTAL. See
 ### `proprietary.py` (optional output — EXPERIMENTAL)
 Reverse-engineered SpotGamma-style **named** key levels on the **OI-gamma** basis
 (carried-in OI × Black-76 gamma, locked dealer signs):
-- **Volatility Trigger** — the zero-crossing of *cumulative* net OI-gamma (the
-  OI/static analogue of the VOL-based gamma flip).
+- **`oi_gamma_flip`** — the zero-crossing of *cumulative* net OI-gamma (the
+  OI/static analogue of the VOL-based `levels.gamma_flip`). HONESTLY RENAMED from
+  `volatility_trigger` (commit `e022fd7`) — the implementation is the gamma-flip on
+  the OI basis, NOT SpotGamma's Volatility Trigger (see caveat below).
 - **Absolute Gamma strike** — the strike with the largest total OI-gamma.
 - **Hedge Wall** — the strike with the largest `|net OI-gamma|`.
 
-> **Honesty caveat — `volatility_trigger`'s method CONTRADICTS its cited source.**
-> The code (`proprietary.py:87-107`) implements VT as the cumulative net-OI-gamma
-> zero-crossing — a **simple OI crossover**. The cited research
-> (`research/archive/riset-spotgamma.md:266`, also :444) explicitly states
-> SpotGamma's Volatility Trigger is **[PROPRIETARY] … from the actual distribution
-> of dealer gamma across strikes, NOT a simple OI crossover.** So this is a tractable
-> **PROXY**, not a faithful reverse-engineering of the named level. `hedge_wall`
-> (`proprietary.py:123-130`) also diverges from the doc's argmax `|total gamma|`
-> near-spot hypothesis (`mega-riset2.md:157`); `abs_gamma_strike` DOES match the
-> doc's [FAKTA] argmax-total-gamma definition. Whether to **rename** `volatility_
-> trigger` is a pending human decision — recorded here, not changed.
->
-> **Fase 2 dissection (sharpened) — VT-as-coded is the gamma flip on the OI basis, a
-> RELABEL.** `volatility_trigger` (`proprietary.py:93`) is algorithmically IDENTICAL
-> to the locked `levels.gamma_flip` (`levels.py:139`): both take the cumulative
-> net-gamma zero-crossing with the same linear interpolation — the ONLY difference is
-> the input basis (OI-gamma vs VOL-gamma). The research archive distinguishes VT from
-> the gamma flip but gives **no reproducible formula** for SpotGamma's VT, only a
-> negative/ordinal description ("NOT a simple crossover," last major positive-gamma
-> support, above the Put Wall and below Zero Gamma — `riset-spotgamma.md:266`,
-> `mega-riset2.md:114-116,145`); every computable candidate (e.g. a τ-threshold
+> **Honesty caveat — why this field is `oi_gamma_flip`, not `volatility_trigger`.**
+> The code (`proprietary.py:87-107`) computes the cumulative net-OI-gamma
+> zero-crossing — a **simple OI crossover**, algorithmically IDENTICAL to the locked
+> `levels.gamma_flip` (`levels.py:139`) modulo the input basis (OI-gamma vs
+> VOL-gamma). The cited research (`research/archive/riset-spotgamma.md:266`, also
+> :444) states SpotGamma's Volatility Trigger is **[PROPRIETARY] … from the actual
+> distribution of dealer gamma across strikes, NOT a simple OI crossover**, and gives
+> no reproducible formula — only a negative/ordinal description (last major
+> positive-gamma support, above the Put Wall and below Zero Gamma —
+> `mega-riset2.md:114-116,145`). Every computable candidate (e.g. a τ-threshold
 > positive-gamma strike, `mega-riset2.md:130`, conf 55%) is sub-60%-confidence
-> inference needing a τ calibrated to SpotGamma's published VT numbers. Because
-> FlowDesk's ES/GLBX universe structurally cannot match the SPX-vendor's VT numbers, a
-> "faithful VT" would have **no validation target** — inference-dressed-as-reproduction.
-> Building it is therefore **DECLINED** (deferred until the gap-#1 90-day harness can
-> rank it, and even then τ must never be tuned to vendor numbers nor named as
-> SpotGamma's VT). The honest options are **rename** (a human/contract decision) or
-> **keep-with-honest-label**.
+> inference needing τ calibrated to SpotGamma's published VT numbers. FlowDesk's
+> ES/GLBX universe structurally cannot match the SPX-vendor's VT numbers, so a
+> "faithful VT" would have **no validation target** — inference-dressed-as-
+> reproduction. Building it was therefore **DECLINED**. Instead, the field was
+> **renamed** to `oi_gamma_flip` (commit `e022fd7`) — code, contract mirror
+> (`schema.py` ↔ `snapshot.ts` ↔ `CONTRACT.md`), tests, and golden all carry the new
+> name; `volatility_trigger` is retained nowhere as a live identifier. The new name
+> is honest about what the code does: the gamma flip on the OI basis. Related:
+> `hedge_wall` (`proprietary.py:123-130`) also diverges from the doc's argmax
+> `|total gamma|` near-spot hypothesis (`mega-riset2.md:157`); `abs_gamma_strike`
+> DOES match the doc's [FAKTA] argmax-total-gamma definition.
 
 Emitted as the optional `proprietary` field, gated by `with_proprietary` (worker +
 session generator pass `True`). Thin strikes skipped. **INFERRED approximations —

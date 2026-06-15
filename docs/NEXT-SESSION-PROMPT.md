@@ -51,9 +51,12 @@ B. quant-research-expert: verifikasi klaim commit f4d614c/6be20ff — DDOI flat 
    (49.2/50.8), cross-day 0DTE mustahil, definisi proprietary dari riset-spotgamma.md,
    HiroTrade.ts, FD vanna/charm. (Tertunda sesi lalu karena agent belum ke-load.)
 C. Tindak lanjuti temuan audit non-blocking (PROGRESS.md): label open/close DDOI
-   relatif-snapshot; volatility_trigger ambil crossing pertama; risiko laten mutasi
-   rows in-place. Putuskan: perbaiki (delegasi ke coder→test-author→auditor) atau
-   dokumentasikan sebagai batasan sadar (doc-scribe).
+   relatif-snapshot; risiko laten mutasi rows in-place. Putuskan: perbaiki
+   (delegasi ke coder→test-author→auditor) atau dokumentasikan sebagai batasan
+   sadar (doc-scribe). (CATATAN: item `volatility_trigger` sudah selesai — rename
+   ke `oi_gamma_flip` di commit `e022fd7`; sub-isu "ambil crossing pertama saat
+   multi-cross" tercatat sebagai batasan sadar di `docs/04-engine.md` §proprietary
+   dan `docs/08-status-and-gaps.md`.)
 
 == ROADMAP BESAR (tawarkan, JANGAN auto-kerjakan tanpa keputusanku) ==
 - Gap #1 VALIDASI (satu-satunya gap nyata): forward-test ~90 hari. Pull data MANUAL
