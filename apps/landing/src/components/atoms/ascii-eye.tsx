@@ -1,154 +1,110 @@
 "use client";
 
 /**
- * AsciiEye — animated ASCII eye that scans and occasionally blinks.
+ * AsciiEye — large brick-red ASCII disc that "watches" from the hero's
+ * right column. Procedurally generated density gradient: sparse outer rim,
+ * dense inner core. No iris/pupil — abstract motif that pairs with the
+ * brick headline accent rather than a literal eye.
  *
- * Behavior:
- *   - Iris position drifts horizontally (sinusoidal, ~6s cycle, ±3 chars).
- *   - Eye blinks ~once every 4-7 seconds (lid closes 200ms, opens 100ms).
- *   - Reduced-motion → static centered eye, no animation.
+ * Animation: slow opacity pulse (~5s breath cycle), bone-3 → bone-1 →
+ * bone-3 modulation via opacity. No per-character animation, no scan,
+ * no blink. The disc is a static glyph that breathes.
  *
- * Render strategy:
- *   - Pre-built character grid (ROWS × COLS) as the eye's open frame.
- *   - Per frame, we compute (irisX, blinkPhase) and stamp the iris into
- *     the open frame, OR replace mid-rows with a closed-lid line.
- *   - Output a single multi-line string into a <pre>; React only swaps the
- *     string each rAF tick, no per-character DOM nodes.
+ * Reduced-motion: opacity locked at the breath midpoint (0.85). No rAF.
  *
- * Visual scale: ~30 cols × 11 rows. Tuned for hero top-right block.
+ * Render: single <pre>, the frame string is precomputed at module load
+ * so React only swaps the wrapper opacity per tick — zero string work
+ * after mount.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 // ────────────────────────────────────────────────────────────────────────────
-// Eye art (open state, iris centered). 11 rows × 31 cols.
-// '@' marks the iris cell (replaced per-frame). Lid rows above/below are
-// the static eye outline.
-const OPEN_FRAME = [
-  "         .,;ooooooooooo;,.     ",
-  "       ,;oooooooooooooooooo;,  ",
-  "    .;oooooo;'.       .';oooo;.",
-  "   ,oooooo'    .:::::.    'ooo,",
-  "  oooooo    .::::OOOO::::.   oo",
-  " ooooo    ::::OOO@@@OOO::::    o",
-  "  oooooo    '::::OOOO::::'   oo",
-  "   'oooooo,    ':::::'    ,ooo'",
-  "    ':oooooo;,.       .,;oooo;'",
-  "       ';oooooooooooooooooo;'  ",
-  "         ''`;ooooooooooo;`''   ",
-];
-const COLS = OPEN_FRAME[0].length;
-const ROWS = OPEN_FRAME.length;
-// Iris row in the open frame (the row with '@@@'):
-const IRIS_ROW = 5;
-// Iris center col (the middle '@' of '@@@'):
-const IRIS_CENTER_COL = 15;
+// Disc generation (deterministic, runs once at module load).
+// We pick a fixed PRNG seed so the shape is identical between SSR and CSR;
+// otherwise hydration would mismatch.
 
-// Scan motion
-const SCAN_PERIOD_MS = 6000; // full left→right→left cycle
-const SCAN_AMPLITUDE = 3; // ±3 chars from iris center
+const COLS = 50;
+const ROWS = 25;
+const CHAR_ASPECT = 0.5; // monospace width/height ratio for circle correction
 
-// Blink timing
-const BLINK_MIN_GAP_MS = 4000;
-const BLINK_MAX_GAP_MS = 7000;
-const BLINK_CLOSE_MS = 200;
-const BLINK_OPEN_MS = 100;
+// Density ramp tuned for visual weight: very thin outer rim, then dense
+// fill from ~85% radius inward. Goal is a solid-feeling brick disc, not
+// a texture cloud.
+const OUTER = [".", ",", "'", "`"];
+const MID_OUTER = ["*", "+", "%", "&"];
+const MID = ["#", "&", "%", "@"];
+const INNER = ["#", "@", "$", "&"];
+const CORE = ["#", "@", "$", "█"];
 
-// Closed-lid line (replaces mid-rows during blink). Same width as COLS.
-const CLOSED_LINE = "    ─────────────────────────    ";
-// Pad / trim to COLS exactly:
-const CLOSED_LID = CLOSED_LINE.padEnd(COLS, " ").slice(0, COLS);
+// Mulberry32 PRNG — small, deterministic, browser-safe.
+function mulberry32(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-function buildFrame(irisOffset: number, blinkAmount: number): string {
-  // blinkAmount: 0 = fully open, 1 = fully closed.
-  // We collapse rows from top and bottom toward the iris row as blink grows.
-  const lines = OPEN_FRAME.slice();
-
-  // Place iris.
-  const irisCol = Math.round(IRIS_CENTER_COL + irisOffset);
-  const irisLine = OPEN_FRAME[IRIS_ROW];
-  // Replace the 3-char @@@ region with a moved iris.
-  const before = irisLine.slice(0, IRIS_CENTER_COL - 1).replace(/@/g, "O");
-  const after = irisLine.slice(IRIS_CENTER_COL + 2).replace(/@/g, "O");
-  // Build new row with iris at irisCol.
-  let mid = irisLine.slice(IRIS_CENTER_COL - 1, IRIS_CENTER_COL + 2);
-  // Empty mid first.
-  const emptyMid = mid.replace(/@/g, "O");
-  let row = (before + emptyMid + after).split("");
-  // Stamp iris (single char @) at irisCol if it falls within the open eye area.
-  if (irisCol >= 4 && irisCol < COLS - 4) {
-    row[irisCol] = "@";
-    // Add a trailing softer pixel to fake the iris depth
-    if (irisCol - 1 >= 4) row[irisCol - 1] = "O";
-    if (irisCol + 1 < COLS - 4) row[irisCol + 1] = "O";
-  }
-  lines[IRIS_ROW] = row.join("").padEnd(COLS, " ").slice(0, COLS);
-
-  if (blinkAmount > 0) {
-    // Collapse rows. blinkAmount in [0,1].
-    // At amount=1 we want only IRIS_ROW visible as a line (closed).
-    const collapse = Math.round(blinkAmount * (ROWS / 2));
-    for (let i = 0; i < ROWS; i++) {
-      const distFromIris = Math.abs(i - IRIS_ROW);
-      if (distFromIris > ROWS / 2 - collapse) {
-        lines[i] = " ".repeat(COLS);
-      }
+function buildDisc(seed: number): string {
+  const rnd = mulberry32(seed);
+  const cx = COLS / 2;
+  const cy = ROWS / 2;
+  const radiusRef = Math.max(cx, cy / CHAR_ASPECT);
+  const lines: string[] = [];
+  for (let y = 0; y < ROWS; y++) {
+    let row = "";
+    for (let x = 0; x < COLS; x++) {
+      const dx = x - cx;
+      const dy = (y - cy) / CHAR_ASPECT;
+      let r = Math.sqrt(dx * dx + dy * dy) / radiusRef;
+      // tiny edge noise so the rim isn't a perfect circle
+      r += (rnd() - 0.5) * 0.04;
+      let ch = " ";
+      if (r > 1.0) ch = " ";
+      else if (r > 0.96) ch = OUTER[Math.floor(rnd() * OUTER.length)];
+      else if (r > 0.88) ch = MID_OUTER[Math.floor(rnd() * MID_OUTER.length)];
+      else if (r > 0.7) ch = MID[Math.floor(rnd() * MID.length)];
+      else if (r > 0.45) ch = INNER[Math.floor(rnd() * INNER.length)];
+      else ch = CORE[Math.floor(rnd() * CORE.length)];
+      row += ch;
     }
-    if (blinkAmount > 0.85) {
-      // Replace the iris row itself with the closed lid line.
-      lines[IRIS_ROW] = CLOSED_LID;
-    }
+    lines.push(row);
   }
-
   return lines.join("\n");
 }
 
+// Precompute the disc once. Seed 7 gives a balanced look in dev.
+const DISC_FRAME = buildDisc(7);
+
+// Pulse parameters
+const PULSE_PERIOD_MS = 5000; // full breath cycle
+const PULSE_MIN = 0.55;
+const PULSE_MAX = 1.0;
+const STATIC_OPACITY = 0.85;
+
 export function AsciiEye({ className = "" }: { className?: string }) {
-  const [frame, setFrame] = useState<string>(() => buildFrame(0, 0));
+  const [opacity, setOpacity] = useState<number>(STATIC_OPACITY);
   const rafRef = useRef<number | null>(null);
-  const reducedRef = useRef(false);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    reducedRef.current = mq.matches;
-    if (reducedRef.current) {
-      setFrame(buildFrame(0, 0));
+    if (mq.matches) {
+      setOpacity(STATIC_OPACITY);
       return;
     }
 
     const start = performance.now();
-    let nextBlinkAt =
-      start + BLINK_MIN_GAP_MS + Math.random() * (BLINK_MAX_GAP_MS - BLINK_MIN_GAP_MS);
-    let blinkStartedAt: number | null = null;
-
     const tick = (now: number) => {
-      // Iris scan: sinusoidal between -SCAN_AMPLITUDE..+SCAN_AMPLITUDE.
-      const scanT = ((now - start) % SCAN_PERIOD_MS) / SCAN_PERIOD_MS;
-      const irisOffset = Math.sin(scanT * Math.PI * 2) * SCAN_AMPLITUDE;
-
-      // Blink state machine.
-      let blinkAmount = 0;
-      if (blinkStartedAt !== null) {
-        const elapsed = now - blinkStartedAt;
-        if (elapsed < BLINK_CLOSE_MS) {
-          blinkAmount = elapsed / BLINK_CLOSE_MS;
-        } else if (elapsed < BLINK_CLOSE_MS + BLINK_OPEN_MS) {
-          blinkAmount = 1 - (elapsed - BLINK_CLOSE_MS) / BLINK_OPEN_MS;
-        } else {
-          blinkStartedAt = null;
-          nextBlinkAt =
-            now +
-            BLINK_MIN_GAP_MS +
-            Math.random() * (BLINK_MAX_GAP_MS - BLINK_MIN_GAP_MS);
-        }
-      } else if (now >= nextBlinkAt) {
-        blinkStartedAt = now;
-      }
-
-      setFrame(buildFrame(irisOffset, blinkAmount));
+      const t = ((now - start) % PULSE_PERIOD_MS) / PULSE_PERIOD_MS;
+      // Smooth sinusoidal between PULSE_MIN and PULSE_MAX.
+      const o = PULSE_MIN + (PULSE_MAX - PULSE_MIN) * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
+      setOpacity(o);
       rafRef.current = requestAnimationFrame(tick);
     };
-
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -158,9 +114,10 @@ export function AsciiEye({ className = "" }: { className?: string }) {
   return (
     <pre
       aria-hidden="true"
-      className={`font-mono text-[11px] leading-[1.1] text-bone-2 select-none whitespace-pre ${className}`}
+      style={{ opacity }}
+      className={`font-mono text-[11px] leading-[0.95] text-brick-glow select-none whitespace-pre tracking-[-0.02em] ${className}`}
     >
-      {frame}
+      {DISC_FRAME}
     </pre>
   );
 }

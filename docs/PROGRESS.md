@@ -1134,3 +1134,23 @@ Filled top-right negative space with an animated ASCII eye.
   (delayed transition was sticking at opacity:0 in some flows).
 - Verified: tsc clean, HTTP 200, 3-frame screenshot diff confirms
   animation tick, vision confirms recognizable eye motif.
+
+## 2026-06-16 (later·3) — Hero disc rebalanced per user reference
+
+User shared a reference image (large red ASCII disc, abstract, no iris)
+plus a teal-oval annotation "DISINI LETAK MATANYA" marking the right
+column of the hero. Direction: bigger, denser, brick-red, real space.
+
+- `ascii-eye.tsx` rewritten: procedural 50×25 disc via seeded
+  Mulberry32 PRNG (deterministic so SSR/CSR match). Density ramp
+  tuned for solid feel — outer rim very thin, dense fill from ~88%
+  radius inward. Color text-brick-glow at 11px, leading 0.95,
+  tracking -0.02em.
+- Animation: opacity pulse only (0.55 ↔ 1.0, 5s sinusoidal). No
+  scan, no blink. RM-aware (locked at 0.85).
+- `hero.tsx`: AsciiEye moved inline to top of right column above
+  the description paragraph. mb-6 separator.
+- Vision verdict: "circular disc, density solid, color saturated,
+  65/35 weight ratio with headline = healthy editorial asymmetry,
+  ship-able." 3 iterations: first density too sparse, tightened
+  thresholds + heavier core set fixed it.

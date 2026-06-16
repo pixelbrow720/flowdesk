@@ -18,14 +18,6 @@ export function Hero() {
   return (
     <section id="top" className="relative isolate overflow-hidden bg-ink-0">
       <div className="container-grid relative pt-32 pb-12 md:pt-40 md:pb-16">
-        {/* AsciiEye — top-right, hidden on mobile to avoid layout fight */}
-        <div
-          className="pointer-events-none absolute right-6 top-28 hidden opacity-90 md:right-10 md:top-36 md:block lg:right-14 lg:top-40"
-          aria-hidden="true"
-        >
-          <AsciiEye />
-        </div>
-
         {/* Eyebrow status line — terminal-ish */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10.5px] uppercase tracking-[0.22em] text-bone-3">
           <span className="flex items-center gap-2">
@@ -38,7 +30,7 @@ export function Hero() {
 
         {/* Main composition */}
         <div className="mt-16 grid grid-cols-1 items-end gap-x-10 gap-y-10 md:mt-24 md:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-          {/* Headline — both lines WHITE. Cursor smoke does the brick. */}
+          {/* Headline — line 1 white, line 2 brick. */}
           <motion.h1
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
@@ -49,13 +41,16 @@ export function Hero() {
             <span className="block text-brick">{t(lang, copy.hero.headline2)}</span>
           </motion.h1>
 
-          {/* Subhead + scroll hint. NO buttons. */}
+          {/* Right column: AsciiEye disc + subhead + scroll hint. */}
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
             className="max-w-md pb-2 md:pb-4"
           >
+            <div className="mb-6 hidden md:block" aria-hidden="true">
+              <AsciiEye />
+            </div>
             <p className="text-base leading-relaxed text-bone-2 md:text-[17px]">
               {t(lang, copy.hero.sub)}
             </p>
