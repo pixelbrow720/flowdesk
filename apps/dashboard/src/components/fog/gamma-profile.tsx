@@ -25,6 +25,10 @@ type Props = {
   spot: number;
   callWalls: { strike: number }[];
   putWalls: { strike: number }[];
+  /** Session intraday high (price reached since RTH open). Optional. */
+  sessionHigh?: number;
+  /** Session intraday low. Optional. */
+  sessionLow?: number;
   height?: number;
 };
 
@@ -40,6 +44,8 @@ export function GammaProfile({
   spot,
   callWalls,
   putWalls,
+  sessionHigh,
+  sessionLow,
   height = 520,
 }: Props) {
   if (data.length === 0) return null;
@@ -93,6 +99,12 @@ export function GammaProfile({
     return PAD_Y + t * (H - 2 * PAD_Y);
   };
 
+  // Session H/L y-positions (for horizontal dashed reference lines).
+  // yOf already extrapolates correctly for strikes between/outside the grid
+  // since strikes are discrete (kelipatan 5) but H/L can be fractional.
+  const yHigh = sessionHigh != null ? yOf(sessionHigh) : null;
+  const yLow = sessionLow != null ? yOf(sessionLow) : null;
+
   const spineX = PAD_LEFT + (W - PAD_LEFT - PAD_RIGHT) / 2;
   const halfW = (W - PAD_LEFT - PAD_RIGHT) / 2;
   const xOf = (g: number) => spineX + (g / maxAbsGamma) * halfW;
@@ -117,6 +129,56 @@ export function GammaProfile({
           stroke="rgba(250,250,247,0.18)"
           strokeWidth={1}
         />
+
+        {/* Session high/low — horizontal dashed reference lines spanning panel */}
+        {yHigh != null && (
+          <g>
+            <line
+              x1={PAD_LEFT - 2}
+              x2={W - PAD_RIGHT}
+              y1={yHigh}
+              y2={yHigh}
+              stroke="rgba(200,200,200,0.32)"
+              strokeWidth={0.8}
+              strokeDasharray="2 3"
+            />
+            <text
+              x={W - PAD_RIGHT}
+              y={yHigh - 2}
+              textAnchor="end"
+              fontFamily="ui-monospace, monospace"
+              fontSize={7.5}
+              fill="rgba(200,200,200,0.55)"
+              letterSpacing="0.18em"
+            >
+              H {sessionHigh!.toFixed(2)}
+            </text>
+          </g>
+        )}
+        {yLow != null && (
+          <g>
+            <line
+              x1={PAD_LEFT - 2}
+              x2={W - PAD_RIGHT}
+              y1={yLow}
+              y2={yLow}
+              stroke="rgba(200,200,200,0.32)"
+              strokeWidth={0.8}
+              strokeDasharray="2 3"
+            />
+            <text
+              x={W - PAD_RIGHT}
+              y={yLow + 8}
+              textAnchor="end"
+              fontFamily="ui-monospace, monospace"
+              fontSize={7.5}
+              fill="rgba(200,200,200,0.55)"
+              letterSpacing="0.18em"
+            >
+              L {sessionLow!.toFixed(2)}
+            </text>
+          </g>
+        )}
 
         {/* Header axis labels */}
         <text

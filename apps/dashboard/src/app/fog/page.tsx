@@ -16,6 +16,11 @@ import { WallsList } from "@/components/fog/walls-list";
 import { StatTile } from "@/components/fog/stat-tile";
 import { RegimeBadge } from "@/components/fog/regime-badge";
 import type { Candle } from "@/components/fog/price-chart";
+import {
+  generateGexField,
+  generateSessionRange,
+  generateSecondaryLine,
+} from "@/lib/dummy-field";
 
 // ─── DUMMY DATA ─────────────────────────────────────────────────
 const FAKE = {
@@ -93,6 +98,16 @@ function generateCandles(spot: number): Candle[] {
 
 export default function FogPage() {
   const d = FAKE;
+  // Derived dummy artifacts (pure functions of FAKE → stable per render)
+  const field = generateGexField({
+    spot: d.spot,
+    callWalls: d.callWalls,
+    putWalls: d.putWalls,
+    gammaProfile: d.gammaProfile,
+  });
+  const { sessionHigh, sessionLow } = generateSessionRange(d.spot);
+  const secondary = generateSecondaryLine(d.candles, 20);
+
   return (
     <div className="px-5 py-5">
       {/* Eyebrow */}
@@ -150,11 +165,15 @@ export default function FogPage() {
       <FogRow2
         gammaProfile={d.gammaProfile}
         candles={d.candles}
+        secondary={secondary}
         callWalls={d.callWalls}
         putWalls={d.putWalls}
         spot={d.spot}
         flip={d.flipLevel}
         instrument={d.instrument}
+        field={field}
+        sessionHigh={sessionHigh}
+        sessionLow={sessionLow}
       />
 
       {/* Row 3 — walls list */}

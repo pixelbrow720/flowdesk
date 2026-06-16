@@ -24,12 +24,16 @@ export type Candle = { t: number; o: number; h: number; l: number; c: number };
 
 type Props = {
   candles: Candle[];
+  /** Optional secondary line (e.g. 20-period SMA) to overlay on top of candles. */
+  secondary?: Array<{ t: number; v: number }>;
   callWalls: { strike: number }[]; // already top-3 ordered (CW1=biggest)
   putWalls: { strike: number }[];
   spot: number;
   flip: number;
   levels: LevelsState;
   height?: number;
+  /** Make the SVG background fully transparent so a heatmap canvas sits below it. */
+  transparent?: boolean;
 };
 
 const COLOR = {
@@ -47,12 +51,14 @@ const COLOR = {
 
 export function PriceChart({
   candles,
+  secondary,
   callWalls,
   putWalls,
   spot,
   flip,
   levels,
   height = 520,
+  transparent = false,
 }: Props) {
   if (candles.length === 0) return null;
 
@@ -115,6 +121,13 @@ export function PriceChart({
       : []),
   ];
 
+  // Build path for secondary line (smoothed reference) if provided
+  const secondaryPath = secondary && secondary.length
+    ? secondary
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${xOf(p.t).toFixed(2)} ${yOf(p.v).toFixed(2)}`)
+        .join(" ")
+    : null;
+
   return (
     <div className="w-full">
       <svg
@@ -122,6 +135,7 @@ export function PriceChart({
         className="w-full h-auto"
         preserveAspectRatio="none"
         aria-label="Price candlestick chart with key levels"
+        style={transparent ? { background: "transparent" } : undefined}
       >
         {/* Subtle grid */}
         {[0.25, 0.5, 0.75].map((f) => (
@@ -219,6 +233,18 @@ export function PriceChart({
             </g>
           );
         })}
+
+        {/* Secondary line (smoothed/reference) — drawn last so sits above candles */}
+        {secondaryPath && (
+          <path
+            d={secondaryPath}
+            fill="none"
+            stroke="rgba(220,220,220,0.55)"
+            strokeWidth={1.1}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
       </svg>
     </div>
   );
