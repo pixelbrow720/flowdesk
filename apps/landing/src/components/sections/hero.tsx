@@ -1,16 +1,13 @@
 "use client";
 
 /**
- * HERO — solid black BG. No static aura.
- * Headline1 white, headline2 brick (one-line accent payoff).
+ * HERO — solid black BG. Headline1 white, headline2 brick.
  * Headline leading 0.92 for descender clearance (p, g, y, q).
- * AsciiEye sits in the top-right negative space, "watching" the dealer line.
  */
 
 import { motion } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
-import { AsciiEye } from "@/components/atoms/ascii-eye";
 
 export function Hero() {
   const lang = useLang();
@@ -41,16 +38,13 @@ export function Hero() {
             <span className="block text-brick">{t(lang, copy.hero.headline2)}</span>
           </motion.h1>
 
-          {/* Right column: AsciiEye disc + subhead + scroll hint. */}
+          {/* Right column: subhead + scroll hint. */}
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
             className="max-w-md pb-2 md:pb-4"
           >
-            <div className="mb-6 hidden md:block" aria-hidden="true">
-              <AsciiEye />
-            </div>
             <p className="text-base leading-relaxed text-bone-2 md:text-[17px]">
               {t(lang, copy.hero.sub)}
             </p>

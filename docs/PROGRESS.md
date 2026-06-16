@@ -1154,3 +1154,12 @@ column of the hero. Direction: bigger, denser, brick-red, real space.
   65/35 weight ratio with headline = healthy editorial asymmetry,
   ship-able." 3 iterations: first density too sparse, tightened
   thresholds + heavier core set fixed it.
+
+## 2026-06-16 (later·4) — Eye removed entirely
+
+User: "hapus aja la mata itu bikin stres". Done.
+
+- Deleted `apps/landing/src/components/atoms/ascii-eye.tsx`.
+- `hero.tsx`: dropped AsciiEye import + render, restored right column
+  to plain subhead + scroll-hint layout.
+- Hero is now back to clean two-column: headline left, paragraph right.
