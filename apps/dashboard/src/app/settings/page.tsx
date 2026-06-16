@@ -1,10 +1,9 @@
-import { ComingSoon } from "@/components/atoms/coming-soon";
-
-export default function Page() {
+export default function SettingsPage() {
   return (
-    <ComingSoon
-      title="SETTINGS"
-      hint="Operator preferences · feed source · risk caps · keybindings"
-    />
+    <div className="flex min-h-screen items-center justify-center">
+      <p className="font-mono text-bone-3 text-sm tracking-wide">
+        Settings — coming soon
+      </p>
+    </div>
   );
 }

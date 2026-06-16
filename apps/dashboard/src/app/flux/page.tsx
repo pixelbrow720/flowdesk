@@ -1,10 +1,9 @@
-import { ComingSoon } from "@/components/atoms/coming-soon";
-
-export default function Page() {
+export default function FluxPage() {
   return (
-    <ComingSoon
-      title="FLUX"
-      hint="Signed orderflow · trades-aggressor B/A/N · cumulative delta"
-    />
+    <div className="flex min-h-screen items-center justify-center">
+      <p className="font-mono text-bone-3 text-sm tracking-wide">
+        Flux — coming soon
+      </p>
+    </div>
   );
 }

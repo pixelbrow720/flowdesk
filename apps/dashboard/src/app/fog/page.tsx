@@ -1,248 +1,342 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { PriceChart } from "@/components/fog/PriceChart";
+
 /**
- * FOG — positioning lens. TRACE-style 2-column layout (25% / 75%).
+ * Fog — 0DTE GEX/DEX terminal landing surface.
  *
- * Layout (placeholder data; engine wiring later):
- *   Row 1: Spot · Regime · GEX · DEX · IV%-ile
- *   Row 2: GammaProfile vertical [span 3] · Candlestick + Levels [span 9]
- *   Row 3: Call walls top-3 [span 6] · Put walls top-3 [span 6]
- *   Row 4: 0DTE expiry · Snapshot age · Session state
+ * Layout principles (per design spec, 2026-06-16 rev2):
+ *   - Minimalism: no heavy borders. Hairline rules separate the three zones
+ *     (price ladder | GEX profile | chart). Bar pills are rounded, not boxy.
+ *   - Selector dropdown (top-left): GEX / VEX / CEX / DEX. Click opens, click
+ *     item selects, click-outside closes. Hover text → red.
+ *   - GEX profile (left rail):
+ *       · Each row = one strike. Background hairline = full historical
+ *         GEX range (low ↔ high). Foreground pill = current GEX value.
+ *       · Pills are rounded-full (lozenge), bidirectional from a center axis.
+ *       · Center vertical line = zero-axis.
+ *       · Rows are tightly packed but visibly separated.
+ *       · Color: deep turquoise = long GEX, deep crimson = short GEX.
+ *   - Price ladder (leftmost): font-color only (no fill).
+ *       · Amber  = current price
+ *       · Turquoise = level with major net long GEX
+ *       · Crimson   = level with major net short GEX
+ *   - Center: chart placeholder.
+ *   - Right rail: turquoise→black→crimson heatmap gradient.
+ *   - Bottom-left: flash glyph.
  *
- * NOTE: All numbers di file ini DUMMY — diganti `Snapshot` payload dari
- * /api/snapshot/{instrument} saat data wiring fase.
+ * All synthetic data is deterministic (seeded) — SSR ↔ client identical.
  */
 
-import { FogRow2 } from "@/components/fog/fog-row-2";
-import { WallsList } from "@/components/fog/walls-list";
-import { StatTile } from "@/components/fog/stat-tile";
-import { RegimeBadge } from "@/components/fog/regime-badge";
-import type { Candle } from "@/components/fog/price-chart";
-import {
-  generateGexField,
-  generateSessionRange,
-  generateSecondaryLine,
-} from "@/lib/dummy-field";
+const SELECTORS = ["GEX", "VEX", "CEX", "DEX"] as const;
+type Selector = (typeof SELECTORS)[number];
 
-// ─── DUMMY DATA ─────────────────────────────────────────────────
-const FAKE = {
-  instrument: "ES" as const,
-  spot: 5847.25,
-  spotChangePct: +0.42,
-  regime: "long-gamma" as "long-gamma" | "short-gamma",
-  flipLevel: 5832.5,
-  gex: 12.4e9,
-  gexChange: +1.8e9,
-  dex: -3.2e9,
-  ivPercentile: 23,
-  atmIv: 0.118,
-  callWalls: [
-    { strike: 5875, gammaDollar: 4.2e9 },
-    { strike: 5900, gammaDollar: 3.1e9 },
-    { strike: 5860, gammaDollar: 2.7e9 },
-  ],
-  putWalls: [
-    { strike: 5825, gammaDollar: 3.6e9 },
-    { strike: 5800, gammaDollar: 2.9e9 },
-    { strike: 5840, gammaDollar: 2.1e9 },
-  ],
-  gammaProfile: generateGammaProfile(5847.25),
-  candles: generateCandles(5847.25),
-  expirySecondsToClose: 4 * 3600 + 23 * 60 + 12,
-  snapshotAgeSec: 42,
-  sessionState: "RTH" as const,
-};
-
-function generateGammaProfile(spot: number) {
-  // Strikes kelipatan 5, range ±50 around spot → 21 strikes
-  const strikes: { strike: number; gamma: number }[] = [];
-  const center = Math.round(spot / 5) * 5;
-  for (let k = -50; k <= 50; k += 5) {
-    const strike = center + k;
-    const distance = Math.abs(k);
-    const magnitude = Math.exp(-distance * distance / 600) * 1e9;
-    const sign = k > 0 ? +1 : -1; // calls above, puts below
-    const noise = (Math.sin(k * 0.31) * 0.3 + 1) * sign;
-    strikes.push({ strike, gamma: magnitude * noise });
-  }
-  return strikes;
-}
-
-function generateCandles(spot: number): Candle[] {
-  // 120 × 1-min candles, mean-revert toward spot, deterministic
-  const candles: Candle[] = [];
-  let prev = spot - 8;
-  const start = Date.now() - 120 * 60_000;
-  for (let i = 0; i < 120; i++) {
-    const seedA = Math.sin(i * 0.37);
-    const seedB = Math.cos(i * 0.91) * 0.6;
-    const drift = (spot - prev) * 0.02;
-    const open = parseFloat(prev.toFixed(2));
-    const close = parseFloat((open + seedA * 0.5 + seedB * 0.4 + drift).toFixed(2));
-    // High/low: extremes around open/close, with intra-bar noise
-    const wickUp = Math.abs(Math.sin(i * 1.13)) * 0.7;
-    const wickDn = Math.abs(Math.cos(i * 0.71)) * 0.7;
-    const hi = parseFloat((Math.max(open, close) + wickUp).toFixed(2));
-    const lo = parseFloat((Math.min(open, close) - wickDn).toFixed(2));
-    candles.push({ t: start + i * 60_000, o: open, h: hi, l: lo, c: close });
-    prev = close;
-  }
-  // Force last candle close to current spot (so SPOT line lands on last bar)
-  const last = candles[candles.length - 1];
-  candles[candles.length - 1] = {
-    ...last,
-    c: spot,
-    h: Math.max(last.h, spot),
-    l: Math.min(last.l, spot),
+// ── Synthetic GEX-by-strike profile ────────────────────────────────
+//   24 strikes spanning the simulated price range. Each strike has:
+//     · current  : signed GEX value in [-1, 1]
+//     · low      : historical minimum (≤ current)
+//     · high     : historical maximum (≥ current)
+//   Seeded so SSR = client. Strike count is even for clean visual.
+const STRIKE_COUNT = 24;
+const BASE_PRICE = 5_840;
+const TICK = 5;
+const CURRENT_PRICE = 5_872; // amber row
+const STRIKES = Array.from({ length: STRIKE_COUNT }, (_, i) => {
+  const price = BASE_PRICE + (STRIKE_COUNT - 1 - i) * TICK; // top = highest price
+  const seed = (n: number) => {
+    const t = Math.sin(i * 91.345 + n * 17.13) * 43758.5453;
+    return t - Math.floor(t);
   };
-  return candles;
-}
+  const current = (seed(1) - 0.5) * 2 * (0.4 + seed(2) * 0.6); // [-1, 1]
+  const range = 0.25 + seed(3) * 0.55;
+  const low = Math.max(-1, current - range * (0.3 + seed(4) * 0.7));
+  const high = Math.min(1, current + range * (0.3 + seed(5) * 0.7));
+  return { price, current, low, high };
+});
+
+// Major long/short levels = the two extremes of |current|.
+const MAJOR_LONG_PRICE = STRIKES.reduce((a, b) =>
+  b.current > a.current ? b : a,
+).price;
+const MAJOR_SHORT_PRICE = STRIKES.reduce((a, b) =>
+  b.current < a.current ? b : a,
+).price;
 
 export default function FogPage() {
-  const d = FAKE;
-  // Derived dummy artifacts (pure functions of FAKE → stable per render)
-  const field = generateGexField({
-    spot: d.spot,
-    callWalls: d.callWalls,
-    putWalls: d.putWalls,
-    gammaProfile: d.gammaProfile,
-  });
-  const { sessionHigh, sessionLow } = generateSessionRange(d.spot);
-  const secondary = generateSecondaryLine(d.candles, 20);
+  const [selector, setSelector] = useState<Selector>("GEX");
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Close dropdown on outside click / Escape
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (!dropdownRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   return (
-    <div className="px-5 py-5">
-      {/* Eyebrow */}
-      <div className="flex items-center gap-3 mb-4">
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-          Lens · Positioning
-        </span>
-        <span className="h-px flex-1 bg-[color:var(--hairline)]" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 tabular-nums">
-          /{d.instrument} · 0DTE
-        </span>
+    <div className="relative min-h-screen w-full overflow-hidden bg-black text-bone-0">
+      {/* Top-center banner */}
+      <div className="pointer-events-none fixed inset-x-0 top-9 z-40 flex justify-center">
+        <p className="font-mono text-[11px] uppercase tracking-[0.32em] text-bone-3">
+          FlowDesk · Zero-DTE GEX / DEX Terminal
+        </p>
       </div>
 
-      {/* Row 1 — hero stats */}
-      <div className="grid grid-cols-12 gap-3 mb-3">
-        <StatTile
-          className="col-span-3"
-          label="Spot"
-          primary={d.spot.toFixed(2)}
-          delta={d.spotChangePct}
-          deltaFmt="pct"
-        />
-        <div className="col-span-3 border border-[color:var(--hairline)] p-4 flex flex-col justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-            Regime
-          </span>
-          <div className="flex items-end justify-between">
-            <RegimeBadge regime={d.regime} />
-            <span className="font-mono text-[10px] tabular-nums text-bone-3">
-              flip {d.flipLevel.toFixed(2)}
-            </span>
-          </div>
+      {/* Selector dropdown — top-left */}
+      <div ref={dropdownRef} className="fixed left-8 top-[4.5rem] z-40">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="font-mono text-[13px] tracking-[0.18em] text-bone-0 transition-colors duration-150 hover:text-brick-glow"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+        >
+          {selector}
+        </button>
+        {open && (
+          <ul
+            role="listbox"
+            className="absolute left-0 top-6 flex flex-col gap-1.5 font-mono text-[13px] tracking-[0.18em]"
+          >
+            {SELECTORS.filter((s) => s !== selector).map((s) => (
+              <li key={s}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  onClick={() => {
+                    setSelector(s);
+                    setOpen(false);
+                  }}
+                  className="text-bone-3 transition-colors duration-150 hover:text-brick-glow"
+                >
+                  {s}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Main grid: price | rule | GEX profile | rule | chart | rule | gradient */}
+      <div className="flex h-screen w-full items-stretch gap-0 px-8 pt-24 pb-20">
+        <PriceLadder />
+        <div className="mx-3 w-px bg-rule" aria-hidden="true" />
+        <GexProfile />
+        <div className="mx-3 w-px bg-rule" aria-hidden="true" />
+        <div className="relative flex flex-1 flex-col">
+          {/* Stats banner — fixed di atas chart area */}
+          <StatsBanner />
+          {/* Chart placeholder di bawah */}
+          <PriceChart />
         </div>
-        <StatTile
-          className="col-span-2"
-          label="GEX (1%)"
-          primary={formatBn(d.gex)}
-          delta={d.gexChange / 1e9}
-          deltaFmt="bn"
-        />
-        <StatTile
-          className="col-span-2"
-          label="DEX"
-          primary={formatBn(d.dex)}
-        />
-        <StatTile
-          className="col-span-2"
-          label="IV %-ile"
-          primary={`${d.ivPercentile}`}
-          secondary={`atm ${(d.atmIv * 100).toFixed(1)}%`}
-        />
+        <div className="mx-3 w-px bg-rule" aria-hidden="true" />
+        <GradientRail />
       </div>
 
-      {/* Row 2 — TRACE-style: GEX profile vertical (25%) + candlestick (75%) */}
-      <FogRow2
-        gammaProfile={d.gammaProfile}
-        candles={d.candles}
-        secondary={secondary}
-        callWalls={d.callWalls}
-        putWalls={d.putWalls}
-        spot={d.spot}
-        flip={d.flipLevel}
-        instrument={d.instrument}
-        field={field}
-        sessionHigh={sessionHigh}
-        sessionLow={sessionLow}
+      {/* Bottom-left flash glyph */}
+      <button
+        type="button"
+        aria-label="Quick action"
+        className="fixed bottom-7 left-8 z-40 text-bone-3 transition-colors duration-150 hover:text-brick-glow"
+      >
+        <FlashIcon />
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Price ladder — font-color only                                      */
+/* ------------------------------------------------------------------ */
+
+function PriceLadder() {
+  return (
+    <div className="flex w-16 flex-col justify-between py-1 pr-2 text-right">
+      {STRIKES.map((s) => {
+        const isCurrent = Math.abs(s.price - CURRENT_PRICE) < TICK / 2;
+        const isLong = s.price === MAJOR_LONG_PRICE;
+        const isShort = s.price === MAJOR_SHORT_PRICE;
+        const cls = isCurrent
+          ? "text-amber-current"
+          : isLong
+            ? "text-turquoise-deep"
+            : isShort
+              ? "text-crimson-deep"
+              : "text-bone-3";
+        return (
+          <span
+            key={s.price}
+            className={`font-mono text-[10.5px] leading-none tracking-tight tabular-nums ${cls}`}
+          >
+            {s.price.toLocaleString("en-US")}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* GEX profile — bidirectional rounded pills + history range hairline  */
+/* ------------------------------------------------------------------ */
+
+function GexProfile() {
+  return (
+    <div className="relative flex w-80 flex-col justify-between py-0.5 pl-3 pr-3">
+      {/* Center zero-axis */}
+      <div className="pointer-events-none absolute inset-y-0.5 left-1/2 w-px -translate-x-1/2 bg-rule" />
+
+      {STRIKES.map((s, i) => (
+        <GexRow key={i} current={s.current} low={s.low} high={s.high} />
+      ))}
+    </div>
+  );
+}
+
+function GexRow({
+  current,
+  low,
+  high,
+}: {
+  current: number;
+  low: number;
+  high: number;
+}) {
+  // Convert [-1, 1] → percent offset from center.
+  const pct = (v: number) => `${(v * 50).toFixed(2)}%`;
+  const positive = current >= 0;
+  const color = positive ? "bg-turquoise-deep" : "bg-crimson-deep";
+
+  // Pill geometry
+  const pillLeft = positive ? "50%" : `calc(50% + ${pct(current)})`;
+  const pillWidth = `${(Math.abs(current) * 50).toFixed(2)}%`;
+
+  // Range hairline (low↔high) — spans negative/positive freely
+  const rangeLeft = `calc(50% + ${pct(low)})`;
+  const rangeWidth = `${((high - low) * 50).toFixed(2)}%`;
+
+  return (
+    <div className="relative flex h-[13px] w-full items-center">
+      {/* History range hairline — sits behind pill, LEBIH TERANG */}
+      <div
+        className="absolute h-px bg-bone-3/40"
+        style={{ left: rangeLeft, width: rangeWidth }}
       />
+      {/* Current GEX pill — LEBIH BESAR */}
+      <div
+        className={`absolute h-[9px] rounded-full ${color}`}
+        style={{ left: pillLeft, width: pillWidth }}
+      />
+    </div>
+  );
+}
 
-      {/* Row 3 — walls list */}
-      <div className="grid grid-cols-12 gap-3 mb-3">
-        <div className="col-span-6 border border-[color:var(--hairline)] p-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-3">
-            Call walls · top 3 · γ$
-          </span>
-          <WallsList rows={d.callWalls} side="call" />
-        </div>
-        <div className="col-span-6 border border-[color:var(--hairline)] p-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-3">
-            Put walls · top 3 · γ$
-          </span>
-          <WallsList rows={d.putWalls} side="put" />
-        </div>
+/* ------------------------------------------------------------------ */
+/* Stats banner — realtime price, gamma regime, P/C ratio (top bar)    */
+/* ------------------------------------------------------------------ */
+
+function StatsBanner() {
+  // Mock realtime stats (deterministic seed untuk SSR)
+  const currentPrice = CURRENT_PRICE;
+  const priceChange = -12.5; // points since RTH open
+  const priceChangePct = (priceChange / currentPrice) * 100;
+  
+  // Gamma regime classification based on net GEX
+  const netGex = STRIKES.reduce((sum, s) => sum + s.current, 0);
+  const gammaRegime = netGex > 0.5 ? "Long Gamma" : netGex < -0.5 ? "Short Gamma" : "Neutral";
+  const regimeColor = netGex > 0.5 ? "text-turquoise-deep" : netGex < -0.5 ? "text-crimson-deep" : "text-bone-3";
+  
+  const totalCallOI = 142_300;
+  const totalPutOI = 138_900;
+  const pcRatio = (totalPutOI / totalCallOI).toFixed(2);
+
+  return (
+    <div className="flex w-full shrink-0 items-baseline gap-6 border-b border-rule px-6 pb-3 pt-2">
+      <div>
+        <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-bone-3">
+          /ES Price
+        </p>
+        <p className="mt-0.5 font-mono text-[28px] font-medium leading-none tabular-nums text-amber-current">
+          {currentPrice.toLocaleString("en-US")}
+        </p>
+        <p className={`mt-0.5 font-mono text-[10px] tabular-nums ${priceChange < 0 ? "text-crimson-deep" : "text-turquoise-deep"}`}>
+          {priceChange > 0 ? "+" : ""}{priceChange.toFixed(1)} ({priceChangePct > 0 ? "+" : ""}{priceChangePct.toFixed(2)}%)
+        </p>
       </div>
-
-      {/* Row 4 — meta strip */}
-      <div className="grid grid-cols-12 gap-3">
-        <div className="col-span-4 border border-[color:var(--hairline)] p-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-2">
-            0DTE expiry
-          </span>
-          <span className="font-mono text-[18px] tabular-nums text-bone-0">
-            {formatCountdown(d.expirySecondsToClose)}
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mt-1">
-            until 16:00 ET
-          </span>
-        </div>
-        <div className="col-span-4 border border-[color:var(--hairline)] p-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-2">
-            Snapshot age
-          </span>
-          <span className="font-mono text-[18px] tabular-nums text-bone-0">
-            {d.snapshotAgeSec}s
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mt-1">
-            cadence 60s · schema v1
-          </span>
-        </div>
-        <div className="col-span-4 border border-[color:var(--hairline)] p-4">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-2">
-            Session state
-          </span>
-          <span className="font-mono text-[18px] uppercase tracking-[0.1em] text-bone-0">
-            {d.sessionState}
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mt-1">
-            real-time clock · ET
-          </span>
-        </div>
+      <div>
+        <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-bone-3">
+          Gamma Regime
+        </p>
+        <p className={`mt-0.5 font-mono text-[16px] font-medium tracking-wide ${regimeColor}`}>
+          {gammaRegime}
+        </p>
+      </div>
+      <div>
+        <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-bone-3">
+          P/C Ratio
+        </p>
+        <p className="mt-0.5 font-mono text-[16px] font-medium tabular-nums text-bone-0">
+          {pcRatio}
+        </p>
       </div>
     </div>
   );
 }
 
-// ─── helpers ────────────────────────────────────────────────────
-function formatBn(n: number): string {
-  const sign = n < 0 ? "−" : "";
-  const abs = Math.abs(n);
-  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
-  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
-  return `${sign}$${abs.toFixed(0)}`;
+/* ------------------------------------------------------------------ */
+/* Gradient rail                                                       */
+/* ------------------------------------------------------------------ */
+
+function GradientRail() {
+  return (
+    <div className="relative flex h-full w-7 flex-col overflow-hidden rounded-[6px]">
+      <div
+        className="h-full w-full"
+        style={{
+          background:
+            "linear-gradient(to bottom, #0FB5A8 0%, #000000 50%, #B5002E 100%)",
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 flex flex-col justify-between py-[10%]">
+        {Array.from({ length: 9 }).map((_, i) => (
+          <div key={i} className="h-px w-full bg-black/40" />
+        ))}
+      </div>
+    </div>
+  );
 }
-function formatCountdown(s: number): string {
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  return `${h}h ${m.toString().padStart(2, "0")}m ${sec.toString().padStart(2, "0")}s`;
+
+/* ------------------------------------------------------------------ */
+/* Icons                                                               */
+/* ------------------------------------------------------------------ */
+
+function FlashIcon() {
+  return (
+    <svg
+      width="18"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
+  );
 }

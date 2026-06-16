@@ -1,10 +1,9 @@
-import { ComingSoon } from "@/components/atoms/coming-soon";
-
-export default function Page() {
+export default function ArcPage() {
   return (
-    <ComingSoon
-      title="ARC"
-      hint="3D volatility surface · per-expiry IV fit · vol regime"
-    />
+    <div className="flex min-h-screen items-center justify-center">
+      <p className="font-mono text-bone-3 text-sm tracking-wide">
+        Arc — coming soon
+      </p>
+    </div>
   );
 }
