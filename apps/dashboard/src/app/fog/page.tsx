@@ -1,9 +1,9 @@
 /**
- * FOG — positioning lens. TRACE-style 2-column layout.
+ * FOG — positioning lens. TRACE-style 2-column layout (25% / 75%).
  *
  * Layout (placeholder data; engine wiring later):
  *   Row 1: Spot · Regime · GEX · DEX · IV%-ile
- *   Row 2: GammaProfile vertical [span 5] · PriceChart with level overlays [span 7]
+ *   Row 2: GammaProfile vertical [span 3] · Candlestick + Levels [span 9]
  *   Row 3: Call walls top-3 [span 6] · Put walls top-3 [span 6]
  *   Row 4: 0DTE expiry · Snapshot age · Session state
  *
@@ -11,14 +11,13 @@
  * /api/snapshot/{instrument} saat data wiring fase.
  */
 
-import { GammaProfile } from "@/components/fog/gamma-profile";
-import { PriceChart } from "@/components/fog/price-chart";
+import { FogRow2 } from "@/components/fog/fog-row-2";
 import { WallsList } from "@/components/fog/walls-list";
 import { StatTile } from "@/components/fog/stat-tile";
 import { RegimeBadge } from "@/components/fog/regime-badge";
+import type { Candle } from "@/components/fog/price-chart";
 
 // ─── DUMMY DATA ─────────────────────────────────────────────────
-// Placeholder — replace dengan zod-validated Snapshot dari API.
 const FAKE = {
   instrument: "ES" as const,
   spot: 5847.25,
@@ -41,39 +40,55 @@ const FAKE = {
     { strike: 5840, gammaDollar: 2.1e9 },
   ],
   gammaProfile: generateGammaProfile(5847.25),
-  priceBars: generatePriceBars(5847.25),
+  candles: generateCandles(5847.25),
   expirySecondsToClose: 4 * 3600 + 23 * 60 + 12,
   snapshotAgeSec: 42,
   sessionState: "RTH" as const,
 };
 
 function generateGammaProfile(spot: number) {
+  // Strikes kelipatan 5, range ±50 around spot → 21 strikes
   const strikes: { strike: number; gamma: number }[] = [];
+  const center = Math.round(spot / 5) * 5;
   for (let k = -50; k <= 50; k += 5) {
-    const strike = Math.round((spot + k) / 5) * 5;
+    const strike = center + k;
     const distance = Math.abs(k);
     const magnitude = Math.exp(-distance * distance / 600) * 1e9;
-    const sign = k > 0 ? +1 : -1;
+    const sign = k > 0 ? +1 : -1; // calls above, puts below
     const noise = (Math.sin(k * 0.31) * 0.3 + 1) * sign;
     strikes.push({ strike, gamma: magnitude * noise });
   }
   return strikes;
 }
 
-function generatePriceBars(spot: number) {
-  // 6.5h × 60 ≈ 390 bars (1-min RTH session) — keep 120 for visual density
-  const bars: { t: number; price: number }[] = [];
-  let p = spot - 8;
+function generateCandles(spot: number): Candle[] {
+  // 120 × 1-min candles, mean-revert toward spot, deterministic
+  const candles: Candle[] = [];
+  let prev = spot - 8;
   const start = Date.now() - 120 * 60_000;
   for (let i = 0; i < 120; i++) {
-    // Random walk seeded by index → deterministic per render
-    const seed = Math.sin(i * 0.37) + Math.cos(i * 0.91) * 0.6;
-    p += seed * 0.6 + (spot - p) * 0.02; // mean-revert toward current spot
-    bars.push({ t: start + i * 60_000, price: parseFloat(p.toFixed(2)) });
+    const seedA = Math.sin(i * 0.37);
+    const seedB = Math.cos(i * 0.91) * 0.6;
+    const drift = (spot - prev) * 0.02;
+    const open = parseFloat(prev.toFixed(2));
+    const close = parseFloat((open + seedA * 0.5 + seedB * 0.4 + drift).toFixed(2));
+    // High/low: extremes around open/close, with intra-bar noise
+    const wickUp = Math.abs(Math.sin(i * 1.13)) * 0.7;
+    const wickDn = Math.abs(Math.cos(i * 0.71)) * 0.7;
+    const hi = parseFloat((Math.max(open, close) + wickUp).toFixed(2));
+    const lo = parseFloat((Math.min(open, close) - wickDn).toFixed(2));
+    candles.push({ t: start + i * 60_000, o: open, h: hi, l: lo, c: close });
+    prev = close;
   }
-  // Ensure last bar = current spot
-  bars[bars.length - 1] = { t: Date.now(), price: spot };
-  return bars;
+  // Force last candle close to current spot (so SPOT line lands on last bar)
+  const last = candles[candles.length - 1];
+  candles[candles.length - 1] = {
+    ...last,
+    c: spot,
+    h: Math.max(last.h, spot),
+    l: Math.min(last.l, spot),
+  };
+  return candles;
 }
 
 export default function FogPage() {
@@ -131,39 +146,16 @@ export default function FogPage() {
         />
       </div>
 
-      {/* Row 2 — TRACE-style: GEX profile vertical (kiri) + price chart (kanan) */}
-      <div className="grid grid-cols-12 gap-3 mb-3">
-        <div className="col-span-5 border border-[color:var(--hairline)] p-4">
-          <div className="flex items-baseline justify-between mb-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-              Gamma Profile · γ$ per strike
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-              vertical
-            </span>
-          </div>
-          <GammaProfile data={d.gammaProfile} spot={d.spot} />
-        </div>
-        <div className="col-span-7 border border-[color:var(--hairline)] p-4">
-          <div className="flex items-baseline justify-between mb-2">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-              Price Action · /{d.instrument} · last 2h
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-              <span className="text-bone-1">─ CW</span>{" "}
-              <span className="text-brick-glow">─ PW</span>{" "}
-              <span style={{ color: "#40E0D0" }}>━ SPOT</span>
-            </span>
-          </div>
-          <PriceChart
-            bars={d.priceBars}
-            callWalls={d.callWalls}
-            putWalls={d.putWalls}
-            spot={d.spot}
-            flip={d.flipLevel}
-          />
-        </div>
-      </div>
+      {/* Row 2 — TRACE-style: GEX profile vertical (25%) + candlestick (75%) */}
+      <FogRow2
+        gammaProfile={d.gammaProfile}
+        candles={d.candles}
+        callWalls={d.callWalls}
+        putWalls={d.putWalls}
+        spot={d.spot}
+        flip={d.flipLevel}
+        instrument={d.instrument}
+      />
 
       {/* Row 3 — walls list */}
       <div className="grid grid-cols-12 gap-3 mb-3">
