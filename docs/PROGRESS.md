@@ -1032,3 +1032,60 @@ M docs/design/landing-page-plan.md   (round-2 section appended)
 - Color tokens beyond `ink-0`.
 
 **Full rationale + de-leak mapping table:** `docs/design/landing-page-plan.md` §10.
+
+## 2026-06-16 — Round-3 fix: ASCII smoke + hover aura visibility
+
+**Context:** After round-2 commit f37e960 (gradient cursor smoke + HoverAura
+component), neither the cursor smoke nor hover aura were visible in the
+running browser. Two distinct bugs, plus a creative-direction pivot.
+
+### Bug 1: cursor smoke layer hidden by section backgrounds
+- Old: `<CursorTrigger />` rendered a fixed div at `z-0` with a radial
+  gradient driven by CSS variables. Every section uses `bg-ink-0` (pure
+  black, opaque), which painted on top of the smoke layer.
+- Fix: moved the layer to `z-[60]` (above nav and content) and switched to
+  `mix-blend-mode: screen` so the brick reads as additive light over the
+  black sections without blocking pointer events.
+
+### Bug 2: hover aura span hidden by parent card backgrounds
+- Old: `<HoverAura variant="stay|sweep" />` rendered an absolutely-positioned
+  span at `-z-10` inside each `bg-ink-0` card. The parent's opaque BG covered
+  the span's gradient.
+- Fix: deleted the component. Aura now lives as `::before` pseudo-elements
+  on two new utility classes `.aura-stay` / `.aura-sweep` in `globals.css`.
+  Pseudo-elements paint between the parent's background and content children,
+  solving the painting order naturally. `mix-blend-mode: screen` so the brick
+  glow reads as additive over the card BG. Reduced-motion disables both.
+
+### Creative pivot: gradient smoke → ASCII smoke
+- User direction: replace radial-gradient cursor smoke with an ASCII-art
+  particle trail (▓ ▒ ░ # * ~ ^ ` . , ').
+- New `CursorTrigger`: canvas-based particle system. Each particle is a
+  single glyph picked from a density ramp tied to age (fresh = denser, dying
+  = sparse). Velocity inherits from cursor motion; particles rise and fade.
+
+### Velocity-driven spawn density
+- User direction: smoke should silence when cursor is still, thicken when
+  cursor moves fast, thin out when cursor is slow.
+- Implementation: EMA-smoothed cursor speed (px/ms) drives a linear ramp
+  from `PARTICLES_MIN=1` to `PARTICLES_MAX=8` per spawn tick. Below
+  `SPEED_MIN=0.05` px/ms, no spawn at all. When mousemove stops firing, a
+  per-frame ~95% decay on `speed` makes trailing wisps thin out within
+  ~300ms of idle, then stop entirely.
+
+### Verification
+- Static QA harness rendered three trail tiers (25 / 100 / 400 particles)
+  side-by-side; vision confirmed wisp → medium → thick density progression
+  and individual ASCII glyph readability (#, *, ~, ^, blocks).
+- Live homepage HTTP 200, canvas mounts at z-[60] with mix-blend-screen,
+  28 `.aura-stay` + 14 `.aura-sweep` instances render across sections.
+- Test harness pages deleted; no leftovers under `apps/landing/src/app/`.
+
+### Files
+- `apps/landing/src/components/atoms/cursor-trigger.tsx` — full rewrite,
+  canvas + ASCII particle system + velocity-driven density.
+- `apps/landing/src/components/atoms/hover-aura.tsx` — deleted.
+- `apps/landing/src/app/globals.css` — added `.aura-stay` / `.aura-sweep`
+  utility classes via `::before`, plus `aura-sweep-anim` keyframes.
+- `apps/landing/src/components/sections/{access,flow,honest,lenses,problem,system}.tsx`
+  — replaced `<HoverAura />` import + JSX with utility class on parent.

@@ -9,8 +9,6 @@
 import { motion } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
-import { HoverAura } from "@/components/atoms/hover-aura";
-
 export function Access() {
   const lang = useLang();
   return (
@@ -40,9 +38,8 @@ export function Access() {
           {copy.access.bullets.map((b, i) => (
             <li
               key={i}
-              className="group relative isolate flex items-center gap-4 overflow-hidden bg-ink-0 px-6 py-5"
+              className="group relative isolate flex items-center gap-4 overflow-hidden bg-ink-0 px-6 py-5 aura-sweep"
             >
-              <HoverAura variant="sweep" />
               <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-bone-0 transition-colors group-hover:text-brick">
                 0{i + 1}
               </span>

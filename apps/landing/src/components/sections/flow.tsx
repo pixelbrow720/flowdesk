@@ -7,8 +7,6 @@
 import { motion } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
-import { HoverAura } from "@/components/atoms/hover-aura";
-
 export function Flow() {
   const lang = useLang();
   return (
@@ -39,9 +37,8 @@ export function Flow() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-10%" }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: (i % 4) * 0.05 }}
-              className="group relative isolate overflow-hidden bg-ink-0 p-7 md:p-8"
+              className="group relative isolate overflow-hidden bg-ink-0 p-7 md:p-8 aura-stay"
             >
-              <HoverAura variant="stay" />
               <span className="pointer-events-none absolute left-0 top-0 h-full w-[2px] origin-top scale-y-0 bg-brick transition-transform duration-500 group-hover:scale-y-100" />
               <div className="flex items-center justify-between font-mono text-[10.5px] uppercase tracking-[0.22em] text-bone-3">
                 <span>{String(i + 1).padStart(2, "0")}</span>

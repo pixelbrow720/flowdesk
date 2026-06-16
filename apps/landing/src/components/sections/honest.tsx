@@ -11,8 +11,6 @@
 import { motion } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
-import { HoverAura } from "@/components/atoms/hover-aura";
-
 export function Honest() {
   const lang = useLang();
   return (
@@ -46,9 +44,8 @@ export function Honest() {
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true, margin: "-5%" }}
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: i * 0.03 }}
-                className="group relative isolate grid grid-cols-1 gap-2 overflow-hidden px-6 py-5 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:gap-8 md:px-8"
+                className="group relative isolate grid grid-cols-1 gap-2 overflow-hidden px-6 py-5 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:gap-8 md:px-8 aura-sweep"
               >
-                <HoverAura variant="sweep" />
                 <dt className="font-mono text-[11px] uppercase tracking-[0.22em] text-bone-3 transition-colors group-hover:text-bone-0">
                   {t(lang, row.k)}
                 </dt>

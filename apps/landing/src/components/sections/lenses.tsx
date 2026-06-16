@@ -19,8 +19,6 @@ import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
-import { HoverAura } from "@/components/atoms/hover-aura";
-
 // Card geometry (desktop). Keep cards close: ~520px wide on big screens with a
 // thin gap between them. Track width = N * (cardW + gap).
 const CARD_W = "min(560px, 72vw)";
@@ -156,8 +154,7 @@ function LensCard({
 }) {
   const isExp = item.status === "EXPERIMENTAL";
   return (
-    <article className="group relative isolate flex h-full w-full flex-col justify-between overflow-hidden border border-[color:var(--hairline)] bg-ink-0 p-8 md:p-10">
-      <HoverAura variant="stay" />
+    <article className="group relative isolate flex h-full w-full flex-col justify-between overflow-hidden border border-[color:var(--hairline)] bg-ink-0 p-8 md:p-10 aura-stay">
       <span
         className={`pointer-events-none absolute left-0 top-0 h-full w-[2px] origin-top bg-brick transition-transform duration-500 ${
           active ? "scale-y-100" : "scale-y-0"
