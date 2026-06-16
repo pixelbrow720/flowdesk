@@ -15,27 +15,43 @@ The original phase-by-phase build playbook is preserved at
 
 ## Next (highest leverage first)
 
-### A. Validation / backtest harness — do this first
-The roadmap is currently inverted: this should have come before more features.
-- Reconstruct EOD dealer position; reconcile against next-day **ΔOI** (`statistics`).
-- Test whether GEX structure (flip, walls) relates to /ES price intraday across
-  the 90-day window.
-- Output a short, repeatable report. Decide *empirically* whether VOL-GEX is good
-  enough or whether DDOI is worth building.
-- **Heavy item — confirm scope with the human first.**
+### A. Validation / backtest harness — *mechanism complete, evidence pending*
+- Harness wired (`analysis/harness/*`); 109 tests pass. Predictive evals
+  (synthetic-OI, FLUX, DDOI, VT) all returned **UNDETERMINED at n=3–4** —
+  the gap is statistical power, not method. The 90-day forward run that
+  would close this was **dropped by the operator**, so the lensa-lensa
+  remain `NOT-VALIDATED` and must NOT drive a regime classifier without
+  caveat. See `docs/research/empirical/*` for the per-lens reports.
 
-### B. Frontend (DELETED 2026-06-15 — pending redesign)
-The original frontend (`apps/web/`, `@flowdesk/tokens`, components) was deleted
-on 2026-06-15 to be rebuilt from scratch. See `PROGRESS.md` 2026-06-15 checkpoint.
-Locked design rules (TURQUOISE/CRIMSON, Space Grotesk + JetBrains Mono) remain
-in `02-locked-contract.md` and any future FE must honor them.
+### B. Frontend rebuild — *in progress (Fog lens live, Flux/Arc next)*
+The original frontend (`apps/web/`, `@flowdesk/tokens`) was deleted on
+2026-06-15 and is being rebuilt from scratch as `apps/dashboard/`
+(Next.js 15 + React 19 + lightweight-charts, port 4321). Current state:
 
-### C. Wire in the surface
-- Put SVI / expected-move (`surface.py`) into the Snapshot as **optional** fields.
-- Aggregate **VEX / CHEX** from the existing `black76` vanna/charm.
+- ✅ App shell, navbar, routing for `/fog /flux /arc /settings`.
+- 🔨 **Fog lens** (state-based GEX/DEX positioning, TRACE-inspired):
+  minimalist ladder + GEX profile + intraday candles. Synthetic data;
+  API wiring deferred but planned alongside visual polish.
+- ⏳ **Flux lens** (Hiro-style time-series flow): placeholder.
+- ⏳ **Arc lens** (3D vol surface `σ(K,T)`): placeholder.
+- ⏳ Wire `@flowdesk/contracts` zod parser to `/api/snapshot` + `/ws`.
 
-### D. Live feed
-- Implement `LiveAdapter` (replace the stub) behind `FEED_MODE=live`.
+Locked design rules (TURQUOISE `#40E0D0` / CRIMSON `#E0183C`,
+Space Grotesk + JetBrains Mono) remain in `02-locked-contract.md` and
+the new FE must honor them. A separate `apps/landing/` (Next.js, on
+Vercel) is already live.
+
+### C. Wire in the surface — *done*
+- ✅ SVI / expected-move (`surface.py`) emitted as optional Snapshot
+  fields (commit `691a894`).
+- ✅ VEX / CHEX aggregated from `black76` vanna/charm (commit
+  `7eeac8b` series), labelled EXPERIMENTAL.
+
+### D. Live feed — *done (kept disarmed)*
+- ✅ `LiveAdapter` built with two-key arming (`FEED_MODE=live` AND
+  `LIVE_FEED_ARMED=1`), circuit breaker, bounded reconnect; threat
+  model in `docs/architecture/live-feed-threat-model.md`. Beta image
+  intentionally ships without the second key.
 
 ## Later (gated on A)
 

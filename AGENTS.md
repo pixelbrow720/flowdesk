@@ -40,8 +40,10 @@ revolves around the `Snapshot` data contract (`schema_version` 2).
    it that way. Identical inputs must always produce an identical Snapshot. The
    caller supplies the resolved `session_state`; the engine owns no calendar.
 5. **The five methodology divergences are decided** (see §5). Do not silently
-   re-open them. The two heavy items (DDOI engine, proprietary metrics) are
-   explicitly **not built** — do not build them without approval.
+   re-open them. The two heavy items (DDOI engine, proprietary metrics) **are
+   built** as EXPERIMENTAL, alongside (not replacing) VOL-GEX — do not let
+   them drive primary signals without explicit human approval and a passing
+   validation report.
 6. **Don't claim done with red tests.** Always run the verification suite (§4).
 7. **Assert data tenor/provenance before any offline analysis number.** Every
    `analysis/`-harness computation MUST call `assert_0dte` / `assert_session_iids_0dte`
@@ -133,12 +135,21 @@ See `docs/08-status-and-gaps.md` for the full version with file references. Shor
    proven correct against reality. There is **no** reconciliation of synthetic
    positioning vs. official ΔOI, and **no** check that GEX predicts /ES price.
    This is the single biggest source of "feels done but lacking."
-2. **Live feed** — `LiveAdapter` is a stub; only historical-sim works.
-3. **Frontend** — the prior `apps/web` Next.js app and `@flowdesk/tokens` package
-   were deleted on 2026-06-15; the layout will be redesigned from scratch later.
-   See the 2026-06-15 checkpoint in `docs/PROGRESS.md`.
-4. **Surface / vanna / charm wiring** — `surface.py` + `black76.vanna/charm`
-   exist but are isolated (not in Snapshot, no VEX/CHEX aggregation).
-5. **DDOI engine & proprietary metrics** — deliberately unbuilt (needs approval).
-
-Do NOT start a heavy item (1, 5) without confirming scope with the human first.
+2. **Live feed** — `LiveAdapter` built with two-key arming + circuit breaker
+   (Phase 3, 2026-06-15). Beta image keeps `LIVE_FEED_ARMED=1` absent so it
+   stays disarmed; flipping it requires the operator runbook procedure.
+3. **Frontend** — the prior `apps/web` Next.js app and `@flowdesk/tokens`
+   package were deleted on 2026-06-15 and the rebuild is **in progress** at
+   `apps/dashboard/` (Next.js 15 + lightweight-charts, port 4321). Fog lens
+   has a minimalist ladder + GEX profile layout live; Flux & Arc remain
+   placeholders; API wiring (`@flowdesk/contracts` → `/api/snapshot` + `/ws`)
+   is the next planned step. See `docs/09-roadmap.md` §B and the
+   2026-06-15 checkpoint in `docs/PROGRESS.md`.
+4. **Surface / vanna / charm wiring** — `surface.py` (SVI / expected move)
+   wired into the optional Snapshot fields and VEX/CHEX aggregated from
+   `black76.vanna/charm` (commits `691a894`, `7eeac8b` series). Labelled
+   EXPERIMENTAL — must not drive a regime classifier without caveat.
+5. **DDOI engine & proprietary metrics** — built EXPERIMENTAL alongside (not
+   replacing) VOL-GEX (commits `f4d614c`, `6be20ff`). Both are
+   `NOT-VALIDATED` because the 90-day forward run was dropped; they ship
+   with the EXPERIMENTAL label and must NOT drive primary signals.
