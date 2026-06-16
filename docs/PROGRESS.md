@@ -1121,3 +1121,16 @@ pattern to come back.
 - Vision-confirmed: every section reads dual-tone headline white +
   brick; Honest's EXPERIMENTAL labels are brick on ARC SURFACE and
   SYNTHETIC OI rows.
+
+## 2026-06-16 (later·2) — Hero AsciiEye
+
+Filled top-right negative space with an animated ASCII eye.
+
+- New: `apps/landing/src/components/atoms/ascii-eye.tsx` — 11×31 char
+  almond-eye frame, rAF-driven scan (sinusoidal ±3 chars over 6s) and
+  blink (random 4-7s gap, 200ms close + 100ms open). RM-aware.
+- `hero.tsx`: AsciiEye absolute-positioned at top-right, hidden below
+  md, `opacity-90`, `pointer-events-none`. No framer-motion wrapper
+  (delayed transition was sticking at opacity:0 in some flows).
+- Verified: tsc clean, HTTP 200, 3-frame screenshot diff confirms
+  animation tick, vision confirms recognizable eye motif.

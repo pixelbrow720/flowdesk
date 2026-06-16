@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * HERO — solid black BG. No static aura (CursorTrigger handles ambient glow).
- * Headline2 is white. Cursor trigger paints brick over it on hover.
+ * HERO — solid black BG. No static aura.
+ * Headline1 white, headline2 brick (one-line accent payoff).
  * Headline leading 0.92 for descender clearance (p, g, y, q).
+ * AsciiEye sits in the top-right negative space, "watching" the dealer line.
  */
 
 import { motion } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
+import { AsciiEye } from "@/components/atoms/ascii-eye";
 
 export function Hero() {
   const lang = useLang();
@@ -16,6 +18,14 @@ export function Hero() {
   return (
     <section id="top" className="relative isolate overflow-hidden bg-ink-0">
       <div className="container-grid relative pt-32 pb-12 md:pt-40 md:pb-16">
+        {/* AsciiEye — top-right, hidden on mobile to avoid layout fight */}
+        <div
+          className="pointer-events-none absolute right-6 top-28 hidden opacity-90 md:right-10 md:top-36 md:block lg:right-14 lg:top-40"
+          aria-hidden="true"
+        >
+          <AsciiEye />
+        </div>
+
         {/* Eyebrow status line — terminal-ish */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10.5px] uppercase tracking-[0.22em] text-bone-3">
           <span className="flex items-center gap-2">
