@@ -49,9 +49,11 @@ No other instruments. 0DTE focus.
 
 ## Schema
 
-- **`SCHEMA_VERSION = 1`.** Adding an **optional** field (precedent: `ohlc`,
+- **`SCHEMA_VERSION = 2`.** Adding an **optional** field (precedent: `ohlc`,
   `flux`) does **not** bump the version. Any breaking change does — and that's a
-  human decision, not an agent one.
+  human decision, not an agent one. The 1→2 bump landed at commit `2b13ae2`
+  (2026-06-15) when HIRO was renamed to FLUX and TRACE/field to FOG; both are
+  breaking field renames, hence the bump.
 - Snapshot is mirrored in `schema.py` (pydantic) and `snapshot.ts` (zod); they
   must remain identical.
 

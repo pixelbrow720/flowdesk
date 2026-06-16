@@ -13,7 +13,7 @@ FlowDesk is a real-time **0DTE GEX/DEX options terminal** for **/ES & /NQ** CME
 futures options. A Python compute engine prices the option chain (Black-76) and
 emits **one canonical `Snapshot` per instrument per minute**; a FastAPI service
 serves those snapshots over REST/WebSocket behind Discord-role auth. Everything
-revolves around the `Snapshot` data contract (`schema_version` 1).
+revolves around the `Snapshot` data contract (`schema_version` 2).
 
 ## 1. Read-before-you-work (in this order)
 
@@ -27,7 +27,7 @@ revolves around the `Snapshot` data contract (`schema_version` 1).
 ## 2. Golden rules (do NOT violate without explicit human approval)
 
 1. **Never change a LOCKED CONTRACT value** (colors, fonts, instruments,
-   multipliers, math conventions, dealer sign, 12 ENV keys, `schema_version` 1).
+   multipliers, math conventions, dealer sign, 12 ENV keys, `schema_version` 2).
    See `docs/02-locked-contract.md`. If a task seems to require it, STOP and ask.
 2. **The Snapshot contract has two mirrors that must stay byte-for-byte equal:**
    `services/engine/src/engine/schema.py` (pydantic) and

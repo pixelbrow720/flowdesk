@@ -1,5 +1,5 @@
 /**
- * FlowDesk — canonical Snapshot data contract (schema_version 1).
+ * FlowDesk — canonical Snapshot data contract (schema_version 2).
  *
  * SINGLE SOURCE OF TRUTH for the per-(instrument, minute) snapshot object that
  * the compute engine produces, the API serves, and the frontend renders. The

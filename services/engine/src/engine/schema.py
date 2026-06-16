@@ -1,4 +1,4 @@
-"""FlowDesk — canonical Snapshot data contract (schema_version 1), Python mirror.
+"""FlowDesk — canonical Snapshot data contract (schema_version 2), Python mirror.
 
 This module mirrors ``packages/contracts/src/snapshot.ts`` EXACTLY: identical
 field names, casing, and semantics. Units come from PRD #0 (Glossary & Global
