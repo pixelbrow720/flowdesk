@@ -1,29 +1,31 @@
 /**
- * FOG — positioning lens.
+ * FOG — positioning lens. TRACE-style 2-column layout.
  *
  * Layout (placeholder data; engine wiring later):
  *   Row 1: Spot · Regime · GEX · DEX · IV%-ile
- *   Row 2: Gamma profile (per-strike bars) [span 8] · Walls list [span 4]
- *   Row 3: 0DTE expiry countdown · Session state · Last snapshot
+ *   Row 2: GammaProfile vertical [span 5] · PriceChart with level overlays [span 7]
+ *   Row 3: Call walls top-3 [span 6] · Put walls top-3 [span 6]
+ *   Row 4: 0DTE expiry · Snapshot age · Session state
  *
  * NOTE: All numbers di file ini DUMMY — diganti `Snapshot` payload dari
  * /api/snapshot/{instrument} saat data wiring fase.
  */
 
 import { GammaProfile } from "@/components/fog/gamma-profile";
+import { PriceChart } from "@/components/fog/price-chart";
 import { WallsList } from "@/components/fog/walls-list";
 import { StatTile } from "@/components/fog/stat-tile";
 import { RegimeBadge } from "@/components/fog/regime-badge";
 
 // ─── DUMMY DATA ─────────────────────────────────────────────────
-// Ini placeholder — replace dengan zod-validated Snapshot dari API.
+// Placeholder — replace dengan zod-validated Snapshot dari API.
 const FAKE = {
   instrument: "ES" as const,
   spot: 5847.25,
   spotChangePct: +0.42,
   regime: "long-gamma" as "long-gamma" | "short-gamma",
   flipLevel: 5832.5,
-  gex: 12.4e9, // dollar gamma per 1% move
+  gex: 12.4e9,
   gexChange: +1.8e9,
   dex: -3.2e9,
   ivPercentile: 23,
@@ -39,24 +41,39 @@ const FAKE = {
     { strike: 5840, gammaDollar: 2.1e9 },
   ],
   gammaProfile: generateGammaProfile(5847.25),
-  expirySecondsToClose: 4 * 3600 + 23 * 60 + 12, // 4h23m12s
+  priceBars: generatePriceBars(5847.25),
+  expirySecondsToClose: 4 * 3600 + 23 * 60 + 12,
   snapshotAgeSec: 42,
   sessionState: "RTH" as const,
 };
 
 function generateGammaProfile(spot: number) {
-  // Synthetic-but-plausible gamma per strike: peaks at near-ATM, signed.
   const strikes: { strike: number; gamma: number }[] = [];
   for (let k = -50; k <= 50; k += 5) {
     const strike = Math.round((spot + k) / 5) * 5;
     const distance = Math.abs(k);
-    // Bell curve, with sign noise to simulate call-heavy upside / put-heavy downside
     const magnitude = Math.exp(-distance * distance / 600) * 1e9;
-    const sign = k > 0 ? +1 : -1; // calls positive above spot, puts negative below
+    const sign = k > 0 ? +1 : -1;
     const noise = (Math.sin(k * 0.31) * 0.3 + 1) * sign;
     strikes.push({ strike, gamma: magnitude * noise });
   }
   return strikes;
+}
+
+function generatePriceBars(spot: number) {
+  // 6.5h × 60 ≈ 390 bars (1-min RTH session) — keep 120 for visual density
+  const bars: { t: number; price: number }[] = [];
+  let p = spot - 8;
+  const start = Date.now() - 120 * 60_000;
+  for (let i = 0; i < 120; i++) {
+    // Random walk seeded by index → deterministic per render
+    const seed = Math.sin(i * 0.37) + Math.cos(i * 0.91) * 0.6;
+    p += seed * 0.6 + (spot - p) * 0.02; // mean-revert toward current spot
+    bars.push({ t: start + i * 60_000, price: parseFloat(p.toFixed(2)) });
+  }
+  // Ensure last bar = current spot
+  bars[bars.length - 1] = { t: Date.now(), price: spot };
+  return bars;
 }
 
 export default function FogPage() {
@@ -114,36 +131,57 @@ export default function FogPage() {
         />
       </div>
 
-      {/* Row 2 — gamma profile + walls */}
+      {/* Row 2 — TRACE-style: GEX profile vertical (kiri) + price chart (kanan) */}
       <div className="grid grid-cols-12 gap-3 mb-3">
-        <div className="col-span-8 border border-[color:var(--hairline)] p-4">
-          <div className="flex items-baseline justify-between mb-3">
+        <div className="col-span-5 border border-[color:var(--hairline)] p-4">
+          <div className="flex items-baseline justify-between mb-2">
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-              Gamma Profile · per strike (signed γ$)
+              Gamma Profile · γ$ per strike
             </span>
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
-              calls<span className="text-bone-1"> ↑</span> · puts<span className="text-brick-glow"> ↓</span>
+              vertical
             </span>
           </div>
           <GammaProfile data={d.gammaProfile} spot={d.spot} />
         </div>
-        <div className="col-span-4 grid grid-rows-2 gap-3">
-          <div className="border border-[color:var(--hairline)] p-4">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-3">
-              Call walls · top 3
+        <div className="col-span-7 border border-[color:var(--hairline)] p-4">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
+              Price Action · /{d.instrument} · last 2h
             </span>
-            <WallsList rows={d.callWalls} side="call" />
-          </div>
-          <div className="border border-[color:var(--hairline)] p-4">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-3">
-              Put walls · top 3
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3">
+              <span className="text-bone-1">─ CW</span>{" "}
+              <span className="text-brick-glow">─ PW</span>{" "}
+              <span style={{ color: "#40E0D0" }}>━ SPOT</span>
             </span>
-            <WallsList rows={d.putWalls} side="put" />
           </div>
+          <PriceChart
+            bars={d.priceBars}
+            callWalls={d.callWalls}
+            putWalls={d.putWalls}
+            spot={d.spot}
+            flip={d.flipLevel}
+          />
         </div>
       </div>
 
-      {/* Row 3 — meta strip */}
+      {/* Row 3 — walls list */}
+      <div className="grid grid-cols-12 gap-3 mb-3">
+        <div className="col-span-6 border border-[color:var(--hairline)] p-4">
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-3">
+            Call walls · top 3 · γ$
+          </span>
+          <WallsList rows={d.callWalls} side="call" />
+        </div>
+        <div className="col-span-6 border border-[color:var(--hairline)] p-4">
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-3">
+            Put walls · top 3 · γ$
+          </span>
+          <WallsList rows={d.putWalls} side="put" />
+        </div>
+      </div>
+
+      {/* Row 4 — meta strip */}
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-4 border border-[color:var(--hairline)] p-4">
           <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-bone-3 block mb-2">
