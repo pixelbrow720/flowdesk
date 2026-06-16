@@ -36,7 +36,7 @@ export function Hero() {
             className="font-display text-display-1 leading-[0.92] tracking-[-0.04em] text-bone-0"
           >
             <span className="block">{t(lang, copy.hero.headline1)}</span>
-            <span className="block">{t(lang, copy.hero.headline2)}</span>
+            <span className="block text-brick">{t(lang, copy.hero.headline2)}</span>
           </motion.h1>
 
           {/* Subhead + scroll hint. NO buttons. */}

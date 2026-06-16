@@ -1089,3 +1089,35 @@ running browser. Two distinct bugs, plus a creative-direction pivot.
   utility classes via `::before`, plus `aura-sweep-anim` keyframes.
 - `apps/landing/src/components/sections/{access,flow,honest,lenses,problem,system}.tsx`
   — replaced `<HoverAura />` import + JSX with utility class on parent.
+
+## 2026-06-16 (later) — Round-3.5: ASCII smoke OUT, brick accents IN
+
+User pivoted away from ASCII smoke after seeing it live — kept the hover
+aura, dropped the cursor effect, and asked for the brick text accent
+pattern to come back.
+
+### Changes
+1. `<CursorTrigger />` removed from `layout.tsx`. `cursor-trigger.tsx`
+   deleted. No more cursor-driven canvas overlay.
+2. Every section's `headline2` line now wraps in `<span className="block
+   text-brick">` — restores the dual-tone "white statement + brick
+   payoff" headline pattern from commit 8bd0a3e. Affects: hero, problem,
+   system, lenses, flow, honest, access.
+3. Honest table row hover (`group-hover`):
+   - `<dt>` (left-column label) brick-glow on hover (`text-bone-3` →
+     `text-brick-glow`).
+   - `<dd>` (right-column value) brighten to bone-0 on hover.
+4. The keyword `EXPERIMENTAL` inside Honest table values now renders
+   inline as brick — split-and-rejoin so the rest of the value stays
+   plain. Affects ARC SURFACE and SYNTHETIC OI rows.
+
+### Verification
+- `tsc --noEmit` clean after clearing stale `.next/types` directories
+  that referenced deleted test pages.
+- HTTP 200 on `/`. Zero `<canvas>` elements in rendered HTML. 28
+  `.aura-stay` + 14 `.aura-sweep` instances still wired (round-3 hover
+  aura kept). `text-brick`, `text-brick-glow`, `EXPERIMENTAL` brick
+  spans all confirmed in rendered HTML.
+- Vision-confirmed: every section reads dual-tone headline white +
+  brick; Honest's EXPERIMENTAL labels are brick on ARC SURFACE and
+  SYNTHETIC OI rows.

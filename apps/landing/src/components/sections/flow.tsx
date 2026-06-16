@@ -23,7 +23,7 @@ export function Flow() {
           className="mt-10 font-display text-display-2 leading-[0.96] tracking-[-0.02em] text-bone-0"
         >
           <span className="block">{t(lang, copy.flow.headline1)}</span>
-          <span className="block">{t(lang, copy.flow.headline2)}</span>
+          <span className="block text-brick">{t(lang, copy.flow.headline2)}</span>
         </motion.h2>
         <p className="mt-8 max-w-2xl text-[17px] leading-relaxed text-bone-2">
           {t(lang, copy.flow.lede)}

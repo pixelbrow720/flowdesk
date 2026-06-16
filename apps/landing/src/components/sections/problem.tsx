@@ -28,7 +28,7 @@ export function Problem() {
             className="font-display text-display-2 leading-[0.96] tracking-[-0.02em] text-bone-0"
           >
             <span className="block">{t(lang, copy.problem.headline1)}</span>
-            <span className="block">{t(lang, copy.problem.headline2)}</span>
+            <span className="block text-brick">{t(lang, copy.problem.headline2)}</span>
           </motion.h2>
           <motion.p
             initial={{ opacity: 0, y: 18 }}

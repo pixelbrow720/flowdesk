@@ -63,7 +63,7 @@ export function Lenses() {
           className="mt-10 font-display text-display-2 leading-[0.96] tracking-[-0.02em] text-bone-0"
         >
           <span className="block">{t(lang, copy.lenses.headline1)}</span>
-          <span className="block">{t(lang, copy.lenses.headline2)}</span>
+          <span className="block text-brick">{t(lang, copy.lenses.headline2)}</span>
         </motion.h2>
 
         <div className="mt-10 flex items-center gap-3 font-mono text-[10.5px] uppercase tracking-[0.22em] text-bone-3 md:hidden">

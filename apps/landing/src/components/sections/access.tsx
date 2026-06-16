@@ -26,7 +26,7 @@ export function Access() {
           className="mt-10 font-display text-display-1 leading-[0.96] tracking-[-0.035em] text-bone-0"
         >
           <span className="block">{t(lang, copy.access.headline1)}</span>
-          <span className="block">{t(lang, copy.access.headline2)}</span>
+          <span className="block text-brick">{t(lang, copy.access.headline2)}</span>
         </motion.h2>
 
         <p className="mt-10 max-w-2xl text-[18px] leading-relaxed text-bone-2">

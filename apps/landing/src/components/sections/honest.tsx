@@ -28,7 +28,7 @@ export function Honest() {
           className="mt-10 font-display text-display-2 leading-[0.96] tracking-[-0.02em] text-bone-0"
         >
           <span className="block">{t(lang, copy.honest.headline1)}</span>
-          <span className="block">{t(lang, copy.honest.headline2)}</span>
+          <span className="block text-brick">{t(lang, copy.honest.headline2)}</span>
         </motion.h2>
         <p className="mt-8 max-w-2xl text-[17px] leading-relaxed text-bone-2">
           {t(lang, copy.honest.lede)}
@@ -46,10 +46,19 @@ export function Honest() {
                 transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: i * 0.03 }}
                 className="group relative isolate grid grid-cols-1 gap-2 overflow-hidden px-6 py-5 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] md:gap-8 md:px-8 aura-sweep"
               >
-                <dt className="font-mono text-[11px] uppercase tracking-[0.22em] text-bone-3 transition-colors group-hover:text-bone-0">
+                <dt className="font-mono text-[11px] uppercase tracking-[0.22em] text-bone-3 transition-colors duration-300 group-hover:text-brick-glow">
                   {t(lang, row.k)}
                 </dt>
-                <dd className="font-mono text-[13px] text-bone-1">{row.v}</dd>
+                <dd className="font-mono text-[13px] text-bone-1 transition-colors duration-300 group-hover:text-bone-0">
+                  {row.v.split("EXPERIMENTAL").map((part, idx, arr) => (
+                    <span key={idx}>
+                      {part}
+                      {idx < arr.length - 1 && (
+                        <span className="text-brick">EXPERIMENTAL</span>
+                      )}
+                    </span>
+                  ))}
+                </dd>
               </motion.div>
             ))}
           </dl>

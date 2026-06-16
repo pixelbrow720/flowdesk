@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { LenisProvider } from "@/components/providers/lenis-provider";
-import { CursorTrigger } from "@/components/atoms/cursor-trigger";
 import { LangProvider } from "@/lib/i18n";
 import "./globals.css";
 
@@ -73,7 +72,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <LangProvider>
           <LenisProvider>
-            <CursorTrigger />
             {children}
           </LenisProvider>
         </LangProvider>
