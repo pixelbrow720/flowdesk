@@ -36,7 +36,7 @@ The original frontend (`apps/web/`, `@flowdesk/tokens`) was deleted on
 - ⏳ **Arc lens** (3D vol surface `σ(K,T)`): placeholder.
 - ⏳ Wire `@flowdesk/contracts` zod parser to `/api/snapshot` + `/ws`.
 
-Locked design rules (TURQUOISE `#40E0D0` / CRIMSON `#E0183C`,
+Locked design rules (TURQUOISE `#0FB5A8` / CRIMSON `#B5002E`,
 Space Grotesk + JetBrains Mono) remain in `02-locked-contract.md` and
 the new FE must honor them. A separate `apps/landing/` (Next.js, on
 Vercel) is already live.

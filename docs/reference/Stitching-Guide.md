@@ -49,7 +49,7 @@ flowdesk/
 
 ## 2. LOCKED CONTRACT — DO NOT TOUCH
 
-- **Warna:** turquoise `#40E0D0` (positif/support), crimson `#E0183C` (negatif/resistance), base `#000000`. Heatmap dark turquoise->black->crimson, light turquoise->white->crimson, interpolasi OKLab/LCH.
+- **Warna:** turquoise `#0FB5A8` (positif/support), crimson `#B5002E` (negatif/resistance), base `#000000`. Heatmap dark turquoise->black->crimson, light turquoise->white->crimson, interpolasi OKLab/LCH.
 - **Font:** Space Grotesk (UI) + JetBrains Mono (angka). JANGAN Inter.
 - **Instrumen:** /ES mult \$50/pt step 5; /NQ mult \$20/pt step 10.
 - **Sesi:** RTH 09:30-16:00 America/New_York, cadence 1 menit, replay 90 hari rolling (turunan saja).

@@ -25,7 +25,7 @@ OPERATING RULES (non-negotiable):
 - You cannot run code; self-verify by careful static reasoning and keep code type-safe.
 
 LOCKED CONTRACT (global):
-- Colors: turquoise #40E0D0 = positive/support ; crimson #E0183C = negative/resistance ; dark base #000000.
+- Colors: turquoise #0FB5A8 = positive/support ; crimson #B5002E = negative/resistance ; dark base #000000.
 - Heatmap ramp: dark = turquoise->black->crimson ; light = turquoise->white->crimson ; perceptual interpolation (OKLab/LCH).
 - Fonts: Space Grotesk (UI/display) + JetBrains Mono (all numbers). NEVER Inter. NEVER wedding-style/decorative fonts.
 - Instruments: /ES multiplier $50/pt, /NQ multiplier $20/pt. Strike step: /ES = 5, /NQ = 10.
@@ -124,7 +124,7 @@ ACCEPTANCE: TS and Python field names match 1:1; both validators accept the exam
 TASK: Build the design-token package (packages/tokens) that EVERY UI imports. Tokens are the only allowed source of colors/spacing/type. Hard-coded hex in components is forbidden later.
 
 PRODUCE:
-- tokens.ts: exported constants for colors (turquoise #40E0D0, crimson #E0183C, dark base #000000, plus a neutral monochrome ramp gray-50..gray-950 you define for dark UI chrome), semantic aliases (positive=turquoise, negative=crimson, support, resistance, bg, surface, border, text-primary, text-muted), spacing scale (4px base: 4,8,12,16,24,32,48,64), radius scale (2,4,8 — NOT pill-everything), type scale (display/h1/h2/body/caption/mono sizes in rem), font families (ui: "Space Grotesk", mono: "JetBrains Mono"), motion (durations 120/180/240ms, easing cubic-bezier values), shadows/glows (subtle turquoise/crimson glow for data states).
+- tokens.ts: exported constants for colors (turquoise #0FB5A8, crimson #B5002E, dark base #000000, plus a neutral monochrome ramp gray-50..gray-950 you define for dark UI chrome), semantic aliases (positive=turquoise, negative=crimson, support, resistance, bg, surface, border, text-primary, text-muted), spacing scale (4px base: 4,8,12,16,24,32,48,64), radius scale (2,4,8 — NOT pill-everything), type scale (display/h1/h2/body/caption/mono sizes in rem), font families (ui: "Space Grotesk", mono: "JetBrains Mono"), motion (durations 120/180/240ms, easing cubic-bezier values), shadows/glows (subtle turquoise/crimson glow for data states).
 - tokens.css: the SAME tokens as CSS custom properties under :root (dark) and [data-theme="light"]. Include the heatmap ramp stops for dark (turquoise->black->crimson) and light (turquoise->white->crimson) as CSS vars + a documented OKLab interpolation note.
 - tailwind-preset.ts: a Tailwind preset that maps these tokens into theme.extend (colors, spacing, borderRadius, fontFamily, transitionDuration). apps/web will consume this preset.
 - fonts/: instructions in README to self-host Space Grotesk + JetBrains Mono (list exact weights: Space Grotesk 400/500/600/700; JetBrains Mono 400/500). Provide @font-face CSS referencing /fonts/*.woff2 (note: user adds the actual woff2 files locally; list the filenames).
@@ -587,7 +587,7 @@ TASK: Build the Three.js hero background for the landing page — a "painted"/da
 REQUIREMENTS:
 - Three.js (pin version), a full-bleed shader plane behind the hero headline. A custom fragment shader generates a flowing field reminiscent of a gamma heatmap: turquoise (positive) blending through dark to crimson (negative), evolving slowly (time uniform).
 - Cursor reactivity: mouse position feeds a uniform that warps/ripples the field gently (no jarring motion). On mobile, fall back to slow autonomous motion.
-- Colors strictly from tokens (#40E0D0 / #E0183C / #000). Perceptual blend in shader.
+- Colors strictly from tokens (#0FB5A8 / #B5002E / #000). Perceptual blend in shader.
 - Performance: cap DPR, pause rendering when tab hidden / when hero off-screen (IntersectionObserver). Respect prefers-reduced-motion (render a static frame).
 - The hero headline + subcopy (Indonesian) + primary CTA ("Gabung & ambil DESK") sit above the canvas with strong contrast.
 - Must degrade gracefully if WebGL unavailable (static gradient-from-tokens fallback, NOT a generic purple).

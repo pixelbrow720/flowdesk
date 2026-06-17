@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createGLHeatmap } from "./glHeatmap";
+import type { GLHeatmapHandle } from "./glHeatmap";
 
-// FlowDesk brand colors
-const TURQUOISE = { r: 15, g: 181, b: 168 }; // #0FB5A8
-const CRIMSON = { r: 181, g: 0, b: 46 }; // #B5002E
+// Dynamic price-band half-width (points) around the median forward. The fog
+// grid drifts frame-to-frame, so a union axis leaves large NaN regions whose
+// moving coverage edge draws hard vertical streaks. Clamping to a tight band
+// around the forward + edge-extrapolation kills the banding. Verified in
+// HANDOFF.md — do not widen back to a union range.
+const PRICE_BAND_PT = 180;
 
 export interface HeatmapFrame {
   ts: number; // epoch seconds
@@ -22,28 +27,38 @@ interface GexHeatmapProps {
   onPriceAxisReady?: (axis: { min: number; max: number; levels: number[] }) => void;
 }
 
-// Build shared price axis from all frames
+// Build the shared price axis as a tight band clamped to the MEDIAN forward
+// ±PRICE_BAND_PT, snapped to tick. Using the median (not per-frame forward)
+// keeps the axis stable for the whole session so the heatmap doesn't scroll
+// vertically. Returns levels DESCENDING (high → low) so p=0 maps to the TOP of
+// the canvas — matching the right-axis labels and the left-hand price ladder.
 function buildSharedAxis(frames: HeatmapFrame[], tick: number) {
-  let min = Infinity;
-  let max = -Infinity;
-  for (const f of frames) {
-    if (f.price_grid.length > 0) {
-      min = Math.min(min, f.price_grid[0]);
-      max = Math.max(max, f.price_grid[f.price_grid.length - 1]);
-    }
+  const forwards = frames
+    .map((f) => f.forward)
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b);
+  const median =
+    forwards.length > 0 ? forwards[Math.floor(forwards.length / 2)] : 0;
+
+  let min = Math.floor((median - PRICE_BAND_PT) / tick) * tick;
+  let max = Math.ceil((median + PRICE_BAND_PT) / tick) * tick;
+  // Degenerate guard (no frames): keep a non-empty axis.
+  if (!(max > min)) {
+    min = 0;
+    max = tick;
   }
-  // Snap to tick boundaries
-  min = Math.floor(min / tick) * tick;
-  max = Math.ceil(max / tick) * tick;
-  
+
   const levels: number[] = [];
-  for (let p = min; p <= max; p += tick) {
+  for (let p = max; p >= min; p -= tick) {
     levels.push(p);
   }
   return { min, max, levels };
 }
 
-// Resample frame metric onto shared axis (linear interpolation)
+// Resample a frame's metric onto the shared axis with linear interpolation
+// INSIDE the frame's own price_grid coverage, and EDGE-HOLD (clamp to the
+// nearest edge value) outside it. Holding the edge instead of writing NaN is
+// what removes the vertical banding at the moving coverage edge.
 function resampleFrame(
   frame: HeatmapFrame,
   axisLevels: number[],
@@ -52,14 +67,25 @@ function resampleFrame(
   const result = new Array<number>(axisLevels.length);
   const src = metric === "gamma" ? frame.gamma : frame.delta;
   const srcPrices = frame.price_grid;
-  
+
+  if (srcPrices.length === 0) {
+    result.fill(0);
+    return result;
+  }
+  const loEdge = srcPrices[0];
+  const hiEdge = srcPrices[srcPrices.length - 1];
+
   for (let i = 0; i < axisLevels.length; i++) {
     const target = axisLevels[i];
-    if (target < srcPrices[0] || target > srcPrices[srcPrices.length - 1]) {
-      result[i] = NaN;
+    if (target <= loEdge) {
+      result[i] = src[0];
       continue;
     }
-    
+    if (target >= hiEdge) {
+      result[i] = src[src.length - 1];
+      continue;
+    }
+
     // Binary search for bracket
     let lo = 0;
     let hi = srcPrices.length - 1;
@@ -68,7 +94,7 @@ function resampleFrame(
       if (srcPrices[mid] <= target) lo = mid;
       else hi = mid;
     }
-    
+
     // Linear interpolation
     const p0 = srcPrices[lo];
     const p1 = srcPrices[hi];
@@ -99,34 +125,6 @@ function gaussianSmooth(values: number[], sigma: number): number[] {
     result[i] = weight > 0 ? sum / weight : NaN;
   }
   return result;
-}
-
-// Color map: black → turquoise (positive) / crimson (negative)
-function colorForValue(v: number): [number, number, number, number] {
-  if (isNaN(v)) return [0, 0, 0, 0]; // transparent
-  
-  const clamped = Math.max(-1, Math.min(1, v));
-  const intensity = Math.pow(Math.abs(clamped), 0.7); // power curve for depth
-  const alpha = Math.round(intensity * 255);
-  
-  if (clamped > 0) {
-    // Turquoise
-    return [
-      Math.round(TURQUOISE.r * intensity),
-      Math.round(TURQUOISE.g * intensity),
-      Math.round(TURQUOISE.b * intensity),
-      alpha,
-    ];
-  } else if (clamped < 0) {
-    // Crimson
-    return [
-      Math.round(CRIMSON.r * intensity),
-      Math.round(CRIMSON.g * intensity),
-      Math.round(CRIMSON.b * intensity),
-      alpha,
-    ];
-  }
-  return [0, 0, 0, 0];
 }
 
 // Marching squares for contour lines
@@ -218,9 +216,23 @@ export default function GexHeatmap({
   tick = 5,
   onPriceAxisReady,
 }: GexHeatmapProps) {
+  const glCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const crosshairRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const glHandleRef = useRef<GLHeatmapHandle | null>(null);
   const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+  // Layout + data snapshot shared with the crosshair overlay so it can map
+  // pointer position → price / time without re-running the heavy heatmap render.
+  const layoutRef = useRef<{
+    marginLeft: number;
+    marginTop: number;
+    plotW: number;
+    plotH: number;
+    axisMin: number;
+    axisMax: number;
+    ts: number[];
+  } | null>(null);
   
   // Resize observer
   useEffect(() => {
@@ -235,8 +247,22 @@ export default function GexHeatmap({
     
     return () => ro.disconnect();
   }, []);
-  
-  // Render heatmap
+
+  // Initialise the WebGL heatmap renderer once (per mounted canvas).
+  useEffect(() => {
+    const gl = glCanvasRef.current;
+    if (!gl) return;
+    const handle = createGLHeatmap(gl);
+    glHandleRef.current = handle;
+    return () => {
+      handle?.destroy();
+      glHandleRef.current = null;
+    };
+  }, []);
+
+  // Render heatmap. WebGL paints the GEX/DEX field (smooth + bloom) into the
+  // plot rect; this Canvas2D layer is transparent and only carries the
+  // overlays (contours, candles, gamma line, axes).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !dims || frames.length === 0) return;
@@ -251,9 +277,9 @@ export default function GexHeatmap({
     canvas.style.height = `${dims.h}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     
-    // Layout
-    const marginLeft = 60;
-    const marginRight = 20;
+    // Layout — price axis labels live on the RIGHT side of the plot.
+    const marginLeft = 12;
+    const marginRight = 58;
     const marginTop = 10;
     const marginBottom = 40;
     const plotW = dims.w - marginLeft - marginRight;
@@ -271,7 +297,7 @@ export default function GexHeatmap({
       onPriceAxisReady(axis);
     }
     
-    // Resample all frames
+    // Resample all frames onto the clamped axis (edge-hold, no NaN).
     const grid: number[][] = new Array(nT);
     for (let t = 0; t < nT; t++) {
       grid[t] = resampleFrame(frames[t], axis.levels, metric);
@@ -306,48 +332,32 @@ export default function GexHeatmap({
         }
       }
     }
-    const scale = Math.max(Math.abs(minVal), Math.abs(maxVal));
+    const scale = Math.max(Math.abs(minVal), Math.abs(maxVal)) || 1;
     
-    // Create small offscreen canvas (1 pixel per grid cell)
-    const small = document.createElement("canvas");
-    small.width = nT;
-    small.height = nP;
-    const sctx = small.getContext("2d");
-    if (!sctx) return;
-    
-    const imgData = sctx.createImageData(nT, nP);
-    const data = imgData.data;
-    
+    // Upload the normalized field to the GPU and render (smooth + bloom).
+    // Field is row-major (p*nT + t); row 0 = highest price = top of plot.
+    const field = new Float32Array(nT * nP);
     for (let t = 0; t < nT; t++) {
       for (let p = 0; p < nP; p++) {
-        const v = grid[t][p];
-        const normalized = isNaN(v) ? NaN : v / scale;
-        const [r, g, b, a] = colorForValue(normalized);
-        
-        const idx = (p * nT + t) * 4;
-        data[idx] = r;
-        data[idx + 1] = g;
-        data[idx + 2] = b;
-        data[idx + 3] = a;
+        field[p * nT + t] = grid[t][p] / scale;
       }
     }
+    const glDpr = window.devicePixelRatio || 1;
+    const glCanvas = glCanvasRef.current;
+    if (glCanvas) {
+      glCanvas.width = dims.w * glDpr;
+      glCanvas.height = dims.h * glDpr;
+      glCanvas.style.width = `${dims.w}px`;
+      glCanvas.style.height = `${dims.h}px`;
+    }
+    glHandleRef.current?.render(
+      { nT, nP, data: field },
+      { left: marginLeft, top: marginTop, width: plotW, height: plotH },
+      glDpr,
+    );
     
-    sctx.putImageData(imgData, 0, 0);
-    
-    // Clear and draw heatmap (bilinear interpolation)
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, dims.w, dims.h);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(small, marginLeft, marginTop, plotW, plotH);
-    
-    // Bloom pass (subtle depth glow)
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.filter = "blur(8px)";
-    ctx.globalAlpha = 0.15;
-    ctx.drawImage(small, marginLeft, marginTop, plotW, plotH);
-    ctx.restore();
+    // The 2D layer is transparent over the WebGL canvas; only overlays below.
+    ctx.clearRect(0, 0, dims.w, dims.h);
     
     // Contour lines (marching squares)
     const cellW = plotW / nT;
@@ -379,22 +389,56 @@ export default function GexHeatmap({
     }
     ctx.restore();
     
-    // Forward price line (bone white, prominent)
-    ctx.save();
-    ctx.strokeStyle = "#FAFAF7";
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = "#FAFAF7";
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    for (let t = 0; t < nT; t++) {
-      const fwd = frames[t].forward;
-      const y = marginTop + ((fwd - axis.min) / (axis.max - axis.min)) * plotH;
-      const x = marginLeft + (t / (nT - 1)) * plotW;
-      if (t === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-    ctx.restore();
+// Candlesticks from the forward path, aggregated to reduce noise.
+// 0DTE options snapshots carry no intraday futures OHLC (`ohlc` is null),
+// so candles are built from the per-minute forward series grouped into
+// buckets of `candleBucket`: open=first, high=max, low=min, close=last.
+// Up (close >= open): bone-white body. Down: black body. Border: bone white.
+const candleBucket = 5;
+const nCandles = Math.ceil(nT / candleBucket);
+const candles: Array<{ open: number; high: number; low: number; close: number; tMid: number }> = [];
+for (let i = 0; i < nCandles; i++) {
+  const start = i * candleBucket;
+  const end = Math.min(start + candleBucket, nT);
+  const open = frames[start].forward;
+  const close = frames[end - 1].forward;
+  let high = -Infinity;
+  let low = Infinity;
+  for (let t = start; t < end; t++) {
+    high = Math.max(high, frames[t].forward);
+    low = Math.min(low, frames[t].forward);
+  }
+  candles.push({ open, high, low, close, tMid: start + (end - start - 1) / 2 });
+}
+const slotW = plotW / nCandles;
+const bodyW = Math.max(1.5, slotW * 0.65);
+const yForPrice = (price: number) =>
+  marginTop + ((axis.max - price) / (axis.max - axis.min)) * plotH;
+ctx.save();
+ctx.lineWidth = 1;
+for (let i = 0; i < nCandles; i++) {
+  const c = candles[i];
+  const up = c.close >= c.open;
+  const x = marginLeft + ((i + 0.5) / nCandles) * plotW;
+  const yOpen = yForPrice(c.open);
+  const yClose = yForPrice(c.close);
+  const yHigh = yForPrice(c.high);
+  const yLow = yForPrice(c.low);
+  const top = Math.min(yOpen, yClose);
+  const h = Math.max(1, Math.abs(yClose - yOpen));
+  // Wick (thin line from high to low)
+  ctx.strokeStyle = "#FAFAF7";
+  ctx.beginPath();
+  ctx.moveTo(x, yHigh);
+  ctx.lineTo(x, yLow);
+  ctx.stroke();
+  // Body
+  ctx.fillStyle = up ? "#FAFAF7" : "#000000";
+  ctx.fillRect(x - bodyW / 2, top, bodyW, h);
+  ctx.strokeStyle = "#FAFAF7";
+  ctx.strokeRect(x - bodyW / 2, top, bodyW, h);
+}
+ctx.restore();
     
     // Aggregate gamma line (sum of gamma around forward ±5 strikes)
     ctx.save();
@@ -438,13 +482,15 @@ export default function GexHeatmap({
     ctx.fillStyle = "#6B655B";
     ctx.font = "10px ui-monospace, monospace";
     
-    // Y-axis (price)
+    // Y-axis (price) — labels on the RIGHT of the plot.
     const yTicks = 6;
+    ctx.textAlign = "left";
     for (let i = 0; i <= yTicks; i++) {
       const price = axis.min + (i / yTicks) * (axis.max - axis.min);
       const y = marginTop + plotH - (i / yTicks) * plotH;
-      ctx.fillText(price.toFixed(0), 10, y + 3);
+      ctx.fillText(price.toFixed(0), marginLeft + plotW + 8, y + 3);
     }
+    ctx.textAlign = "start";
     
     // X-axis (time)
     const xTicks = 5;
@@ -458,11 +504,110 @@ export default function GexHeatmap({
       ctx.fillText(`${hh}:${mm}`, x - 18, dims.h - 10);
     }
     ctx.restore();
+
+    // Publish layout for the crosshair overlay.
+    layoutRef.current = {
+      marginLeft,
+      marginTop,
+      plotW,
+      plotH,
+      axisMin: axis.min,
+      axisMax: axis.max,
+      ts: frames.map((f) => f.ts),
+    };
   }, [dims, frames, metric, tick, onPriceAxisReady]);
   
+  // Crosshair overlay — drawn on a separate canvas so pointer moves never
+  // trigger the heavy heatmap re-render. Maps pointer → price (right axis)
+  // and time (bottom axis), with a dashed cross and value labels.
+  useEffect(() => {
+    const cv = crosshairRef.current;
+    const container = containerRef.current;
+    if (!cv || !container || !dims) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = dims.w * dpr;
+    cv.height = dims.h * dpr;
+    cv.style.width = `${dims.w}px`;
+    cv.style.height = `${dims.h}px`;
+    const ctx = cv.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const clear = () => ctx.clearRect(0, 0, dims.w, dims.h);
+
+    const draw = (mx: number, my: number) => {
+      const L = layoutRef.current;
+      if (!L) return;
+      clear();
+      const { marginLeft, marginTop, plotW, plotH, axisMin, axisMax, ts } = L;
+      // Only inside the plot area.
+      if (mx < marginLeft || mx > marginLeft + plotW || my < marginTop || my > marginTop + plotH) {
+        return;
+      }
+      ctx.save();
+      ctx.strokeStyle = "rgba(250, 250, 247, 0.55)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      // Vertical
+      ctx.beginPath();
+      ctx.moveTo(mx, marginTop);
+      ctx.lineTo(mx, marginTop + plotH);
+      ctx.stroke();
+      // Horizontal
+      ctx.beginPath();
+      ctx.moveTo(marginLeft, my);
+      ctx.lineTo(marginLeft + plotW, my);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = "10px ui-monospace, monospace";
+      // Price label (right axis): top = axisMax, bottom = axisMin.
+      const price = axisMax - ((my - marginTop) / plotH) * (axisMax - axisMin);
+      const priceTxt = price.toFixed(1);
+      ctx.fillStyle = "#FAFAF7";
+      ctx.fillRect(marginLeft + plotW + 2, my - 7, 48, 14);
+      ctx.fillStyle = "#000000";
+      ctx.textAlign = "left";
+      ctx.fillText(priceTxt, marginLeft + plotW + 6, my + 3);
+
+      // Time label (bottom axis).
+      const frac = (mx - marginLeft) / plotW;
+      const idx = Math.round(frac * (ts.length - 1));
+      const d = new Date(ts[Math.max(0, Math.min(ts.length - 1, idx))] * 1000);
+      const hh = d.getUTCHours().toString().padStart(2, "0");
+      const mm = d.getUTCMinutes().toString().padStart(2, "0");
+      const timeTxt = `${hh}:${mm}`;
+      const tw = ctx.measureText(timeTxt).width + 8;
+      ctx.fillStyle = "#FAFAF7";
+      ctx.fillRect(mx - tw / 2, marginTop + plotH + 4, tw, 14);
+      ctx.fillStyle = "#000000";
+      ctx.textAlign = "center";
+      ctx.fillText(timeTxt, mx, marginTop + plotH + 14);
+      ctx.restore();
+    };
+
+    const onMove = (e: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      draw(e.clientX - rect.left, e.clientY - rect.top);
+    };
+    const onLeave = () => clear();
+
+    container.addEventListener("mousemove", onMove);
+    container.addEventListener("mouseleave", onLeave);
+    return () => {
+      container.removeEventListener("mousemove", onMove);
+      container.removeEventListener("mouseleave", onLeave);
+    };
+  }, [dims, frames]);
+
   return (
     <div ref={containerRef} className="relative h-full w-full">
-      <canvas ref={canvasRef} className="absolute inset-0" />
+      {/* Stack: WebGL field (bottom) → Canvas2D overlay (contour/candles/axis)
+          → crosshair (top). */}
+      <canvas ref={glCanvasRef} className="absolute inset-0" />
+      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" />
+      <canvas ref={crosshairRef} className="pointer-events-none absolute inset-0" />
     </div>
   );
 }

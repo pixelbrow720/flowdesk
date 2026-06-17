@@ -52,7 +52,7 @@ Layar inti = satu tampilan: **panel kiri** (profil garis Net GEX/DEX) + **panel 
 | Layout | Panel kiri (profil garis) + panel kanan (heatmap), 1 sumbu harga/strike di tengah (label per 5 poin, current price garis putus + tag tunggal). Light & dark identik. |
 | Garis kiri | Satu garis, color-coded: turquoise=positif, crimson=negatif. Tanpa angka, tanpa gradient. Toggle Net GEX / Net DEX. Berbasis VOL → tanpa toggle 0DTE. |
 | Heatmap | Field projection ala TRACE. Light: turquoise→putih→crimson. Dark: turquoise→hitam→crimson. Basis Gamma/Delta. Mulus (interpolasi) + toggle blok. |
-| Warna brand | Turquoise #40E0D0 (positif/support), Crimson #E0183C (negatif/resistance). UI monokrom netral. Dark base #000. |
+| Warna brand | Turquoise #0FB5A8 (positif/support), Crimson #B5002E (negatif/resistance). UI monokrom netral. Dark base #000. |
 | Tipografi | Space Grotesk (display/UI) + JetBrains Mono (angka). Hindari Inter. |
 | Mood | Gelap minimalis futuristik + data-art. Polish landing-page di SEMUA layar. |
 | Update | Per 1 menit untuk semua perhitungan. |
@@ -202,8 +202,8 @@ GEX_strike = gamma * VOL * M * F^2 * 0.01
 
 | Token | Hex | Makna |
 | --- | --- | --- |
-| turquoise | #40E0D0 | positif / support |
-| crimson | #E0183C | negatif / resistance |
+| turquoise | #0FB5A8 | positif / support |
+| crimson | #B5002E | negatif / resistance |
 | base (dark) | #000000 | background gelap |
 
 - Heatmap dark: turquoise -> black -> crimson. Light: turquoise -> white -> crimson. Interpolasi perceptual (OKLab/LCH).
@@ -342,8 +342,8 @@ Alert otomatis · Mobile/tablet · Instrumen selain ES/NQ · Charm/Vanna & Stabi
 
 | Token | Dark | Light | Guna |
 | --- | --- | --- | --- |
-| --accent-pos (turquoise) | #40E0D0 | #40E0D0 | positif / support / pinning |
-| --accent-neg (crimson) | #E0183C | #E0183C | negatif / resistance / volatil |
+| --accent-pos (turquoise) | #0FB5A8 | #0FB5A8 | positif / support / pinning |
+| --accent-neg (crimson) | #B5002E | #B5002E | negatif / resistance / volatil |
 | --bg-base | #000000 | #FFFFFF | latar utama |
 | --bg-surface | #0B0E11 | #F4F5F7 | panel/topbar |
 | --bg-glass | rgba(255,255,255,0.04) | rgba(0,0,0,0.04) | toolbar floating |
@@ -353,8 +353,8 @@ Alert otomatis · Mobile/tablet · Instrumen selain ES/NQ · Charm/Vanna & Stabi
 | --price-line | #E8EAED (dashed) | #0B0E11 (dashed) | harga berjalan |
 
 **Skala heatmap (simetris terhadap 0):**
-- Dark: `crimson(#E0183C) → hitam(#000000) → turquoise(#40E0D0)`.
-- Light: `crimson(#E0183C) → putih(#FFFFFF) → turquoise(#40E0D0)`.
+- Dark: `crimson(#B5002E) → hitam(#000000) → turquoise(#0FB5A8)`.
+- Light: `crimson(#B5002E) → putih(#FFFFFF) → turquoise(#0FB5A8)`.
 - Interpolasi di ruang warna perseptual (OKLab/LCH) agar mulus, BUKAN RGB linear.
 
 ### 3. Tipografi
@@ -1556,7 +1556,7 @@ OPERATING RULES (non-negotiable):
 - You cannot run code; self-verify by careful static reasoning and keep code type-safe.
 
 LOCKED CONTRACT (global):
-- Colors: turquoise #40E0D0 = positive/support ; crimson #E0183C = negative/resistance ; dark base #000000.
+- Colors: turquoise #0FB5A8 = positive/support ; crimson #B5002E = negative/resistance ; dark base #000000.
 - Heatmap ramp: dark = turquoise->black->crimson ; light = turquoise->white->crimson ; perceptual interpolation (OKLab/LCH).
 - Fonts: Space Grotesk (UI/display) + JetBrains Mono (all numbers). NEVER Inter. NEVER wedding-style/decorative fonts.
 - Instruments: /ES multiplier $50/pt, /NQ multiplier $20/pt. Strike step: /ES = 5, /NQ = 10.
@@ -1712,8 +1712,8 @@ GEX_strike = gamma * VOL * M * F^2 * 0.01
 
 | Token | Hex | Makna |
 | --- | --- | --- |
-| turquoise | #40E0D0 | positif / support |
-| crimson | #E0183C | negatif / resistance |
+| turquoise | #0FB5A8 | positif / support |
+| crimson | #B5002E | negatif / resistance |
 | base (dark) | #000000 | background gelap |
 - Heatmap **dark**: turquoise → black → crimson. **Light**: turquoise → white → crimson. Interpolasi perseptual (**OKLab/LCH**), bukan RGB linear.
 - Font: **Space Grotesk** (UI) + **JetBrains Mono** (angka). **BUKAN Inter**.
@@ -1788,8 +1788,8 @@ Tujuan visual: **gelap minimalis futuristik + data-art**, polish setingkat landi
 
 | Token | Dark | Light | Guna |
 | --- | --- | --- | --- |
-| --accent-pos | #40E0D0 | #40E0D0 | positif/support/pinning |
-| --accent-neg | #E0183C | #E0183C | negatif/resistance/volatil |
+| --accent-pos | #0FB5A8 | #0FB5A8 | positif/support/pinning |
+| --accent-neg | #B5002E | #B5002E | negatif/resistance/volatil |
 | --bg-base | #000000 | #FFFFFF | latar utama |
 | --bg-surface | #0B0E11 | #F4F5F7 | panel/topbar |
 | --bg-glass | rgba(255,255,255,0.04) | rgba(0,0,0,0.04) | toolbar floating |

@@ -10,8 +10,8 @@ The original full text lives in [`reference/Stitching-Guide.md`](reference/Stitc
 ## Visual identity
 
 - **Colors (OKLab-tuned):**
-  - Turquoise (positive / call / dealer-long-gamma) `#40E0D0`
-  - Crimson (negative / put / dealer-short-gamma) `#E0183C`
+  - Turquoise (positive / call / dealer-long-gamma) `#0FB5A8`
+  - Crimson (negative / put / dealer-short-gamma) `#B5002E`
   - Base background `#000000`
 - **Fonts:** Space Grotesk (display/UI) + JetBrains Mono (numbers/data).
   **Never Inter.**

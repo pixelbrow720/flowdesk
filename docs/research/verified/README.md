@@ -20,7 +20,7 @@ Paket ini berisi **hasil riset terverifikasi** untuk FlowDesk — BUKAN kode apl
 - **Opus di VSCode:** layer empiris/repo → jalankan harness Track G (Lapis 1→2) pada data /ES /NQ nyata, tutup gap kode-vs-dokumen, implement live feed.
 
 ## LOCKED CONTRACT (jangan diubah tanpa label eksplisit)
-- Warna: turquoise `#40E0D0` / crimson `#E0183C` / base `#000000` (interpolasi OKLab).
+- Warna: turquoise `#0FB5A8` / crimson `#B5002E` / base `#000000` (interpolasi OKLab).
 - Font: Space Grotesk + JetBrains Mono.
 - /ES M=$50 step 5; /NQ M=$20 step 10.
 - RTH 09:30–16:00 ET, 1-menit, replay 90 hari.
