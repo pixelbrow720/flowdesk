@@ -63,28 +63,54 @@ services/engine/   flowdesk-engine  — Python compute core (Black-76, IV, expos
                    field, levels, snapshot, flux, surface, feed adapters, ingest)
 services/api/      flowdesk-api     — FastAPI REST+WS, Discord OAuth, worker,
                    Redis/Timescale repos, session state machine
-packages/contracts @flowdesk/contracts — zod mirror of Snapshot + /api/me
-infra/             docker-compose etc. (Fase 6 — currently only .gitkeep)
-docs/              ALL human documentation (start at docs/README.md)
+packages/contracts @flowdesk/contracts — zod mirror of Snapshot + /api/me (the
+                   ONLY real package in pnpm workspace)
+packages/tokens/   EMPTY — leftover after the 2026-06-15 FE deletion. Do NOT
+                   resurrect; locked tokens live in docs/02-locked-contract.md.
+apps/dashboard/    @flowdesk/dashboard — Next.js 15 + lightweight-charts (port 4321).
+                   In-progress rebuild. STANDALONE: own node_modules + pnpm-lock,
+                   NOT in pnpm-workspace.yaml.
+apps/landing/      @flowdesk/landing — Next.js marketing site (also port 4321 → port
+                   collision if both run). STANDALONE: own node_modules +
+                   package-lock.json, NOT in pnpm-workspace.yaml.
+analysis/          Offline research/eval harnesses. `analysis/harness/provenance.py`
+                   is the chokepoint that enforces 0DTE tenor (rule 2.7).
+infra/             docker-compose etc. (Fase 6 — currently only .gitkeep).
+docs/              ALL human documentation (start at docs/README.md).
 ```
 
-Two ecosystems are managed **separately**: TS/JS via pnpm workspaces
-(`packages/*`); Python via per-service `pyproject.toml` (NOT in the
-pnpm workspace).
+Three ecosystems are managed **separately**:
+- pnpm workspace: `packages/*` only (currently just `@flowdesk/contracts`).
+- `apps/dashboard` and `apps/landing`: each has its own `node_modules` and lockfile.
+  Run `pnpm install` *inside* the app dir before `pnpm dev` / `pnpm build`. The
+  root `pnpm install` will NOT install them. The README mention of `pnpm dev:web`
+  is stale — no such script exists.
+- Python: per-service `pyproject.toml` under `services/engine` and `services/api`.
 
 ## 4. Verification — run after EVERY change
 
+There is **no CI** (`.github/` does not exist) and no pre-commit hook. The
+checks below are the *only* gate; you must run them locally.
+
 ```bash
-# Engine
+# Engine — both linters are strict and gated by mypy strict mode.
 cd services/engine && pytest && ruff check . && mypy
-# API (engine must be installed editable first: pip install -e ../engine)
-cd services/api && pytest && ruff check . && mypy
-# TS
+# API — engine MUST be installed editable first or imports break.
+cd services/api && pip install -e ../engine && pytest && ruff check . && mypy
+# TS contracts (only thing in the pnpm workspace).
 pnpm -r typecheck && pnpm -r lint
 pnpm --filter @flowdesk/contracts validate   # zod contract: accepts example, rejects malformed
-# Engine golden fixture (after an INTENTIONAL contract change only)
+# Engine golden fixture (after an INTENTIONAL contract change only).
 cd services/engine && PYTHONPATH=src python tests/gen_golden.py
 ```
+
+`Makefile` shortcuts exist: `make dev-api`, `make lint`, `make typecheck`
+(the latter two run BOTH pnpm and per-service ruff/mypy in one go).
+
+The Databento ingest script needs an extra: `pip install -e ".[dev,ingest]"`
+in `services/engine`. The base `[dev]` install is enough for the engine, the
+historical adapter, and all tests — do not pull `ingest` unless you actually
+hit the live API.
 
 Known pre-existing baseline noise (NOT introduced by you, do not "fix" blindly):
 engine `mypy -p engine` shows ~16 strict errors in locked core modules

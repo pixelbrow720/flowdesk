@@ -1,78 +1,46 @@
 "use client";
 
 /* ------------------------------------------------------------------ */
-/* PriceChart — lightweight-charts powered candle + overlay            */
+/* PriceChart — lightweight-charts candlestick from forward price      */
 /* ------------------------------------------------------------------ */
 /*                                                                     */
-/* /ES 0DTE intraday chart. Dummy deterministic data for now —          */
-/* swap to live snapshot feed later (ohlc field on Snapshot is the      */
-/* canonical source).                                                   */
+/* /ES 0DTE intraday chart. Builds candlesticks from the per-minute    */
+/* forward price series (parity-derived). Each 1-minute bar:           */
+/*   open  = previous minute's forward (or same for m=0)               */
+/*   close = this minute's forward                                     */
+/*   high  = max(open, close) + small noise to avoid flat bars         */
+/*   low   = min(open, close) - small noise                            */
 /*                                                                     */
 /* Theme matches the FLUX/FOG bone palette (locked):                    */
-/*   bone-0  #F4EFE6                                                    */
-/*   bone-2  #6B655B                                                    */
-/*   bone-3  #45413B                                                    */
-/*   ink     #14130F                                                    */
-/*   crimson #B5002E                                                    */
-/*   teal    #0FB5A8                                                    */
+/*   bone-0  #F4EFE6   bone-2  #6B655B   bone-3  #45413B               */
+/*   ink     #14130F   crimson #B5002E   teal    #0FB5A8               */
 /* ------------------------------------------------------------------ */
 
 import { useEffect, useRef } from "react";
 import {
   createChart,
   CandlestickSeries,
-  LineSeries,
   CrosshairMode,
   type IChartApi,
   type ISeriesApi,
   type Time,
 } from "lightweight-charts";
 
-const BASE = 5_840;
-
-/** Generate deterministic 1m bars for an RTH session (09:30 → 16:00 ET). */
-function genBars() {
-  const bars: { time: Time; open: number; high: number; low: number; close: number }[] = [];
-  // 09:30 ET on 2026-06-09 → epoch seconds (UTC = 13:30)
-  const start = Math.floor(new Date("2026-06-09T13:30:00Z").getTime() / 1000);
-  let prev = BASE;
-  for (let i = 0; i < 390; i++) {
-    // pseudo-random walk seeded by i
-    const drift = Math.sin(i / 23) * 1.4 + Math.cos(i / 47) * 0.8;
-    const noise = ((i * 9301 + 49297) % 233280) / 233280 - 0.5; // [-0.5, 0.5]
-    const close = prev + drift + noise * 2.2;
-    const open = prev;
-    const high = Math.max(open, close) + Math.abs(noise) * 1.5;
-    const low = Math.min(open, close) - Math.abs(noise) * 1.5;
-    bars.push({
-      time: (start + i * 60) as Time,
-      open: +open.toFixed(2),
-      high: +high.toFixed(2),
-      low: +low.toFixed(2),
-      close: +close.toFixed(2),
-    });
-    prev = close;
-  }
-  return bars;
+interface ForwardPoint {
+  time: number;
+  value: number;
 }
 
-/** VWAP overlay derived from candle midpoints (cheap proxy). */
-function genVwap(bars: ReturnType<typeof genBars>) {
-  let cumPV = 0;
-  let cumV = 0;
-  return bars.map((b) => {
-    const tp = (b.high + b.low + b.close) / 3;
-    const v = 1; // unit volume — dummy
-    cumPV += tp * v;
-    cumV += v;
-    return { time: b.time, value: +(cumPV / cumV).toFixed(2) };
-  });
-}
-
-export function PriceChart() {
+export function PriceChart({
+  forwardSeries = [],
+}: {
+  forwardSeries?: ForwardPoint[];
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
 
+  // Create the chart once.
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -82,10 +50,11 @@ export function PriceChart() {
         textColor: "#6B655B",
         fontFamily: "var(--font-jetbrains-mono), ui-monospace, monospace",
         fontSize: 10,
+        attributionLogo: false,
       },
       grid: {
-        vertLines: { color: "rgba(69, 65, 59, 0.15)" },
-        horzLines: { color: "rgba(69, 65, 59, 0.15)" },
+        vertLines: { visible: false },
+        horzLines: { visible: false },
       },
       rightPriceScale: {
         borderColor: "rgba(69, 65, 59, 0.4)",
@@ -105,35 +74,64 @@ export function PriceChart() {
     });
     chartRef.current = chart;
 
-    const bars = genBars();
-
-    // Candles
-    const candles: ISeriesApi<"Candlestick"> = chart.addSeries(CandlestickSeries, {
-      upColor: "#0FB5A8",
-      downColor: "#B5002E",
-      borderUpColor: "#0FB5A8",
-      borderDownColor: "#B5002E",
-      wickUpColor: "#0FB5A8",
-      wickDownColor: "#B5002E",
+    // Candles — bone palette:
+    //   up   → body bone-0 (putih tulang)         #F4EFE6
+    //   down → body ink/black                     #000000
+    //   border + wick → SEMUA bone-0 (outline putih tulang dua-duanya)
+    const candles = chart.addSeries(CandlestickSeries, {
+      upColor: "#F4EFE6",
+      downColor: "#000000",
+      borderUpColor: "#F4EFE6",
+      borderDownColor: "#F4EFE6",
+      wickUpColor: "#F4EFE6",
+      wickDownColor: "#F4EFE6",
     });
-    candles.setData(bars);
-
-    // VWAP overlay
-    const vwap: ISeriesApi<"Line"> = chart.addSeries(LineSeries, {
-      color: "#F4EFE6",
-      lineWidth: 1,
-      priceLineVisible: false,
-      lastValueVisible: false,
-    });
-    vwap.setData(genVwap(bars));
-
-    chart.timeScale().fitContent();
+    seriesRef.current = candles;
 
     return () => {
       chart.remove();
       chartRef.current = null;
+      seriesRef.current = null;
     };
   }, []);
+
+  // Push data whenever the forward series changes.
+  useEffect(() => {
+    const series = seriesRef.current;
+    const chart = chartRef.current;
+    if (!series || !chart || forwardSeries.length === 0) return;
+
+    // De-dupe + sort by time (lightweight-charts requires strictly ascending,
+    // unique timestamps).
+    const seen = new Set<number>();
+    const sorted = forwardSeries
+      .filter((p) => Number.isFinite(p.value) && p.time > 0)
+      .sort((a, b) => a.time - b.time)
+      .filter((p) => {
+        if (seen.has(p.time)) return false;
+        seen.add(p.time);
+        return true;
+      });
+
+    // Build candles: open = previous close, high/low include both.
+    const bars = sorted.map((p, i) => {
+      const open = i > 0 ? sorted[i - 1].value : p.value;
+      const close = p.value;
+      const high = Math.max(open, close);
+      const low = Math.min(open, close);
+      const wickExt = Math.max(0.5, (high - low) * 0.15);
+      return {
+        time: p.time as Time,
+        open: +open.toFixed(2),
+        high: +(high + wickExt).toFixed(2),
+        low: +(low - wickExt).toFixed(2),
+        close: +close.toFixed(2),
+      };
+    });
+
+    series.setData(bars);
+    chart.timeScale().fitContent();
+  }, [forwardSeries]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }

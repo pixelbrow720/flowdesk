@@ -189,3 +189,105 @@ def test_get_hiro_trades_excludes_pre_open() -> None:
     trades = adapter.get_flux_trades(INSTRUMENT, TS)
     # The size-999 pre-open call trade must not appear.
     assert all(t.size != 999.0 for t in trades)
+
+
+# --------------------------------------------------------------------------- #
+# Put-call parity forward fallback (options-only Databento pulls have no
+# futures market data; the forward is recovered from the option chain).
+# --------------------------------------------------------------------------- #
+def _parity_data(
+    *, quoted_expiry: datetime, calls: dict, puts: dict, defs_extra: dict | None = None
+) -> dict:
+    """Build a minimal in-memory ``data`` payload for the internal methods.
+
+    ``calls`` / ``puts`` map strike -> (bid, ask). All legs share ``quoted_expiry``.
+    No futures are present, so ``_forward_from`` must fall through to parity.
+    """
+    from engine.feed.historical import InstrumentDef
+
+    defs: dict[int, InstrumentDef] = {}
+    quotes: dict[int, list] = {}
+    iid = 100
+    qts = quoted_expiry  # any ts; quotes are time-sorted, we query at qts
+    for strike, (bid, ask) in calls.items():
+        defs[iid] = InstrumentDef(iid, f"C{strike}", "call", float(strike), quoted_expiry)
+        quotes[iid] = [(qts, bid, ask)]
+        iid += 1
+    for strike, (bid, ask) in puts.items():
+        defs[iid] = InstrumentDef(iid, f"P{strike}", "put", float(strike), quoted_expiry)
+        quotes[iid] = [(qts, bid, ask)]
+        iid += 1
+    if defs_extra:
+        defs.update(defs_extra)
+    return {"defs": defs, "quotes": quotes, "settle": {}}
+
+
+def test_forward_from_parity_when_no_futures() -> None:
+    # Options on a future: F = K + e^{rT}(C_mid - P_mid). At the ATM strike where
+    # C_mid == P_mid, F == K exactly. Build a chain where 5000 has equal mids.
+    expiry = datetime(2026, 6, 10, 20, 0, tzinfo=timezone.utc)
+    adapter = HistoricalSimAdapter(DATA_DIR, rate=0.0)
+    data = _parity_data(
+        quoted_expiry=expiry,
+        calls={4990: (13.5, 14.5), 5000: (7.0, 8.0), 5010: (3.5, 4.5)},
+        puts={4990: (3.5, 4.5), 5000: (7.0, 8.0), 5010: (13.5, 14.5)},
+    )
+    # rate=0 → discount factor 1. ATM 5000 has C_mid == P_mid == 7.5 → F == 5000.
+    fwd = adapter._forward_from(data, expiry)
+    assert abs(fwd - 5000.0) < 1e-9
+
+
+def test_forward_from_parity_picks_atm_strike() -> None:
+    # Even when no strike has perfectly equal mids, parity picks the strike with
+    # the smallest |C - P| and applies F = K + (C_mid - P_mid). Here 5000 is
+    # closest to ATM (C_mid 7.5, P_mid 7.0 → F = 5000 + 0.5 = 5000.5).
+    expiry = datetime(2026, 6, 10, 20, 0, tzinfo=timezone.utc)
+    adapter = HistoricalSimAdapter(DATA_DIR, rate=0.0)
+    data = _parity_data(
+        quoted_expiry=expiry,
+        calls={4990: (13.0, 14.0), 5000: (7.0, 8.0), 5010: (3.0, 4.0)},
+        puts={4990: (4.0, 5.0), 5000: (6.5, 7.5), 5010: (14.0, 15.0)},
+    )
+    fwd = adapter._forward_from(data, expiry)
+    assert abs(fwd - 5000.5) < 1e-9
+
+
+def test_select_expiry_prefers_quoted_over_contaminant() -> None:
+    # Two same-day expiries: an AM-settled contaminant (09:00Z, no quotes) and
+    # the real 0DTE close (20:00Z, quoted). The selector must pick the quoted one
+    # (guards the documented quarterly-as-0DTE contamination).
+    from engine.feed.historical import InstrumentDef
+
+    ny_session = datetime(2026, 6, 10, 13, 31, tzinfo=timezone.utc)
+    am_expiry = datetime(2026, 6, 10, 13, 0, tzinfo=timezone.utc)  # 09:00 ET
+    pm_expiry = datetime(2026, 6, 10, 20, 0, tzinfo=timezone.utc)  # 16:00 ET
+    adapter = HistoricalSimAdapter(DATA_DIR, rate=0.0)
+    # Build defs: contaminant legs (no quotes) + quoted legs.
+    data = _parity_data(
+        quoted_expiry=pm_expiry,
+        calls={5000: (7.0, 8.0)},
+        puts={5000: (7.0, 8.0)},
+        defs_extra={
+            900: InstrumentDef(900, "C_AM", "call", 5000.0, am_expiry),
+            901: InstrumentDef(901, "P_AM", "put", 5000.0, am_expiry),
+        },
+    )
+    defs = data["defs"]
+    quote_iids = adapter._quote_iids(data)
+    selected = adapter._select_0dte_expiry(defs, ny_session, quote_iids)
+    assert selected == pm_expiry  # the QUOTED expiry, not the earlier contaminant
+
+
+def test_select_expiry_without_quote_iids_is_unchanged() -> None:
+    # Back-compat: when no quote_iids passed, behaviour is the old "earliest
+    # same-day expiry" (a single same-day expiry is returned as before).
+    from engine.feed.historical import InstrumentDef
+
+    ny_session = datetime(2026, 6, 10, 13, 31, tzinfo=timezone.utc)
+    expiry = datetime(2026, 6, 10, 20, 0, tzinfo=timezone.utc)
+    adapter = HistoricalSimAdapter(DATA_DIR, rate=0.0)
+    defs = {
+        10: InstrumentDef(10, "C", "call", 5000.0, expiry),
+        11: InstrumentDef(11, "P", "put", 5000.0, expiry),
+    }
+    assert adapter._select_0dte_expiry(defs, ny_session) == expiry

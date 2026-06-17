@@ -30,6 +30,10 @@ venv/
 # ── Data cache (raw Databento chains + decoded/derived case-study artefacts) ──
 /data/raw/
 /data/case_study/
+/data/cache/
+
+# ── Dashboard derived snapshot assets (regenerable from engine) ──
+apps/dashboard/public/data/
 
 # ── Analysis harness outputs (regenerable from data) ──
 /analysis/charts/

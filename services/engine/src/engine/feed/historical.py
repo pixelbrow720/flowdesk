@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import bisect
 import csv
+import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
@@ -145,9 +146,15 @@ class HistoricalSimAdapter(FeedAdapter):
         data_dir: str | Path,
         *,
         quote_schema: str = "mbp-1",
+        rate: float = 0.0,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.quote_schema = quote_schema
+        # Continuously-compounded risk-free rate used ONLY for the put-call
+        # parity forward fallback (discount factor e^{rT}). For 0DTE T is tiny so
+        # the default 0.0 is negligible; the caller may pass the session rate to
+        # match the snapshot's pricing rate exactly.
+        self._rate = rate
         # Memoised per (instrument, session_date) parsed payloads.
         self._cache: dict[tuple[str, str], dict[str, object]] = {}
 
@@ -158,7 +165,7 @@ class HistoricalSimAdapter(FeedAdapter):
         data = self._load(instr, ts)
         defs: dict[int, InstrumentDef] = data["defs"]  # type: ignore[assignment]
 
-        expiry = self._select_0dte_expiry(defs, ts)
+        expiry = self._select_0dte_expiry(defs, ts, self._quote_iids(data))
         rth_open = self._rth_open_utc(ts)
 
         rows: list[ChainRow] = []
@@ -195,7 +202,10 @@ class HistoricalSimAdapter(FeedAdapter):
         """
         instr = self._check_instrument(instrument)
         ts = ensure_utc_minute(ts)
-        return self._select_0dte_expiry(self._load(instr, ts)["defs"], ts)  # type: ignore[arg-type]
+        data = self._load(instr, ts)
+        return self._select_0dte_expiry(
+            data["defs"], ts, self._quote_iids(data)  # type: ignore[arg-type]
+        )
 
     def get_ohlc(
         self, instrument: str, ts: datetime
@@ -308,7 +318,10 @@ class HistoricalSimAdapter(FeedAdapter):
         return local_open.astimezone(timezone.utc)
 
     def _select_0dte_expiry(
-        self, defs: dict[int, InstrumentDef], ts: datetime
+        self,
+        defs: dict[int, InstrumentDef],
+        ts: datetime,
+        quote_iids: Optional[set[int]] = None,
     ) -> Optional[datetime]:
         session_date = ts.astimezone(NY_TZ).date()
         expiries = sorted(
@@ -322,9 +335,38 @@ class HistoricalSimAdapter(FeedAdapter):
             return None
         same_day = [e for e in expiries if e.astimezone(NY_TZ).date() == session_date]
         if same_day:
+            # When a session has multiple same-day expiries (e.g. weekly E2B
+            # plus AM-settled or quarterly contaminants), pick the one with the
+            # most quoted legs. A contaminant has no market data; the intended
+            # 0DTE expiry is the one actually trading. Ties break on latest
+            # expiry (RTH close beats AM settle).
+            if len(same_day) > 1 and quote_iids is not None:
+                def _coverage(exp: datetime) -> tuple[int, datetime]:
+                    n = sum(
+                        1
+                        for iid, d in defs.items()
+                        if d.kind in ("call", "put")
+                        and d.expiration == exp
+                        and iid in quote_iids
+                    )
+                    return (n, exp)
+                return max(same_day, key=_coverage)
             return same_day[0]
         future = [e for e in expiries if e.astimezone(NY_TZ).date() >= session_date]
         return future[0] if future else expiries[-1]
+
+    @staticmethod
+    def _quote_iids(data: dict[str, object]) -> set[int]:
+        """instrument_ids that have at least one quote in the loaded session.
+
+        Used by :meth:`_select_0dte_expiry` to disambiguate same-day expiries:
+        the real 0DTE expiry is the one with traded/quoted legs, not an
+        AM-settled or quarterly contaminant that carries a definition but no
+        market data (guards the documented quarterly-as-0DTE contamination).
+        """
+        quotes: dict[int, object] = data["quotes"]  # type: ignore[assignment]
+        return set(quotes.keys())
+
 
     def _latest_quote(
         self, data: dict[str, object], iid: int, ts: datetime
@@ -369,30 +411,92 @@ class HistoricalSimAdapter(FeedAdapter):
     def _forward_from(self, data: dict[str, object], ts: datetime) -> float:
         defs: dict[int, InstrumentDef] = data["defs"]  # type: ignore[assignment]
         futures = [d for d in defs.values() if d.kind == "future"]
-        if not futures:
-            raise ValueError("no future instrument found in definition cache")
-        # Front future = nearest expiration on/after ts (fallback: earliest).
-        dated = sorted(
-            (d for d in futures if d.expiration is not None),
-            key=lambda d: d.expiration,  # type: ignore[arg-type,return-value]
-        )
-        ordered = [d for d in dated if d.expiration and d.expiration >= ts] or dated or futures
-        for fut in ordered:
-            bid, ask = self._latest_quote(data, fut.instrument_id, ts)
-            if bid is not None and ask is not None and ask >= bid > 0:
-                return (bid + ask) / 2.0
-        # Fallback: latest settlement price <= ts.
-        settle: dict[int, list[tuple[datetime, float]]] = data["settle"]  # type: ignore[assignment]
-        for fut in ordered:
-            series = settle.get(fut.instrument_id)
-            if series:
-                val = None
-                for s_ts, px in series:
-                    if s_ts <= ts:
-                        val = px
-                if val is not None:
-                    return val
+        if futures:
+            # Front future = nearest expiration on/after ts (fallback: earliest).
+            dated = sorted(
+                (d for d in futures if d.expiration is not None),
+                key=lambda d: d.expiration,  # type: ignore[arg-type,return-value]
+            )
+            ordered = [d for d in dated if d.expiration and d.expiration >= ts] or dated or futures
+            for fut in ordered:
+                bid, ask = self._latest_quote(data, fut.instrument_id, ts)
+                if bid is not None and ask is not None and ask >= bid > 0:
+                    return (bid + ask) / 2.0
+            # Fallback: latest settlement price <= ts.
+            settle: dict[int, list[tuple[datetime, float]]] = data["settle"]  # type: ignore[assignment]
+            for fut in ordered:
+                series = settle.get(fut.instrument_id)
+                if series:
+                    val = None
+                    for s_ts, px in series:
+                        if s_ts <= ts:
+                            val = px
+                    if val is not None:
+                        return val
+        # Final fallback: derive the forward from option quotes via put-call
+        # parity. These are options ON the future, so the underlying forward is
+        # recoverable from the call/put mids at the strike where |C - P| is
+        # smallest (closest to ATM, where parity is most numerically stable):
+        #     F = K + e^(rT) * (C_mid - P_mid)
+        # No futures market data is required — only the option chain we already
+        # have. This keeps the engine usable on options-only Databento pulls.
+        fwd = self._forward_from_parity(data, ts)
+        if fwd is not None:
+            return fwd
         raise ValueError("could not determine forward: no future quote or settlement")
+
+    def _forward_from_parity(
+        self, data: dict[str, object], ts: datetime
+    ) -> Optional[float]:
+        """Recover the underlying forward from option quotes via put-call parity.
+
+        For options on a future, ``C - P = e^{-rT}(F - K)`` (Black-76 parity), so
+        ``F = K + e^{rT}(C_mid - P_mid)``. We pick the strike with the smallest
+        ``|C_mid - P_mid|`` (nearest ATM, where the estimate is least sensitive
+        to bid/ask noise). Returns ``None`` if no strike has both a valid call and
+        put mid.
+        """
+        defs: dict[int, InstrumentDef] = data["defs"]  # type: ignore[assignment]
+        expiry = self._select_0dte_expiry(defs, ts, self._quote_iids(data))
+        # Discount factor e^{rT}; for 0DTE T is tiny so this is ~1, but compute
+        # it honestly from the selected expiry (365-day convention).
+        disc = 1.0
+        if expiry is not None:
+            t_expiry = self._year_fraction(expiry, ts)
+            disc = math.exp(self._rate * t_expiry)
+
+        # Index calls and puts by strike (only legs matching the 0DTE expiry).
+        calls: dict[float, float] = {}
+        puts: dict[float, float] = {}
+        for iid, d in defs.items():
+            if d.kind not in ("call", "put") or d.strike is None:
+                continue
+            if expiry is not None and d.expiration is not None and d.expiration != expiry:
+                continue
+            bid, ask = self._latest_quote(data, iid, ts)
+            if bid is None or ask is None or not (ask >= bid > 0):
+                continue
+            mid = (bid + ask) / 2.0
+            target = calls if d.kind == "call" else puts
+            target[float(d.strike)] = mid
+
+        best_strike: Optional[float] = None
+        best_spread = float("inf")
+        for strike, c_mid in calls.items():
+            p_mid = puts.get(strike)
+            if p_mid is None:
+                continue
+            spread = abs(c_mid - p_mid)
+            if spread < best_spread:
+                best_spread = spread
+                best_strike = strike
+        if best_strike is None:
+            return None
+        c_mid = calls[best_strike]
+        p_mid = puts[best_strike]
+        return best_strike + disc * (c_mid - p_mid)
+
+
 
     # ----------------------------------------------------------- file loading
     def _load(self, instrument: str, ts: datetime) -> dict[str, object]:

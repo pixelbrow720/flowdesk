@@ -62,7 +62,9 @@ def main(argv: list[str]) -> int:
     from engine.flux import FluxState
     from engine.snapshot import MULTIPLIER, build_snapshot, t_expiry_from_clock
 
-    adapter = HistoricalSimAdapter(args.data_dir, quote_schema=args.quote_schema)
+    adapter = HistoricalSimAdapter(
+        args.data_dir, quote_schema=args.quote_schema, rate=args.rate
+    )
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
