@@ -53,6 +53,37 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-18 — Fog lens redesign: two-zone terminal (FE only)
+Pure frontend, additive — **engine / Snapshot contract / locked values
+untouched**. The Fog page (`apps/dashboard/src/app/fog/page.tsx`) was iterated
+with the user from the 2026-06-17 three-panel spec into a simpler **two-zone**
+terminal:
+- **LEFT (≈26%, only scrolling zone)** — strike ladder + per-strike `net_gex`
+  bidirectional bars at native **$5** spacing + session MIN↔MAX range hairline
+  + dotted self-normalized **IV-smile** dots (SVI, EXPERIMENTAL, toggle).
+  User-locked, "do not change".
+- **RIGHT** — `lightweight-charts` price candle chart (spot/forward OHLC; no
+  wick because data is one forward/min and engine `ohlc` is null — close-series
+  candle, no fabricated intrabar range) + **selectable key-level price lines**
+  (call/put wall, zero γ, largest GEX/DEX real; hedge wall / abs-γ / OI-γ-flip
+  EXPERIMENTAL, off by default) + **toggleable ratio overlays** (GEX+ share /
+  ATM IV / skew, each on its own hidden scale) + session-metrics strip
+  (ATM IV · Exp Move · Net γ · GEX+ share · Skew).
+- New pure, `node:test`-covered helpers: `strikeMath.ts` (binning/percentile/
+  smile/mean) + `levelsChart.ts` (candles/levels/metrics/ratios). 18 fog tests
+  pass.
+- **Explored and dropped** (removed from tree): 3-panel center "dynamics" (range
+  band + Canvas2D flow particles, `flowField.ts`), OptionsDepth-style price×time
+  gamma "fog" heatmap (`gammaHeatmap*`), HIRO-style flux time-tape
+  (`timeChart*` / `TimeChartPanel`). The pre-existing `GexHeatmap.tsx` /
+  `glHeatmap.ts` / `PriceChart.tsx` stay in the repo, unimported.
+- Also reverted an accidental $10 strike-binning that had slipped into the left
+  ladder; spacing is back to native $5.
+- Docs synced: `09-roadmap.md` §B, `AGENTS.md` item 3, and a SUPERSEDED banner
+  on the 2026-06-17 three-panel spec.
+- Gate: `npm run typecheck` ✅, `npm run build` ✅ (`/fog`), `node --test` fog
+  suites ✅. ESLint not configured (do not use `npm run lint`).
+
 ### 2026-06-15 — Phase 4 DONE: backend hardening complete, paid beta GO (historical)
 **Verdict (`docs/architecture/beta-readiness.md`):** GO for paid beta on
 `FEED_MODE=historical`. LiveAdapter built but stays disarmed (the

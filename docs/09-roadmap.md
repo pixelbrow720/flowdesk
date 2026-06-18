@@ -26,12 +26,28 @@ The original phase-by-phase build playbook is preserved at
 ### B. Frontend rebuild — *in progress (Fog lens live, Flux/Arc next)*
 The original frontend (`apps/web/`, `@flowdesk/tokens`) was deleted on
 2026-06-15 and is being rebuilt from scratch as `apps/dashboard/`
-(Next.js 15 + React 19 + lightweight-charts, port 4321). Current state:
+(Next.js 15 + React 19 + lightweight-charts, port 4325). Current state:
 
 - ✅ App shell, navbar, routing for `/fog /flux /arc /settings`.
-- 🔨 **Fog lens** (state-based GEX/DEX positioning, TRACE-inspired):
-  minimalist ladder + GEX profile + intraday candles. Synthetic data;
-  API wiring deferred but planned alongside visual polish.
+- 🔨 **Fog lens** — a **two-zone** terminal (2026-06-18 redesign):
+  - **LEFT (≈26%, the only scrolling zone):** strike ladder + per-strike
+    `net_gex` bidirectional bars at native $5 spacing, a session MIN↔MAX
+    range hairline, and a dotted self-normalized **IV-smile** overlay (SVI,
+    EXPERIMENTAL, toggle).
+  - **RIGHT:** a `lightweight-charts` price candle chart (spot/forward OHLC)
+    with **selectable key-level price lines** (call/put wall, zero γ,
+    largest GEX/DEX; hedge wall / abs-γ / OI-γ-flip flagged EXPERIMENTAL,
+    off by default), **toggleable ratio overlays** (GEX+ share, ATM IV, skew
+    on hidden scales), and a session-metrics strip (ATM IV · Exp Move · Net γ
+    · GEX+ share · Skew).
+  - Pure data helpers (`strikeMath.ts`, `levelsChart.ts`) are unit-tested via
+    Node's built-in `node:test` runner. Still reads the static session JSON;
+    API wiring deferred but planned.
+  - **Explored and dropped** (kept out of the tree): a 3-panel center
+    "dynamics" layer (range band + flow particles), an OptionsDepth-style
+    price×time gamma "fog" heatmap, and a HIRO-style flux time-tape. The
+    legacy `GexHeatmap.tsx` / `glHeatmap.ts` / `PriceChart.tsx` remain in the
+    repo, unimported.
 - ⏳ **Flux lens** (Hiro-style time-series flow): placeholder.
 - ⏳ **Arc lens** (3D vol surface `σ(K,T)`): placeholder.
 - ⏳ Wire `@flowdesk/contracts` zod parser to `/api/snapshot` + `/ws`.

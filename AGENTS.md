@@ -166,11 +166,16 @@ See `docs/08-status-and-gaps.md` for the full version with file references. Shor
    stays disarmed; flipping it requires the operator runbook procedure.
 3. **Frontend** — the prior `apps/web` Next.js app and `@flowdesk/tokens`
    package were deleted on 2026-06-15 and the rebuild is **in progress** at
-   `apps/dashboard/` (Next.js 15 + lightweight-charts, port 4321). Fog lens
-   has a minimalist ladder + GEX profile layout live; Flux & Arc remain
+   `apps/dashboard/` (Next.js 15 + lightweight-charts, port 4325). Fog lens is
+   a **two-zone** terminal (2026-06-18 redesign): LEFT = scrolling strike
+   ladder + per-strike `net_gex` bars ($5) + session range hairline + dotted
+   IV-smile overlay (EXPERIMENTAL); RIGHT = `lightweight-charts` price candles
+   with selectable key-level lines + ratio overlays (GEX+ share / ATM IV /
+   skew) + a session-metrics strip. Pure helpers (`strikeMath.ts`,
+   `levelsChart.ts`) are unit-tested with `node:test`. Flux & Arc remain
    placeholders; API wiring (`@flowdesk/contracts` → `/api/snapshot` + `/ws`)
    is the next planned step. See `docs/09-roadmap.md` §B and the
-   2026-06-15 checkpoint in `docs/PROGRESS.md`.
+   2026-06-18 checkpoint in `docs/PROGRESS.md`.
 4. **Surface / vanna / charm wiring** — `surface.py` (SVI / expected move)
    wired into the optional Snapshot fields and VEX/CHEX aggregated from
    `black76.vanna/charm` (commits `691a894`, `7eeac8b` series). Labelled

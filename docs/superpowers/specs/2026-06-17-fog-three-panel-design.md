@@ -1,8 +1,27 @@
 # Fog — Three-Panel Strike Terminal (Design Spec)
 
-> Date: 2026-06-17 · Status: DRAFT (awaiting user review)
+> Date: 2026-06-17 · Status: **SUPERSEDED (2026-06-18) — historical**
 > Replaces the TRACE-style WebGL heatmap as the primary Fog view.
 > Locked-contract colors and data contract unchanged (additive only).
+
+> **SUPERSEDED 2026-06-18 — kept for design history.** The three-panel layout
+> below was built, then iterated with the user into a simpler **two-zone**
+> terminal. What actually shipped (see `docs/09-roadmap.md` §B):
+> - **LEFT (≈26%, only scrolling zone):** strike ladder + per-strike `net_gex`
+>   bars at native **$5** spacing + session MIN↔MAX range hairline + a dotted
+>   self-normalized **IV-smile** overlay (SVI, EXPERIMENTAL, toggle). This is
+>   the "left panel" of this spec, kept and locked by the user.
+> - **RIGHT:** NOT the center "dynamics" panel nor a DEX bar panel. Instead a
+>   `lightweight-charts` **price candle chart** (spot/forward OHLC) with
+>   **selectable key-level price lines** (call/put wall, zero γ, largest
+>   GEX/DEX; hedge wall / abs-γ / OI-γ-flip EXPERIMENTAL, off by default),
+>   **toggleable ratio overlays** (GEX+ share / ATM IV / skew on hidden
+>   scales), and a session-metrics strip.
+> - **Dropped:** the center range-band + flow-particle "dynamics" panel
+>   (§4.2), the OptionsDepth-style price×time gamma "fog" heatmap, and a
+>   HIRO-style flux time-tape — all explored and rejected. Pure helpers live in
+>   `strikeMath.ts` + `levelsChart.ts` (unit-tested via `node:test`).
+> The rest of this document is the original three-panel proposal, unchanged.
 
 ## 1. Why this exists
 
@@ -92,19 +111,18 @@ beyond the existing P/C ratio, `ohlc` (null in data), `synthetic_oi*`, `ddoi`.
   (resistance) or `put_walls` (support); gamma_flip drawn as a faint full-width
   horizontal rule across the row it falls on.
 - Optional IV-smile overlay: a thin bone curve tracing `surface` vol vs strike,
-  toggled off by default, labelled EXPERIMENTAL. It is a background curve, not a
-  competing bar, to avoid double-X clutter. (May be deferred to a follow-up
-  plan if it crowds the panel — flagged as the riskiest sub-feature.)
+  default ON, labelled EXPERIMENTAL. It is a background curve, not a competing
+  bar, to avoid double-X clutter. Toggleable via the panel controls (§4.4).
 
 ### 4.2 Center panel — dynamics (the original idea)
 This is the differentiator. Per strike, three layers stacked in one row:
 1. **Range band** — a filled, semi-transparent lozenge from the strike's
    session MIN to session MAX `net_gex` (signed; may cross the zero axis). This
-   is the user's blue↔red idea, corrected: the band edges use the existing
-   `tide` tokens — `tide.blue` (#5BA3D0) marks session MAX, `tide.red`
-   (#D9534F) marks session MIN (opposite ends of the SAME range), not "longest
-   vs shortest". Using `tide.*` (not turquoise/crimson) keeps the memory band
-   visually distinct from the sign-colored current value.
+   is the user's blue↔red idea, corrected: the band spans session MIN→MAX
+   (opposite ends of the SAME range), not "longest vs shortest". Band fill uses
+   the SIGN palette (turquoise positive / crimson negative) at low opacity —
+   user choice 2026-06-17. The current value is what distinguishes itself from
+   the band, via the bright bone line below.
 2. **Current line** — a bright bone (`bone.0` #FAFAF7) marker at the current
    `net_gex`, "swimming" inside its band. Position in band = percentile of now
    within today's range.
@@ -123,6 +141,14 @@ This is the differentiator. Per strike, three layers stacked in one row:
   three-panel composition). Same turquoise/crimson sign palette.
 - No flow, no band — a clean directional-pressure read, deliberately quieter
   than the center.
+
+### 4.4 Panel controls (toggles)
+A small control cluster (top-right of the Fog page, matching the existing
+top-left GEX selector style — `rule` border, mono micro-type, hover → brick):
+- **IV smile** — show/hide the left-panel smile overlay. Default ON.
+- **Flow** — show/hide center-panel particle motion. Default ON; auto-OFF (and
+  visually disabled) when `prefers-reduced-motion` is set.
+Only install toggles that change a real layer; no decorative switches.
 
 ## 5. Rendering approach
 
