@@ -36,7 +36,7 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `axis` | `Axis` | object | Shared strike axis. | PRD #8 §3 |
 | `regime` | `Regime` | object | Regime summary. | PRD #4 |
 | `profile` | `ProfileRow[]` | array | Net GEX/DEX profile (ascending by strike). | PRD #8 §3 |
-| `field` | `FogGrid` | object | Heatmap field projection arrays. | PRD #8 §3 |
+| `fog` | `FogGrid` | object | Heatmap field projection arrays. | PRD #8 §3 |
 | `levels` | `Levels` | object | Key levels overlay. | PRD #0 §2 |
 | `ohlc` | `OHLC \| null` | object (optional) | Underlying futures OHLC for this minute (candle view). Absent/`null` when not captured; additive, no version bump. | PRD #4 |
 | `flux` | `Flux \| null` | object (optional) | Cumulative dealer hedging flow (FLUX). Absent/`null` when not captured; additive, no version bump (Divergence #5 → option A). | FlowGreeks |
@@ -74,13 +74,13 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `net_dex` | `number` | USD notional | Net dealer Delta Exposure. | PRD #0 §2 |
 | `interpolated` | `boolean` | — | True if values are synthetic (interpolated), not observed. | PRD #8 §3 |
 
-## `field` (FogGrid)
+## `fog` (FogGrid)
 
 | Field | Type | Unit | Meaning | PRD source |
 | --- | --- | --- | --- | --- |
-| `price_grid` | `number[]` | index points | Price grid defining the field's axis. | PRD #8 §3 |
-| `gamma` | `number[]` | USD per 1% move | Gamma field value at each grid point. | PRD #0 §5 |
-| `delta` | `number[]` | USD notional | Delta field value at each grid point. | PRD #8 §3 |
+| `price_grid` | `number[]` | index points | Price grid defining the fog's axis. | PRD #8 §3 |
+| `gamma` | `number[]` | USD per 1% move | Gamma fog value at each grid point. | PRD #0 §5 |
+| `delta` | `number[]` | USD notional | Delta fog value at each grid point. | PRD #8 §3 |
 
 **Invariant (enforced by both validators):** `price_grid` defines the grid, so
 `gamma.length === delta.length === price_grid.length`.

@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
+  BaselineSeries,
   LineSeries,
   CrosshairMode,
   LineStyle,
@@ -29,6 +30,8 @@ import {
   type Time,
 } from "lightweight-charts";
 import type { LevelsChartModel, SessionMetrics } from "@/components/fog/levelsChart";
+import type { FluxSeries } from "@/components/flux/fluxSeries";
+import { DropdownChecklist, type ChecklistItem } from "@/components/terminal/chrome";
 
 // Levels shown by default (the non-experimental ones).
 const DEFAULT_ON = new Set(["call_wall", "put_wall", "gamma_flip"]);
@@ -41,11 +44,21 @@ const OVERLAYS = [
   { id: "skew", label: "Skew", color: "#8E8E88", scaleId: "ov_skew", exp: true },
 ] as const;
 
+// FLUX decomposition lines drawn in the lower pane (calls/puts/retail). The
+// `total` HIRO line is always shown as the baseline; these are opt-in.
+const FLUX_LINES = [
+  { id: "fcalls", key: "calls", label: "Flux Calls", color: "#0FB5A8" },
+  { id: "fputs", key: "puts", label: "Flux Puts", color: "#B5002E" },
+  { id: "fretail", key: "retail", label: "Flux Retail", color: "#C8A24A" },
+] as const;
+
 export function LevelsChartPanel({
   model,
+  flux,
   className = "flex-1",
 }: {
   model: LevelsChartModel;
+  flux?: FluxSeries;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,11 +67,17 @@ export function LevelsChartPanel({
   const priceLinesRef = useRef<IPriceLine[]>([]);
   // One hidden-scale line series per ratio overlay, keyed by overlay id.
   const overlayRef = useRef<Record<string, ISeriesApi<"Line">>>({});
+  // FLUX lower pane: the HIRO baseline + the decomposition lines.
+  const fluxBaseRef = useRef<ISeriesApi<"Baseline"> | null>(null);
+  const fluxLineRef = useRef<Record<string, ISeriesApi<"Line">>>({});
 
   // Which level ids are visible. Initialize to defaults that actually exist.
   const [active, setActive] = useState<Set<string>>(() => new Set(DEFAULT_ON));
   // Which ratio overlays are visible (all off by default).
   const [overlays, setOverlays] = useState<Set<string>>(() => new Set());
+  // Which FLUX decomposition lines are visible (all off by default; the HIRO
+  // baseline `total` is always drawn).
+  const [fluxLines, setFluxLines] = useState<Set<string>>(() => new Set());
 
   // Create the chart + candle series once.
   useEffect(() => {
@@ -70,6 +89,13 @@ export function LevelsChartPanel({
         fontFamily: "var(--font-jetbrains-mono), ui-monospace, monospace",
         fontSize: 10,
         attributionLogo: false,
+        // Pane separator (between price candles + flux): thin dark grey, not the
+        // bright default (#2B2B43 reads almost white on the black terminal).
+        panes: {
+          separatorColor: "rgba(142,142,136,0.18)",
+          separatorHoverColor: "rgba(142,142,136,0.35)",
+          enableResize: true,
+        },
       },
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       rightPriceScale: { borderColor: "rgba(142,142,136,0.25)" },
@@ -110,12 +136,58 @@ export function LevelsChartPanel({
       });
       chart.priceScale(ov.scaleId).applyOptions({ visible: false, scaleMargins: { top: 0.1, bottom: 0.1 } });
     }
+
+    // FLUX lower pane (paneIndex 1): the cumulative HIRO line as a baseline
+    // anchored at 0 (turquoise above = net dealer buying, crimson below =
+    // selling), sharing the SAME time axis as the candles above. Decomposition
+    // lines (calls/puts/retail) live in the same pane, hidden until toggled.
+    fluxBaseRef.current = chart.addSeries(
+      BaselineSeries,
+      {
+        baseValue: { type: "price", price: 0 },
+        topLineColor: "#0FB5A8",
+        topFillColor1: "rgba(15,181,168,0.28)",
+        topFillColor2: "rgba(15,181,168,0.02)",
+        bottomLineColor: "#B5002E",
+        bottomFillColor1: "rgba(181,0,46,0.02)",
+        bottomFillColor2: "rgba(181,0,46,0.28)",
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        crosshairMarkerVisible: false,
+      },
+      1,
+    );
+    fluxLineRef.current = {};
+    for (const ln of FLUX_LINES) {
+      fluxLineRef.current[ln.id] = chart.addSeries(
+        LineSeries,
+        {
+          color: ln.color,
+          lineWidth: 1,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          visible: false,
+          crosshairMarkerVisible: false,
+        },
+        1,
+      );
+    }
+    // Split the height: ~62% price candles, ~38% flux.
+    const panes = chart.panes();
+    if (panes.length >= 2) {
+      panes[0].setStretchFactor(62);
+      panes[1].setStretchFactor(38);
+    }
+
     return () => {
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
       priceLinesRef.current = [];
       overlayRef.current = {};
+      fluxBaseRef.current = null;
+      fluxLineRef.current = {};
     };
   }, []);
 
@@ -131,6 +203,25 @@ export function LevelsChartPanel({
     ov.skew?.setData(model.ratios.skew.map((p) => ({ time: p.time as Time, value: p.value })));
     chart.timeScale().fitContent();
   }, [model]);
+
+  // Feed the FLUX lower pane (HIRO baseline + decomposition) when flux changes.
+  useEffect(() => {
+    const base = fluxBaseRef.current;
+    if (!base || !flux) return;
+    base.setData(flux.total.map((p) => ({ time: p.time as Time, value: p.value })));
+    for (const ln of FLUX_LINES) {
+      const series = fluxLineRef.current[ln.id];
+      const data = flux[ln.key as "calls" | "puts" | "retail"];
+      series?.setData(data.map((p) => ({ time: p.time as Time, value: p.value })));
+    }
+  }, [flux]);
+
+  // Toggle FLUX decomposition line visibility.
+  useEffect(() => {
+    for (const ln of FLUX_LINES) {
+      fluxLineRef.current[ln.id]?.applyOptions({ visible: fluxLines.has(ln.id) });
+    }
+  }, [fluxLines]);
 
   // Toggle overlay series visibility.
   useEffect(() => {
@@ -176,60 +267,52 @@ export function LevelsChartPanel({
       return next;
     });
 
+  const toggleFluxLine = (id: string) =>
+    setFluxLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   return (
     <div className={`relative flex min-w-0 flex-col ${className}`}>
-      {/* Key-level toggle chips. */}
-      <div className="flex flex-wrap items-center gap-1.5 px-1 pb-2">
-        {model.levels.map((lv) => {
-          const on = active.has(lv.id);
-          return (
-            <button
-              key={lv.id}
-              type="button"
-              onClick={() => toggle(lv.id)}
-              aria-pressed={on}
-              title={lv.experimental ? "EXPERIMENTAL — unvalidated" : undefined}
-              className={`flex items-center gap-1.5 rounded-[3px] border px-2 py-0.5 font-mono text-[10px] tracking-[0.1em] transition-colors duration-150 ${
-                on
-                  ? "border-bone-0/50 text-bone-0"
-                  : "border-rule text-bone-3 hover:border-brick-glow hover:text-brick-glow"
-              }`}
-            >
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ background: on ? lv.color : "transparent", border: `1px solid ${lv.color}` }}
-              />
-              {lv.label}
-              {lv.experimental && <span className="text-[8px] text-bone-3/60">EXP</span>}
-            </button>
-          );
-        })}
-        {/* Separator + ratio overlay chips (own hidden scales). */}
-        <span className="mx-1 h-3 w-px bg-rule" aria-hidden="true" />
-        {OVERLAYS.map((ov) => {
-          const on = overlays.has(ov.id);
-          return (
-            <button
-              key={ov.id}
-              type="button"
-              onClick={() => toggleOverlay(ov.id)}
-              aria-pressed={on}
-              title={ov.exp ? "EXPERIMENTAL — unvalidated" : undefined}
-              className={`flex items-center gap-1.5 rounded-[3px] border px-2 py-0.5 font-mono text-[10px] tracking-[0.1em] transition-colors duration-150 ${
-                on
-                  ? "border-bone-0/50 text-bone-0"
-                  : "border-rule text-bone-3 hover:border-brick-glow hover:text-brick-glow"
-              }`}
-            >
-              <span
-                className="inline-block h-[3px] w-3 rounded-full"
-                style={{ background: ov.color, opacity: on ? 1 : 0.4 }}
-              />
-              {ov.label}
-              {ov.exp && <span className="text-[8px] text-bone-3/60">EXP</span>}
-            </button>
-          );
-        })}
+      {/* Compact control row: three dropdowns instead of a long chip wall. */}
+      <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
+        <DropdownChecklist
+          label="Key Levels"
+          items={model.levels.map((lv): ChecklistItem => ({
+            id: lv.id,
+            label: lv.label,
+            color: lv.color,
+            experimental: lv.experimental,
+          }))}
+          active={active}
+          onToggle={toggle}
+        />
+        <DropdownChecklist
+          label="Ratios"
+          items={OVERLAYS.map((ov): ChecklistItem => ({
+            id: ov.id,
+            label: ov.label,
+            color: ov.color,
+            experimental: ov.exp,
+          }))}
+          active={overlays}
+          onToggle={toggleOverlay}
+        />
+        {flux && (
+          <DropdownChecklist
+            label="Flux"
+            items={FLUX_LINES.map((ln): ChecklistItem => ({
+              id: ln.id,
+              label: ln.label.replace("Flux ", ""),
+              color: ln.color,
+            }))}
+            active={fluxLines}
+            onToggle={toggleFluxLine}
+          />
+        )}
       </div>
 
       {/* Candle chart with the price lines + ratio overlays. */}

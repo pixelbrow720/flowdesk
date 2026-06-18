@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import {
   buildCandles,
   resolveKeyLevels,
+  perStrikeGammaFlip,
   buildMetrics,
   buildRatios,
   buildLevelsChart,
@@ -40,32 +41,65 @@ test("buildCandles: open = prev close, high/low bound both, sorted+deduped", () 
   assert.equal(c[1].low, 7100);
 });
 
-test("resolveKeyLevels: takes latest non-null, top wall, drops missing", () => {
+test("perStrikeGammaFlip: interpolates the +/- zone boundary, nearest forward", () => {
+  // net_gex flips sign between 7350 (+) and 7355 (-): zero at the midpoint.
+  const profile = [
+    { strike: 7345, net_gex: 200 },
+    { strike: 7350, net_gex: 100 },
+    { strike: 7355, net_gex: -100 },
+    { strike: 7360, net_gex: -300 },
+  ];
+  assert.equal(perStrikeGammaFlip(profile, 7355), 7352.5);
+  // Fewer than 2 rows → null.
+  assert.equal(perStrikeGammaFlip([{ strike: 7350, net_gex: 5 }], 7350), null);
+  // No sign change → null.
+  assert.equal(
+    perStrikeGammaFlip([{ strike: 7350, net_gex: 5 }, { strike: 7355, net_gex: 7 }], 7350),
+    null,
+  );
+});
+
+test("resolveKeyLevels: walls FROZEN at RTH open, dynamic levels track playhead", () => {
   const frames = [
-    frame({ ts: "2026-06-09T14:00:00Z", forward: 7100, levels: { call_walls: [7410, 7420], put_walls: [7350], gamma_flip: 7402, largest_gex: 7400, largest_dex: null } }),
-    frame({ ts: "2026-06-09T14:01:00Z", forward: 7105, levels: { call_walls: [7415], put_walls: [7355], gamma_flip: null, largest_gex: 7405, largest_dex: null } }),
+    frame({
+      ts: "2026-06-09T14:00:00Z",
+      forward: 7100,
+      profile: [{ strike: 7095, net_gex: 50 }, { strike: 7105, net_gex: -50 }],
+      levels: { call_walls: [7410, 7420], put_walls: [7350], gamma_flip: 7402, largest_gex: 7400, largest_dex: null },
+    }),
+    frame({
+      ts: "2026-06-09T14:01:00Z",
+      forward: 7105,
+      profile: [{ strike: 7100, net_gex: 80 }, { strike: 7110, net_gex: -80 }],
+      levels: { call_walls: [7415], put_walls: [7355], gamma_flip: null, largest_gex: 7405, largest_dex: null },
+    }),
   ];
   const lv = resolveKeyLevels(frames);
   const byId = new Map(lv.map((l) => [l.id, l]));
-  assert.equal(byId.get("call_wall")!.price, 7415); // top of latest frame
-  assert.equal(byId.get("put_wall")!.price, 7355);
-  assert.equal(byId.get("gamma_flip")!.price, 7402); // latest non-null (frame 0)
+  // Walls frozen at frame 0 (RTH open), NOT the latest frame.
+  assert.equal(byId.get("call_wall")!.price, 7410);
+  assert.equal(byId.get("put_wall")!.price, 7350);
+  // Zero γ from the CURRENT (playhead) frame's per-strike flip: 7100(+)→7110(-) → 7105.
+  assert.equal(byId.get("gamma_flip")!.price, 7105);
+  // Largest GEX reads the current frame.
   assert.equal(byId.get("largest_gex")!.price, 7405);
-  assert.ok(!byId.has("largest_dex")); // never present → dropped
-  assert.ok(!byId.has("hedge_wall")); // proprietary null → dropped
+  assert.ok(!byId.has("largest_dex")); // null on current frame → dropped
 });
 
-test("resolveKeyLevels: experimental flag + color set on proprietary levels", () => {
+test("resolveKeyLevels: proprietary OI levels frozen at RTH open + flagged", () => {
   const frames = [
     frame({ ts: "2026-06-09T14:00:00Z", forward: 7100, proprietary: { oi_gamma_flip: null, abs_gamma_strike: 7400, hedge_wall: 7410 } }),
+    frame({ ts: "2026-06-09T14:01:00Z", forward: 7105, proprietary: { oi_gamma_flip: 7488, abs_gamma_strike: 7401, hedge_wall: 7411 } }),
   ];
   const lv = resolveKeyLevels(frames);
-  const hw = lv.find((l) => l.id === "hedge_wall");
+  const byId = new Map(lv.map((l) => [l.id, l]));
+  const hw = byId.get("hedge_wall");
   assert.ok(hw);
   assert.equal(hw!.experimental, true);
-  assert.equal(hw!.price, 7410);
-  // oi_gamma_flip is null → not present.
-  assert.ok(!lv.some((l) => l.id === "oi_gamma_flip"));
+  assert.equal(hw!.price, 7410); // frozen at frame 0, not 7411
+  assert.equal(byId.get("abs_gamma")!.price, 7400);
+  // oi_gamma_flip: null at RTH open → frozen value is the first non-null (7488).
+  assert.equal(byId.get("oi_gamma_flip")!.price, 7488);
 });
 
 test("buildMetrics: GEX long share + latest surface metrics", () => {

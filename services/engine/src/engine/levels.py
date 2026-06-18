@@ -1,6 +1,6 @@
 """Key-level detection for FlowDesk (overlay on the heatmap / profile).
 
-Produces the Snapshot ``levels`` block (``schema_version`` 1):
+Produces the Snapshot ``levels`` block (``schema_version`` 2):
 ``{call_walls[], put_walls[], gamma_flip, largest_gex, largest_dex}``.
 
 Locked semantics (PRD #0 §2, Divergence #2 resolved -> option B, gamma-dollar)

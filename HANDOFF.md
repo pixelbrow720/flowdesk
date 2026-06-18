@@ -1,7 +1,11 @@
 # Handoff — FlowDesk FOG Page (Heatmap TRACE-Style)
 
-> Last updated: 2026-06-17. WebGL TRACE-grade heatmap rewrite is DONE and
-> verified visually via Playwright. See §"DONE" and §"NEXT TASK" for what's left.
+> **Last updated: 2026-06-19**. WebGL TRACE-grade heatmap rewrite is DONE
+> (2026-06-17). A mini-session on 2026-06-19 fixed three Fog bugs, added an
+> additive IV-smile call/put split (new `iv_smile` Snapshot field), and
+> reworked the layout into ONE scrolling page with shared chrome. See
+> **`HANDOFF-MINI-SESSION.md`** for the full 2026-06-19 handoff. This file
+> (main HANDOFF) covers the WebGL heatmap only.
 
 ## Server Status
 - **Dashboard**: `apps/dashboard` port **4325**

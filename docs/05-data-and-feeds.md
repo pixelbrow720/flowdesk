@@ -29,10 +29,30 @@ the chain + trades for instrument *I* at minute *m*."
 Replays stored DBN/fixture data minute-by-minute over the RTH window. This is
 the path used today for development, the golden fixture, and session-snapshot JSON.
 
-### `live.py` (STUB)
-`LiveAdapter` raises `LiveFeedNotAvailable`. Real-time streaming is **not
-implemented**. `FEED_MODE` selects the adapter; only `historical` is functional.
-Wiring a real live feed is a roadmap item ([`09-roadmap.md`](09-roadmap.md)).
+### `live.py` (real, with safety rail)
+`LiveAdapter` is a real-time Databento adapter, but its contact with the live
+account is **gated by a two-key arming rail** (`FEED_MODE=live` **and**
+`LIVE_FEED_ARMED=1`). Without both keys, `make_adapter("live")` raises
+`LiveFeedNotArmed`. The shell is fully implemented (databento `Live`
+subscription + four schemas: `definition`, `statistics`, `trades`, `mbp-1`),
+and the per-minute chain assembly lives in a separate, unit-tested
+`engine.feed.live_book.LiveBook` (pure Python, network-free) — the
+test seam substitutes a hand-rolled `FakeLiveClient`. Built-in circuit
+breaker (`_BreakerState`): 5 consecutive `_connect()` failures within a
+5-minute rolling window opens the breaker permanently (raises
+`LiveFeedDegraded`) — no auto-recovery, humans only. Bounded reconnect:
+5 attempts, exponential backoff capped at 60s, 5-minute total wall budget.
+The minute-assembly logic (definition + OI + cumulative VOL + top-of-book
+mid wired to the realtime stream) ships in a follow-up; the
+`FakeLiveClient` seam means that code can be developed against recorded
+fixtures. See `docs/architecture/live-feed-threat-model.md` for the F1–F7
+failure catalogue and the arming rail rationale.
+
+**Production posture:** the beta image intentionally does **not** set
+`LIVE_FEED_ARMED=1`. Flipping it requires the operator runbook procedure
+(see `docs/ops/deploy-runbook.md`). Until that arm happens, `FEED_MODE=live`
+on the worker raises `LiveFeedNotArmed` at boot — `historical` is the
+only functional mode.
 
 ## Ingest
 

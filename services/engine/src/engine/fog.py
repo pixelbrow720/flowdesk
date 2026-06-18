@@ -2,7 +2,7 @@
 
 Projects the dealer-exposure surface onto a price grid, producing the
 index-aligned ``field{price_grid[], gamma[], delta[]}`` arrays of the Snapshot
-contract (``schema_version`` 1).
+contract (``schema_version`` 2).
 
 Projection model (TRACE / SpotGamma B7 — re-evaluate, do NOT smear)
 ==================================================================

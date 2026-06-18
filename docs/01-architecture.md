@@ -25,7 +25,7 @@ flowdesk-main/
 ### `flowdesk-engine` (services/engine)
 The brain. Pure-Python compute. Given a chain of option quotes/trades plus a
 forward price and rate, it produces a `Snapshot`. Stdlib-only on the hot math
-path except `field.py` (numpy + scipy). Owns the feed adapters and the Databento
+path except `fog.py` (numpy + scipy). Owns the feed adapters and the Databento
 ingest script. See [`04-engine.md`](04-engine.md) and [`05-data-and-feeds.md`](05-data-and-feeds.md).
 
 ### `flowdesk-api` (services/api)

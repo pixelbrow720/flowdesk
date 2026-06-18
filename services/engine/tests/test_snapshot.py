@@ -115,7 +115,7 @@ _SNAPSHOT_KEYS = {
     "state", "stale", "expired", "forward", "rate", "axis", "regime",
     "profile", "fog", "levels", "ohlc", "flux", "synthetic_oi",
     "synthetic_oi_tiered", "synthetic_oi_decay", "exposure_ext",
-    "total_hedging", "surface", "ddoi", "proprietary",
+    "total_hedging", "surface", "ddoi", "proprietary", "iv_smile",
 }
 
 

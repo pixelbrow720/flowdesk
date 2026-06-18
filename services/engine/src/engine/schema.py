@@ -158,7 +158,7 @@ class Levels(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     call_walls: list[FiniteFloat]
-    """Call walls by OI, STATIC, ordered by rank (index 0 = rank 1). PRD #0 §2."""
+    """Call walls by GAMMA-DOLLAR (gamma·OI per strike), STATIC at RTH open, ordered by rank (index 0 = rank 1). PRD #0 §2, Divergence #2 (option B gamma-$)."""
     put_walls: list[FiniteFloat]
     """Put walls by OI, STATIC, ordered by rank (index 0 = rank 1). PRD #0 §2."""
     gamma_flip: FiniteFloat | None
@@ -187,7 +187,7 @@ class OHLC(BaseModel):
     """Close: last futures trade price in the minute (== forward)."""
 
 
-class Hiro(BaseModel):
+class Flux(BaseModel):
     """Cumulative dealer delta-notional hedging flow since the RTH open (FLUX).
 
     Optional/additive (Divergence #5 -> option A): ``None`` for snapshots
@@ -364,6 +364,28 @@ class Proprietary(BaseModel):
     """Strike of the largest |net OI-gamma| (dominant net dealer hedging node)."""
 
 
+class IvSmilePoint(BaseModel):
+    """Per-strike implied-vol smile point: call IV and put IV at one strike.
+
+    Optional/additive (mirrors ``surface``/``exposure_ext``): the ``iv_smile``
+    list is ``None`` when not captured, no ``schema_version`` bump. Each point
+    carries the strike plus the separately-solved call and put implied vols (from
+    the call quote and the put quote respectively). For European options put-call
+    parity makes these theoretically equal; in practice they differ by quote
+    microstructure (bid/ask, liquidity), and that call-vs-put divergence is the
+    informative content. Either side is ``None`` when its quote was too thin/wide
+    to solve a reliable IV. Annualised, per 1.00 (e.g. 0.20 = 20% vol)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strike: FiniteFloat
+    """Strike, in index points."""
+    call_iv: FiniteFloat | None = None
+    """Call implied vol from the call quote (annualised, per 1.00). None if thin."""
+    put_iv: FiniteFloat | None = None
+    """Put implied vol from the put quote (annualised, per 1.00). None if thin."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -397,7 +419,7 @@ class Snapshot(BaseModel):
     levels: Levels
     ohlc: OHLC | None = None
     """Underlying OHLC for this minute (candle view). None when not captured."""
-    flux: Hiro | None = None
+    flux: Flux | None = None
     """Cumulative dealer hedging flow (FLUX). None when not captured. PRD FlowGreeks."""
     synthetic_oi: SyntheticOi | None = None
     """Synthetic-OI #4 positioning lens (EXPERIMENTAL). None when not captured."""
@@ -415,6 +437,8 @@ class Snapshot(BaseModel):
     """Synthetic Dealer Directional OI GEX (EXPERIMENTAL). None when not captured."""
     proprietary: Proprietary | None = None
     """Reverse-engineered SpotGamma-style levels (EXPERIMENTAL approximations). None when not captured."""
+    iv_smile: list[IvSmilePoint] | None = None
+    """Per-strike call/put implied-vol smile (EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

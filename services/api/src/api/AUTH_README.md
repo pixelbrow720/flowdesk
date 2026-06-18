@@ -132,25 +132,36 @@ frontend menampilkan banner). Setelah lewat → `403`.
 ## 6. Cookie & keamanan
 
 - **`flowdesk_session`**: HttpOnly, Secure, SameSite=Lax, `Path=/`,
-  `Max-Age=604800` (7 hari), ditandatangani HMAC-SHA256 dengan `SESSION_SECRET`.
-- **`flowdesk_oauth_state`**: flag sama, `Max-Age=600`.
-- Format token: `base64url(json_payload) + "." + base64url(hmac_sha256)`; field
-  `exp` (epoch) divalidasi; verifikasi tanda tangan **constant-time**.
-- Tanda tangan rusak / secret salah / kedaluwarsa → `deserialize_session` →
-  `None` (dianggap tidak login).
+  `Max-Age=604800` (7 hari), **dienkripsi dengan Fernet** (kunci diturunkan
+  deterministik dari `SESSION_SECRET` lewat HKDF; lihat `api.auth_session`).
+  `flowdesk_oauth_state` tetap memakai tanda tangan **HMAC-SHA256** dengan
+  `SESSION_SECRET` (cookie CSRF stateless yang pendek — beda pakai dari
+  cookie sesi).
+- Field `exp` (epoch) divalidasi saat deskripsi; cookie sesi yang dekripsi
+  gagal / signature tidak cocok / kedaluwarsa → `deserialize_session` → `None`
+  (dianggap tidak login).
 - **Secrets hanya dari env** (`SESSION_SECRET`, `DISCORD_*`). Tidak ada nilai
   rahasia yang di-hardcode.
+- Dependensi kriptografi: `cryptography` (pinned `==49.0.0` di
+  `services/api/pyproject.toml`) — bukan library pihak ketiga seperti
+  `itsdangerous`; envelope Fernet membawa AEAD built-in, tidak ada custom
+  HMAC untuk cookie sesi.
 
 ---
 
 ## 7. `/api/me` & `/api/me/recheck`
 
-- `GET /api/me` → `401` jika tak ada session; jika ada, jalankan re-check **harian
-  (non-forced)**: bila jatuh tempo, panggil `fetch_member` lalu `check_access`.
-  Jika session berubah, cookie baru ditandatangani & di-set. Body:
-  `{discord_id, has_desk, is_member, last_checked, grace_until}`.
-- `POST /api/me/recheck` → sama, tapi **memaksa** pemanggilan Discord segera
-  (`force=True`).
+- `GET /api/me` → **PUBLIC**; jika tak ada session yang valid, mengembalikan
+  HTTP **200** dengan body `{access_state: "ANON", ...}` (lihat
+  `api/models.py` & `api/entitlement.py:88` — `me()` adalah endpoint publik,
+  bukan endpoint yang memuntahkan 401). Jika ada session, jalankan re-check
+  **harian (non-forced)**: bila jatuh tempo, panggil `fetch_member` lalu
+  `check_access`. Jika session berubah, cookie baru dienkripsi & di-set.
+  Body lengkap saat login: `{discord_id, has_desk, is_member, last_checked,
+  grace_until}`.
+- `POST /api/me/recheck` → endpoint ini yang mengembalikan **401** bila tak
+  ada session; kalau ada, sama dengan `/api/me` tapi **memaksa** pemanggilan
+  Discord segera (`force=True`).
 - Bila Discord tidak tersedia saat re-check (`DiscordUnavailable`/token invalid
   `DiscordAuthError`), cache **dipertahankan** (tidak mengunci tiba-tiba), sesuai
   PRD #6 §5 (frontend menampilkan banner “verification pending”).
@@ -177,6 +188,9 @@ pytest tests/test_auth.py -q
 
 Checklist verifikasi:
 - [ ] `test_signed_cookie_roundtrip_and_tamper` — round-trip + tamper/secret/exp.
+  (untuk `flowdesk_oauth_state` HMAC-SHA256)
+- [ ] `test_encrypted_session_roundtrip_and_tamper` — round-trip + dekripsi gagal
+  / signature tamper / expired pada `flowdesk_session` (Fernet).
 - [ ] `test_cookie_flags_exact` — HttpOnly/Secure/SameSite=lax/Max-Age=604800/Path=/.
 - [ ] `test_end_of_day_et_is_next_et_midnight` — grace tepat di tengah malam ET.
 - [ ] `test_check_access_happy_desk` / `_no_desk_denied` / `_not_member_denied`.
@@ -215,14 +229,17 @@ Checklist verifikasi:
    `src/api/session.py` **sudah dipakai** sebagai state machine sesi worker (PRD
    #9, rilis 1.4). Untuk menghindari menimpa file itu, modul cookie diberi nama
    **`auth_session.py`**. (Divergensi nama, fungsional identik.)
-2. **Tanpa `itsdangerous`** (tidak terpasang & tanpa jaringan) → cookie
-   ditandatangani dengan **stdlib `hmac`/`hashlib`/`base64`** (HMAC-SHA256). Tidak
-   menambah dependency.
+2. **Cookie sesi dienkripsi dengan Fernet** (bukan HMAC-sign).
+   `cryptography` (`cryptography==49.0.0` di `services/api/pyproject.toml`)
+   memberi AEAD built-in (AES-128-CBC + HMAC-SHA256 envelope) lewat Fernet,
+   kunci diturunkan deterministik dari `SESSION_SECRET` lewat HKDF. Cookie
+   CSRF stateless `flowdesk_oauth_state` tetap memakai **stdlib
+   `hmac`/`hashlib`/`base64`** (HMAC-SHA256) — beda pakai dari cookie sesi.
 3. **12 env keys LOCKED** → tidak menambah `DISCORD_BOT_TOKEN`. Re-check harian
    memerlukan token user, jadi **OAuth `access_token` disimpan di dalam cookie
-   session yang ditandatangani** (HttpOnly, tidak diekspos via `/api/me`). Masa
+   session yang dienkripsi** (HttpOnly, tidak diekspos via `/api/me`). Masa
    token Discord (~7 hari) ≈ umur cookie; jika token kedaluwarsa saat re-check →
-   diperlakukan sebagai “Discord unavailable” (cache dipertahankan, user re-login
+   diperlakukan sebagai "Discord unavailable" (cache dipertahankan, user re-login
    saat cookie habis).
 4. **Kedua path didaftarkan**: nama kanonik PRD `#6 §3`
    (`/api/auth/discord/login`, `/api/auth/discord/callback`) **dan** alias TASK

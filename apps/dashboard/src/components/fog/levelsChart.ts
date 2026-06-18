@@ -18,7 +18,7 @@
 export interface LevelsFrameLike {
   ts: string;
   forward: number;
-  profile: { net_gex: number }[];
+  profile: { strike: number; net_gex: number }[];
   regime: { net_gamma: number };
   levels: {
     call_walls: number[];
@@ -65,7 +65,7 @@ export interface SessionMetrics {
   skew: number | null; // SVI slope (negative = put skew)
 }
 
-/** One point of a per-frame ratio time-series (epoch seconds + value). */
+/** One per-frame ratio time-series point (epoch seconds + value). */
 export interface RatioPoint {
   time: number;
   value: number;
@@ -135,26 +135,108 @@ function latestNonNull(
 }
 
 /**
- * Resolve every key level to its latest non-null reading and return the ones
- * that exist, each with its display metadata. Walls take the top (rank-0) value.
+ * EARLIEST non-null value of `pick` across frames. Used for the STATIC,
+ * OI-based levels (call/put wall, the proprietary OI levels): open interest is
+ * the prior session's settle (fixed all day), so these are frozen at the RTH
+ * open and must NOT drift as the playhead advances. Scanning from frame 0 means
+ * the value is the RTH-open reading and stays identical at every playhead.
+ */
+function firstNonNull(
+  frames: LevelsFrameLike[],
+  pick: (f: LevelsFrameLike) => number | null | undefined,
+): number | null {
+  for (let i = 0; i < frames.length; i++) {
+    const v = pick(frames[i]);
+    if (v != null && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+/**
+ * Gamma flip / Zero gamma — the price where PER-STRIKE net_gex transitions
+ * between the positive-gamma zone and the negative-gamma zone. This is the
+ * boundary the strike bars visibly flip color across, NOT the engine's
+ * cumulative-sum crossing (`levels.gamma_flip`), which sits elsewhere and is
+ * unstable. Computed from ONE frame's profile so it tracks the playhead.
+ *
+ * Finds sign changes of net_gex between adjacent strikes (ascending) and
+ * linearly interpolates the zero. With several crossings, returns the one
+ * nearest the forward. `null` when the profile never changes sign.
+ */
+export function perStrikeGammaFlip(
+  profile: { strike: number; net_gex: number }[],
+  forward?: number | null,
+): number | null {
+  const rows = profile
+    .filter((p) => Number.isFinite(p.strike) && Number.isFinite(p.net_gex))
+    .slice()
+    .sort((a, b) => a.strike - b.strike);
+  if (rows.length < 2) return null;
+
+  const candidates: number[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i - 1].net_gex;
+    const b = rows[i].net_gex;
+    if ((a < 0 && b > 0) || (a > 0 && b < 0)) {
+      const x0 = rows[i - 1].strike;
+      const x1 = rows[i].strike;
+      candidates.push(x0 + ((x1 - x0) * (0 - a)) / (b - a));
+    } else if (a === 0) {
+      candidates.push(rows[i - 1].strike);
+    }
+  }
+  if (rows[rows.length - 1].net_gex === 0) {
+    candidates.push(rows[rows.length - 1].strike);
+  }
+  if (candidates.length === 0) return null;
+  if (forward != null && Number.isFinite(forward)) {
+    return candidates.reduce((best, x) =>
+      Math.abs(x - forward) < Math.abs(best - forward) ? x : best,
+    );
+  }
+  return candidates[0];
+}
+
+/**
+ * Resolve every key level for the CURRENT playhead and return the ones that
+ * exist, each with display metadata.
+ *
+ * Two classes, deliberately different:
+ *   - STATIC (OI-based): call/put wall + the proprietary OI levels are frozen
+ *     at the RTH open (`firstNonNull`) — OI is the prior settle, fixed all day,
+ *     so these lines must not wander as the session plays.
+ *   - DYNAMIC (VOL-based): Zero γ (per-strike flip), largest GEX/DEX read the
+ *     CURRENT (playhead) frame so they track the replay minute, not a stale
+ *     last-known value.
  */
 export function resolveKeyLevels(frames: LevelsFrameLike[]): KeyLevel[] {
   if (frames.length === 0) return [];
-  const defs: { id: string; label: string; color: string; experimental: boolean; pick: (f: LevelsFrameLike) => number | null | undefined }[] = [
-    { id: "call_wall", label: "Call Wall", color: "#0FB5A8", experimental: false, pick: (f) => f.levels.call_walls?.[0] },
-    { id: "put_wall", label: "Put Wall", color: "#B5002E", experimental: false, pick: (f) => f.levels.put_walls?.[0] },
-    { id: "gamma_flip", label: "Zero γ", color: "#F59E0B", experimental: false, pick: (f) => f.levels.gamma_flip },
-    { id: "largest_gex", label: "Largest GEX", color: "#5BA3D0", experimental: false, pick: (f) => f.levels.largest_gex },
-    { id: "largest_dex", label: "Largest DEX", color: "#8E8E88", experimental: false, pick: (f) => f.levels.largest_dex },
-    { id: "hedge_wall", label: "Hedge Wall", color: "#D54452", experimental: true, pick: (f) => f.proprietary?.hedge_wall },
-    { id: "abs_gamma", label: "Abs γ Strike", color: "#6B655B", experimental: true, pick: (f) => f.proprietary?.abs_gamma_strike },
-    { id: "oi_gamma_flip", label: "OI γ Flip", color: "#8E8E88", experimental: true, pick: (f) => f.proprietary?.oi_gamma_flip },
-  ];
+  const cur = frames[frames.length - 1]; // playhead frame
   const out: KeyLevel[] = [];
-  for (const d of defs) {
-    const price = latestNonNull(frames, d.pick);
-    if (price != null) out.push({ id: d.id, label: d.label, price, color: d.color, experimental: d.experimental });
-  }
+  const push = (
+    id: string,
+    label: string,
+    color: string,
+    experimental: boolean,
+    price: number | null | undefined,
+  ) => {
+    if (price != null && Number.isFinite(price)) out.push({ id, label, price, color, experimental });
+  };
+
+  // STATIC (frozen at RTH open) ------------------------------------------- //
+  push("call_wall", "Call Wall", "#0FB5A8", false, firstNonNull(frames, (f) => f.levels.call_walls?.[0]));
+  push("put_wall", "Put Wall", "#B5002E", false, firstNonNull(frames, (f) => f.levels.put_walls?.[0]));
+
+  // DYNAMIC (current playhead frame) -------------------------------------- //
+  push("gamma_flip", "Zero γ", "#F59E0B", false, perStrikeGammaFlip(cur.profile, cur.forward));
+  push("largest_gex", "Largest GEX", "#5BA3D0", false, cur.levels.largest_gex);
+  push("largest_dex", "Largest DEX", "#8E8E88", false, cur.levels.largest_dex);
+
+  // STATIC proprietary (OI-based, frozen) — EXPERIMENTAL ------------------ //
+  push("hedge_wall", "Hedge Wall", "#D54452", true, firstNonNull(frames, (f) => f.proprietary?.hedge_wall));
+  push("abs_gamma", "Abs γ Strike", "#6B655B", true, firstNonNull(frames, (f) => f.proprietary?.abs_gamma_strike));
+  push("oi_gamma_flip", "OI γ Flip", "#8E8E88", true, firstNonNull(frames, (f) => f.proprietary?.oi_gamma_flip));
+
   return out;
 }
 

@@ -26,6 +26,7 @@ import {
   type MetricKey,
   type MetricSeries,
   type StrikeDatum,
+  type CallPutSmilePoint,
 } from "@/components/fog/strikeMath";
 
 /** Fixed row height (px). Center flow canvas math depends on this exact value. */
@@ -214,6 +215,7 @@ export function MetricBarPanel({
   metric,
   label,
   smile,
+  callPutSmile,
   showSmile,
   className = "flex-1",
 }: {
@@ -221,13 +223,36 @@ export function MetricBarPanel({
   metric: MetricKey;
   label: string;
   smile?: SmilePoint[] | null;
+  callPutSmile?: CallPutSmilePoint[] | null;
   showSmile?: boolean;
   className?: string;
 }) {
-  // IV-smile dots — one per strike, X = self-normalized vol (inset 10..90%),
-  // Y = the strike's row center. CSS-positioned dots (round, never distorted)
-  // to match the gexbot dotted-smile look. EXPERIMENTAL surface.
+  // Call/put IV-smile dots — two per strike on ONE shared scale: turquoise =
+  // call IV, crimson = put IV (X = normalized vol inset 10..90%, Y = the
+  // strike's row center). Both come from the engine's per-strike `iv_smile`
+  // (call_iv solved from the call quote, put_iv from the put quote); their
+  // divergence is the informative content. Falls back to the legacy single
+  // self-normalized SVI smile (bone dots) when call/put data isn't present.
+  const rowTop = (price: number) => {
+    const i = strikes.findIndex((s) => s.price === price);
+    return i < 0 ? null : ((i + 0.5) / strikes.length) * 100;
+  };
+
+  const cpDots = useMemo(() => {
+    if (!callPutSmile || callPutSmile.length === 0 || strikes.length === 0) return [];
+    const out: { price: number; left: number; top: number; side: "call" | "put" }[] = [];
+    for (const p of callPutSmile) {
+      const top = rowTop(p.price);
+      if (top == null) continue;
+      if (p.callNorm != null) out.push({ price: p.price, left: 10 + p.callNorm * 80, top, side: "call" });
+      if (p.putNorm != null) out.push({ price: p.price, left: 10 + p.putNorm * 80, top, side: "put" });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callPutSmile, strikes]);
+
   const smileDots = useMemo(() => {
+    if (cpDots.length > 0) return []; // call/put takes precedence
     if (!smile || smile.length < 2 || strikes.length === 0) return [];
     const byPrice = new Map(smile.map((q) => [q.price, q.norm]));
     return strikes
@@ -241,11 +266,26 @@ export function MetricBarPanel({
         };
       })
       .filter((d): d is { price: number; left: number; top: number } => d !== null);
-  }, [smile, strikes]);
+  }, [smile, strikes, cpDots]);
 
   return (
     <div className={`relative min-w-0 ${className}`}>
-      {/* IV-smile overlay — discrete bone dots, self-normalized vol vs strike. */}
+      {/* Call/put IV-smile overlay — turquoise call dots + crimson put dots,
+          shared scale so the skew (put dots right of call) reads directly. */}
+      {showSmile && cpDots.length > 0 && (
+        <div className="pointer-events-none absolute inset-0 z-20" aria-hidden="true">
+          {cpDots.map((d) => (
+            <span
+              key={`${d.side}-${d.price}`}
+              className={`absolute h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                d.side === "call" ? "bg-turquoise-deep" : "bg-crimson-deep"
+              }`}
+              style={{ left: `${d.left}%`, top: `${d.top}%` }}
+            />
+          ))}
+        </div>
+      )}
+      {/* Legacy fallback: single self-normalized SVI smile (bone dots). */}
       {showSmile && smileDots.length > 0 && (
         <div className="pointer-events-none absolute inset-0 z-20" aria-hidden="true">
           {smileDots.map((d) => (

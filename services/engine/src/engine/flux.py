@@ -29,7 +29,7 @@ and treat the retail line as indicative only (TODO: refine with block/multi-leg
 filters).
 
 This module is PURE and **isolated**: it does NOT touch the Snapshot contract
-(``schema_version`` 1) — output lives in :class:`FluxSnapshot` / :class:`FluxSeries`
+(``schema_version`` 2) — output lives in :class:`FluxSnapshot` / :class:`FluxSeries`
 until a schema decision is taken (Divergence #5). The delta is priced with the
 sibling :mod:`engine.black76` / :mod:`engine.iv` (IV solved from the trade price
 unless an explicit per-trade IV is supplied), so FLUX reuses the exact same

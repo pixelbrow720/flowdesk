@@ -29,8 +29,8 @@ flowdesk/services/api/
 | `GET /api/snapshot/latest?instrument=` | **DESK** | Redis | **alias PRD #8 §6** (lihat divergensi) |
 | `GET /api/replay/sessions?instrument=` | **DESK** | Timescale (`repo.list_sessions`) | `[{session_date, minute_count}]` |
 | `GET /api/replay?instrument&date&from_minute&to_minute` | **DESK** | Timescale (`repo.get_range`) | `{snapshots: Snapshot[]}` |
-| `GET /api/me` | sesi | cookie | `{discord_id, has_desk, last_checked}`; 401 bila tak ada sesi |
-| `POST /api/me/recheck` | sesi | cookie | stub Fase 3; 401 bila tak ada sesi |
+| `GET /api/me` | **PUBLIC** | cookie (opsional) | `{access_state: "ANON", ...}` saat tanpa sesi; payload lengkap saat login. **Bukan 401** untuk anonim — endpoint publik. |
+| `POST /api/me/recheck` | sesi | cookie | paksa recheck Discord; **401** bila tak ada sesi |
 
 ## Gating seam (PRD #8 AC-A5, T-09)
 

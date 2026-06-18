@@ -20,9 +20,12 @@ All documentation lives in **[`docs/`](docs/README.md)**. Start there.
 ## Quick start
 
 ```bash
-# TS workspaces
+# TS contracts workspace (packages/* only)
 pnpm install
-pnpm dev:web                      # Next.js dev on :3000
+pnpm -r typecheck
+
+# Dashboard (standalone: own node_modules + lockfile)
+cd apps/dashboard && pnpm install && pnpm dev   # Next.js dev on :4325
 
 # Engine
 cd services/engine && python -m venv .venv && source .venv/bin/activate

@@ -1,9 +1,8 @@
+import { redirect } from "next/navigation";
+
+// Flux is no longer a standalone lens — the HIRO cumulative-flow pane now lives
+// directly beneath the Fog price chart (shared time axis), so divergence reads
+// at a glance. Old /flux links redirect to /fog.
 export default function FluxPage() {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <p className="font-mono text-bone-3 text-sm tracking-wide">
-        Flux — coming soon
-      </p>
-    </div>
-  );
+  redirect("/fog");
 }

@@ -3,36 +3,33 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Fog + Arc now live on ONE scrolling page (/fog); the tabs are scroll anchors
+// into the two sections rather than separate routes.
 const TABS = [
-  { href: "/fog", label: "Fog" },
-  { href: "/flux", label: "Flux" },
-  { href: "/arc", label: "Arc" },
+  { href: "/fog#fog", label: "Fog" },
+  { href: "/fog#arc", label: "Arc" },
 ] as const;
 
 export function Navbar() {
   const pathname = usePathname();
+  const onTerminal = pathname === "/fog";
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 pointer-events-none">
       <div className="flex items-center justify-between pt-8 px-8">
         {/* Tabs — left */}
         <nav className="pointer-events-auto flex items-center gap-7">
-          {TABS.map((tab) => {
-            const active = pathname === tab.href;
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`font-mono text-sm tracking-wide transition-colors duration-150 ${
-                  active
-                    ? "text-brick-glow"
-                    : "text-bone-0 hover:text-brick-glow"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
+          {TABS.map((tab) => (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`font-mono text-sm tracking-wide transition-colors duration-150 ${
+                onTerminal ? "text-bone-0 hover:text-brick-glow" : "text-bone-0 hover:text-brick-glow"
+              }`}
+            >
+              {tab.label}
+            </Link>
+          ))}
         </nav>
 
         {/* Gear — right */}

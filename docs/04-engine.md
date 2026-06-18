@@ -13,7 +13,7 @@ chain + forward + rate + session_state
    ├─ black76.py    closed-form Black-76 price + greeks (delta, gamma, vanna, charm)
    ├─ iv.py         implied vol from mid (Newton → bisection, tol 1e-6)
    ├─ exposure.py   per-strike net GEX / net DEX (VOL-based, dealer-signed)
-   ├─ field.py      price×strike projection grid (numpy + scipy)
+   ├─ fog.py        price×strike projection grid (numpy + scipy)
    ├─ levels.py     call/put walls, gamma flip, largest GEX/DEX
    ├─ flux.py       optional signed order-flow aggregate
    ├─ synthetic_oi.py  optional OI-anchored + flow-update GEX lens (EXPERIMENTAL)
@@ -54,7 +54,7 @@ fixed dealer sign applied to traded volume, **not** a reconstructed dealer
 position from signed flow or ΔOI. Its limitations are documented honestly in
 [`08-status-and-gaps.md`](08-status-and-gaps.md) — this is the methodological weak point.
 
-### `field.py`
+### `fog.py`
 The only numpy + scipy module. Projects per-strike exposure onto a **price ×
 strike grid** (the heatmap source), producing `price_grid`, `gamma`, `delta`
 arrays of equal length. Vectorized for performance.
@@ -266,7 +266,7 @@ reviewed contract/behaviour change** — an accidental golden diff is a red flag
 
 ## Testing
 
-~92 engine tests cover Black-76 vs. references, IV convergence, exposure signs,
+442 engine tests cover Black-76 vs. references, IV convergence, exposure signs,
 field invariants, level extraction, FLUX signing, and the golden snapshot. Run:
 
 ```bash

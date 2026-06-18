@@ -270,3 +270,67 @@ export function buildSmile(
   if (!(span > 0)) return null;
   return raw.map((r) => ({ price: r.price, norm: (r.vol - lo) / span }));
 }
+
+/** One per-strike point of the call/put IV smile (raw IVs + shared-scale norms). */
+export interface CallPutSmilePoint {
+  price: number;
+  callIv: number | null;
+  putIv: number | null;
+  /** Call IV position 0..1 on the SHARED call+put scale (null if no call IV). */
+  callNorm: number | null;
+  /** Put IV position 0..1 on the SHARED call+put scale (null if no put IV). */
+  putNorm: number | null;
+}
+
+/**
+ * Build the call/put IV-smile points from the engine's per-strike `iv_smile`.
+ *
+ * CRITICAL: call and put are normalized on ONE shared min/max spanning BOTH
+ * series, not per-series. That keeps the call-vs-put divergence (the whole point
+ * of splitting them) visible — if each were self-normalized they'd both fill the
+ * panel width and the spread would vanish. Strikes are matched to the visible
+ * ladder order; a side with no solved IV that minute yields a null norm (dot
+ * skipped). Returns null when there isn't enough data to define a scale.
+ */
+export function buildCallPutSmile(
+  strikes: { price: number }[],
+  ivSmile: { strike: number; call_iv: number | null; put_iv: number | null }[] | null | undefined,
+): CallPutSmilePoint[] | null {
+  if (!ivSmile || ivSmile.length === 0 || strikes.length === 0) return null;
+  const byStrike = new Map(ivSmile.map((p) => [p.strike, p]));
+
+  // Collect every finite IV (both sides) to define the shared scale.
+  let lo = Infinity;
+  let hi = -Infinity;
+  const ok = (v: number | null | undefined): v is number =>
+    typeof v === "number" && Number.isFinite(v) && v > 0;
+  for (const p of ivSmile) {
+    if (ok(p.call_iv)) {
+      lo = Math.min(lo, p.call_iv);
+      hi = Math.max(hi, p.call_iv);
+    }
+    if (ok(p.put_iv)) {
+      lo = Math.min(lo, p.put_iv);
+      hi = Math.max(hi, p.put_iv);
+    }
+  }
+  const span = hi - lo;
+  if (!(span > 0)) return null;
+
+  const out: CallPutSmilePoint[] = [];
+  for (const s of strikes) {
+    const p = byStrike.get(s.price);
+    if (!p) continue;
+    const callIv = ok(p.call_iv) ? p.call_iv : null;
+    const putIv = ok(p.put_iv) ? p.put_iv : null;
+    if (callIv == null && putIv == null) continue;
+    out.push({
+      price: s.price,
+      callIv,
+      putIv,
+      callNorm: callIv != null ? (callIv - lo) / span : null,
+      putNorm: putIv != null ? (putIv - lo) / span : null,
+    });
+  }
+  return out.length > 0 ? out : null;
+}

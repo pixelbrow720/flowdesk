@@ -1,7 +1,7 @@
 """Snapshot assembler for FlowDesk (step 1.3).
 
 Orchestrates the full per-(instrument, minute) compute pipeline and emits ONE
-canonical :class:`engine.schema.Snapshot` (``schema_version`` 1):
+canonical :class:`engine.schema.Snapshot` (``schema_version`` 2):
 
     raw chain quotes
         -> IV solve            (engine.iv.implied_vol / is_iv_reliable)
@@ -330,6 +330,7 @@ def build_snapshot(
     with_exposure_ext: bool = False,
     with_surface: bool = False,
     with_proprietary: bool = False,
+    with_iv_smile: bool = False,
 ) -> Snapshot:
     """Assemble ONE validated Snapshot for ``instrument`` at ``ts_utc``.
 
@@ -457,6 +458,30 @@ def build_snapshot(
         if surf_t is not None:
             surface = build_surface(rows, F, surf_t)
 
+    # Per-strike call/put IV smile (EXPERIMENTAL, optional/additive): the call_iv
+    # and put_iv already solved per leg in _solve_chain, surfaced as a list so the
+    # FE can plot call vs put smile dots. No new compute — just exposes what the
+    # chain solve already produced. Gated by an explicit flag (like with_surface);
+    # None unless requested. Does NOT touch the locked profile.
+    iv_smile = None
+    if with_iv_smile:
+        iv_smile = [
+            {
+                "strike": float(r.strike),
+                "call_iv": (
+                    float(r.call_iv)
+                    if r.call_iv is not None and math.isfinite(r.call_iv)
+                    else None
+                ),
+                "put_iv": (
+                    float(r.put_iv)
+                    if r.put_iv is not None and math.isfinite(r.put_iv)
+                    else None
+                ),
+            }
+            for r in rows
+        ]
+
     field = build_fog(
         rows, FieldAxis(smin, smax, step), F, M, rate, price_grid,
         smoothing_bw=smoothing_bw,
@@ -518,6 +543,7 @@ def build_snapshot(
         "surface": surface.to_dict() if surface is not None else None,
         "ddoi": ddoi.to_dict() if ddoi is not None else None,
         "proprietary": proprietary.to_dict() if proprietary is not None else None,
+        "iv_smile": iv_smile,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)

@@ -3,7 +3,7 @@
 A single-expiry **raw SVI** (Stochastic Volatility Inspired, Gatheral 2004)
 parameterisation of the total-variance smile, plus the 0DTE **expected move**.
 Isolated and additive: this module does NOT touch the Snapshot contract
-(``schema_version`` 1); its output lives in :class:`VolSlice` until a schema
+(``schema_version`` 2); its output lives in :class:`VolSlice` until a schema
 decision is taken. It reuses the engine's own :mod:`engine.iv` solver upstream
 (the caller passes already-solved per-strike IVs) so the surface is consistent
 with the rest of the pricing core.

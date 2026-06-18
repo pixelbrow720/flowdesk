@@ -7,13 +7,13 @@ It is defined twice and the two definitions must stay identical:
 - **TypeScript (zod):** `packages/contracts/src/snapshot.ts`
 - **Canonical prose:** `packages/contracts/CONTRACT.md` (kept beside the zod file)
 
-`schema_version` is **1**.
+`schema_version` is **2**.
 
 ## Top-level shape
 
 ```jsonc
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "instrument": "ES",            // "ES" | "NQ"
   "session_date": "2026-06-09",  // ET trading date
   "ts": "2026-06-09T13:31:00Z",  // snapshot timestamp (UTC)
@@ -64,7 +64,7 @@ It is defined twice and the two definitions must stay identical:
   the regime is across recent minutes.
 - **`profile[]`** — per-strike `net_gex` / `net_dex` (VOL-based). `interpolated`
   flags strikes filled in where the chain was sparse.
-- **`field`** — the heatmap source. **Invariant:**
+- **`fog`** — the heatmap source. **Invariant:**
   `len(price_grid) == len(gamma) == len(delta)`. Enforced in `schema.py`.
 - **`levels`** — call/put walls (gamma-dollar, Top-3), gamma flip, largest
   GEX/DEX strikes.

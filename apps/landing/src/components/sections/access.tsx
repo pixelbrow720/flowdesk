@@ -9,6 +9,7 @@
 import { motion } from "framer-motion";
 import { useLang, t } from "@/lib/i18n";
 import { copy } from "@/lib/copy";
+import { DISCORD_LOGIN_URL } from "@/lib/api";
 export function Access() {
   const lang = useLang();
   return (
@@ -53,7 +54,7 @@ export function Access() {
         {/* CTAs */}
         <div className="mt-16 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-5">
           <a
-            href="/api/auth/discord/login"
+            href={DISCORD_LOGIN_URL}
             className="group inline-flex items-center gap-3 rounded-sm bg-brick px-7 py-4 font-mono text-[12px] uppercase tracking-[0.22em] text-bone-0 transition-colors hover:bg-brick-glow"
           >
             <span>{t(lang, copy.access.ctaPrimary)}</span>

@@ -67,12 +67,12 @@ packages/contracts @flowdesk/contracts — zod mirror of Snapshot + /api/me (the
                    ONLY real package in pnpm workspace)
 packages/tokens/   EMPTY — leftover after the 2026-06-15 FE deletion. Do NOT
                    resurrect; locked tokens live in docs/02-locked-contract.md.
-apps/dashboard/    @flowdesk/dashboard — Next.js 15 + lightweight-charts (port 4321).
+apps/dashboard/    @flowdesk/dashboard — Next.js 15 + lightweight-charts (port 4325).
                    In-progress rebuild. STANDALONE: own node_modules + pnpm-lock,
                    NOT in pnpm-workspace.yaml.
-apps/landing/      @flowdesk/landing — Next.js marketing site (also port 4321 → port
-                   collision if both run). STANDALONE: own node_modules +
-                   package-lock.json, NOT in pnpm-workspace.yaml.
+apps/landing/      @flowdesk/landing — Next.js marketing site (port 4321, distinct
+                   from the dashboard's 4325 so both can run). STANDALONE: own
+                   node_modules + package-lock.json, NOT in pnpm-workspace.yaml.
 analysis/          Offline research/eval harnesses. `analysis/harness/provenance.py`
                    is the chokepoint that enforces 0DTE tenor (rule 2.7).
 infra/             docker-compose etc. (Fase 6 — currently only .gitkeep).

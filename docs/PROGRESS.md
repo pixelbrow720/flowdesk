@@ -53,6 +53,67 @@ Legend: ⏳ not started · 🔨 in progress · ✅ done+pushed · ⚠️ blocked
 
 ## Checkpoint log (append newest at top)
 
+### 2026-06-19 — Mini-session: FOG bug-fixes + IV-smile call/put + one-page layout rework
+
+FE-only plus one additive Snapshot field (`iv_smile`). Engine/kontrak mirror
+touched under user approval (the only locked-contract change of this session).
+Detail: **`HANDOFF-MINI-SESSION.md`** (companion to the main `HANDOFF.md`).
+
+- **Fog bug-fix triplet** (verified against real JSON + hand-built test
+  fixtures): walls were drifting frame-to-frame — frozen at RTH open
+  (`firstNonNull`); dynamic levels were stale — read the playhead frame
+  not the most-recent non-null; "Zero γ" was at the wrong strike — replaced
+  the engine's cumulative-crossing with per-strike `net_gex` sign-change
+  interpolation, so the line now sits exactly where the strike bars flip
+  color. Engine `levels.gamma_flip` field is unchanged (still emitted),
+  just no longer surfaced by the FE.
+- **Additive IV-smile call/put split.** Engine already solved per-strike
+  `call_iv` / `put_iv` in `_solve_chain`; exposed them as a new optional
+  `iv_smile` Snapshot field, gated by `with_iv_smile=True` (preseden
+  `surface`). pydantic ↔ zod mirror updated with new `IvSmilePoint` model;
+  invariant compile-checked; worker + generator pass the flag; golden
+  fixture regenerated; both ES + NQ session JSONs regenerated
+  (success/fail = 390/0 each). Pure FE helper `buildCallPutSmile`
+  enforces SHARED scale across call & put (so the divergence is visible
+  instead of both sides filling the panel width). 3 new tests including
+  the divergence-preserved invariant. Render: turquoise dots = call IV,
+  crimson dots = put IV; legacy single-smile (bone) is fallback when
+  `iv_smile` is absent. ONE honest caveat: deep-ITM IV noise (e.g.
+  call_iv = 2.33 on a strike deep-ITM 170pt from forward) currently
+  stretches the shared scale and visually squashes the ATM portion;
+  percentile clamp left unimplemented pending user feedback.
+- **One-page layout rework.** Three lenses (Fog + Flux + Arc) collapsed
+  into ONE scrolling page at `/fog` with sections `#fog` (terminal) and
+  `#arc` (placeholder, smooth-scroll, scroll-margin). Flux is now a
+  **lower pane** inside the price chart (lightweight-charts native
+  `addSeries(..., paneIndex=1)`; time axis auto-synced; HIRO baseline
+  turquoise/crimson + calls/puts/retail decomposition as a dropdown).
+  Tab/standalone route for Flux is deleted (`/flux` → 307 to `/fog`); Arc
+  tab/route deleted (`/arc` → 307 to `/fog#arc`). New shared chrome
+  module (`components/terminal/chrome.tsx` + `TerminalShell.tsx` +
+  `lib/useTerminalFeed.ts`) so all lenses share one FeedBadge +
+  ES/NQ + LIVE/REPLAY + replay transport. Three-dropdown chip row (Key
+  Levels / Ratios / Flux) replaces ~12 chips that overflowed top-right.
+  Pane separator between candle and flux pane darkened to
+  `rgba(142,142,136,0.18)` (default reads almost white on black).
+- **Honest data check on the HIRO 10:50 ET +$656M jump** (the visual
+  the user flagged in the Flux review): decoded the raw `.dbn.zst` tape
+  for that minute. The +$656M is a single trade on E2BM6 P7475 (deep
+  ITM, fwd 7372, delta ≈ −0.88), ~2,046 contracts all side A (sell
+  aggressor). `s·δ·q·M·F = (−1)·(−0.88)·2019·50·7372 ≈ +$670M`
+  reconciles to the observed +$658M within 2%. Genuine flow, not a
+  bad-tick. Documented in `HANDOFF-MINI-SESSION.md` "Decisions".
+- **Verified** (all green): engine pytest, contracts `tsc --noEmit` +
+  `validate.ts`, FE 36 tests (8 playback + 6 flux + 5 levelsChart + 14
+  strikeMath + 3 iv-smile), `tsc --noEmit`, `npm run build` (66.8 kB
+  for `/fog`). NOTHING committed (per the project's "no commits unless
+  asked" convention).
+- **Deferred** to after Arc: theta decay aggregation (engine has
+  `black76.theta()`; just needs aggregate + field — same pattern as the
+  iv_smile work), max-pain strike (pure-OI, but methodologically
+  controversial), vol-expansion metric (needs design first). Recommend
+  batching all three as ONE contract bump + ONE regen, not three.
+
 ### 2026-06-18 — Fog lens redesign: two-zone terminal (FE only)
 Pure frontend, additive — **engine / Snapshot contract / locked values
 untouched**. The Fog page (`apps/dashboard/src/app/fog/page.tsx`) was iterated

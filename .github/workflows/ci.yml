@@ -1,0 +1,86 @@
+name: CI
+
+# Minimal verification gate (AGENTS.md §4). There was no CI before; this runs
+# the checks that are GREEN today as hard gates and surfaces the documented
+# baseline noise (engine mypy ~16 strict errors in locked core; api ruff ~150
+# UP/N818/B008 findings — see docs/08-status-and-gaps.md) as NON-blocking so the
+# pipeline is honest from day one instead of red-on-arrival. Tighten the
+# `continue-on-error` steps into hard gates as that baseline is burned down.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: engine + api (pytest hard; ruff/mypy advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install engine (editable, dev extras)
+        working-directory: services/engine
+        run: pip install -e ".[dev]"
+
+      - name: Engine — pytest (hard gate)
+        working-directory: services/engine
+        run: pytest
+
+      - name: Engine — ruff (advisory)
+        working-directory: services/engine
+        continue-on-error: true
+        run: ruff check .
+
+      - name: Engine — mypy (advisory; ~16 known strict errors in locked core)
+        working-directory: services/engine
+        continue-on-error: true
+        run: mypy
+
+      - name: Install api (engine must be editable first)
+        working-directory: services/api
+        run: pip install -e ../engine && pip install -e ".[dev]"
+
+      - name: API — pytest (hard gate)
+        working-directory: services/api
+        run: pytest
+
+      - name: API — ruff (advisory; ~150 known UP/N818/B008 findings)
+        working-directory: services/api
+        continue-on-error: true
+        run: ruff check .
+
+      - name: API — mypy (advisory)
+        working-directory: services/api
+        continue-on-error: true
+        run: mypy
+
+  contracts:
+    name: "@flowdesk/contracts (typecheck + zod validate)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (all workspace packages)
+        run: pnpm -r typecheck
+
+      - name: Zod contract validate (accepts example, rejects malformed)
+        run: pnpm --filter @flowdesk/contracts validate

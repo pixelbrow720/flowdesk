@@ -116,7 +116,7 @@ def main(argv: list[str]) -> int:
                     instrument, ts, quotes, forward, args.rate,
                     "LIVE", axis, t_expiry=t_expiry, stale=False, expired=False,
                     ohlc=ohlc, flux=flux, with_exposure_ext=True, with_surface=True,
-                    with_proprietary=True,
+                    with_proprietary=True, with_iv_smile=True,
                 )
                 frames.append(json.loads(snap.model_dump_json()))
                 ok += 1

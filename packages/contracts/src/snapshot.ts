@@ -89,9 +89,9 @@ export interface FogGrid {
 
 /** Key levels overlay. PRD #0 §2, locked contract. */
 export interface Levels {
-  /** Call walls by OI, STATIC all day, ordered by rank (index 0 = rank 1). Strikes in index points. PRD #0 §2. */
+  /** Call walls by GAMMA-DOLLAR (gamma·OI per strike), STATIC at RTH open, ordered by rank (index 0 = rank 1). Strikes in index points. PRD #0 §2, Divergence #2 (option B gamma-$). */
   call_walls: number[];
-  /** Put walls by OI, STATIC all day, ordered by rank (index 0 = rank 1). Strikes in index points. PRD #0 §2. */
+  /** Put walls by GAMMA-DOLLAR (gamma·OI per strike), STATIC at RTH open, ordered by rank (index 0 = rank 1). Strikes in index points. PRD #0 §2, Divergence #2 (option B gamma-$). */
   put_walls: number[];
   /** Gamma flip strike (net-gamma zero-crossing), by VOL, dynamic. Index points, or null if none. PRD #0 §2. */
   gamma_flip: number | null;
@@ -265,9 +265,27 @@ export interface Proprietary {
   hedge_wall?: number | null;
 }
 
+/**
+ * Per-strike implied-vol smile point: call IV and put IV at one strike
+ * (EXPERIMENTAL). Optional/additive (mirrors `surface`): the `iv_smile` list is
+ * `null` when not captured, no `SCHEMA_VERSION` bump. Call IV is solved from the
+ * call quote, put IV from the put quote; for European options put-call parity
+ * makes them theoretically equal, but in practice they diverge by quote
+ * microstructure — that divergence is the informative content. Either side is
+ * `null` when its quote was too thin/wide to solve. Annualised, per 1.00.
+ */
+export interface IvSmilePoint {
+  /** Strike, in index points. */
+  strike: number;
+  /** Call implied vol from the call quote (annualised, per 1.00). null if thin. */
+  call_iv?: number | null;
+  /** Put implied vol from the put quote (annualised, per 1.00). null if thin. */
+  put_iv?: number | null;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
-  /** Schema version. MUST equal `SCHEMA_VERSION` (1). PRD #8 §3. */
+  /** Schema version. MUST equal `SCHEMA_VERSION` (2). PRD #8 §3. */
   schema_version: SchemaVersion;
   /** Instrument: "ES" | "NQ". PRD #0 §4. */
   instrument: Instrument;
@@ -317,6 +335,8 @@ export interface Snapshot {
   ddoi?: Ddoi | null;
   /** Reverse-engineered SpotGamma-style levels (EXPERIMENTAL approximations). null when not captured. */
   proprietary?: Proprietary | null;
+  /** Per-strike call/put implied-vol smile (EXPERIMENTAL). null when not captured. */
+  iv_smile?: IvSmilePoint[] | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -502,6 +522,15 @@ export const ProprietarySchema = z
   })
   .strict();
 
+/** Runtime schema for {@link IvSmilePoint}. */
+export const IvSmilePointSchema = z
+  .object({
+    strike: finiteNumber,
+    call_iv: finiteNumber.nullish(),
+    put_iv: finiteNumber.nullish(),
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -530,6 +559,7 @@ export const SnapshotSchema = z
     surface: SurfaceSchema.nullish(),
     ddoi: DdoiSchema.nullish(),
     proprietary: ProprietarySchema.nullish(),
+    iv_smile: z.array(IvSmilePointSchema).nullish(),
   })
   .strict();
 
@@ -577,6 +607,7 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof SurfaceSchema>, Surface>>,
   Expect<Equals<z.infer<typeof DdoiSchema>, Ddoi>>,
   Expect<Equals<z.infer<typeof ProprietarySchema>, Proprietary>>,
+  Expect<Equals<z.infer<typeof IvSmilePointSchema>, IvSmilePoint>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];

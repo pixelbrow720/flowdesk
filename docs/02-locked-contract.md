@@ -61,6 +61,9 @@ No other instruments. 0DTE focus.
 
 - **Discord OAuth**, scopes `identify guilds.members.read`.
 - Access requires membership of `DISCORD_GUILD_ID` **and** holding `DESK_ROLE_ID`.
+  The earlier alias `DISCORD_DESK_ROLE_ID` is still accepted as a fallback
+  (`api/auth.py:_desk_role_id` resolves `DESK_ROLE_ID` first, then the legacy
+  name); new deployments must use the locked `DESK_ROLE_ID`.
 
 ## Environment — exactly 12 locked keys
 
@@ -81,6 +84,15 @@ SOFR_RATE
 
 Do not add, rename, or remove ENV keys without approval. New configuration
 should reuse these where possible.
+
+## Operational arming (not a locked config key)
+
+- **`LIVE_FEED_ARMED=1`** — explicit second key required by the live-feed rail
+  (`engine/feed/__init__.py` + `api/worker.py`). Even with `FEED_MODE=live`,
+  `make_adapter("live")` REFUSES to construct `LiveAdapter` unless this is
+  also set (it raises `LiveFeedNotArmed`). This is a **safety gate** against
+  the Databento account being locked twice by runaway live request patterns,
+  not a config knob; see `docs/architecture/live-feed-threat-model.md`.
 
 ## Validation philosophy
 

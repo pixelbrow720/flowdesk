@@ -3,7 +3,7 @@
 The live/replay payload model is the canonical :class:`Snapshot` contract,
 re-exported from the engine mirror (``engine/schema.py`` == the Python twin of
 ``packages/contracts``). We do NOT redefine it here: routes return the exact
-contract so responses validate against ``schema_version = 1``.
+contract so responses validate against ``schema_version = 2``.
 
 The small wrapper models below (health / me / replay envelope) are API-only
 shapes from PRD #8 §6 / PRD #10 §2 / the FE auth contract (release 1.6).

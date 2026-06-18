@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
   html,
   body {
     background: #000;
@@ -10,6 +13,10 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+  /* Anchor sections (#fog / #arc) clear the fixed navbar when scrolled to. */
+  section[id] {
+    scroll-margin-top: 4rem;
   }
 }
 

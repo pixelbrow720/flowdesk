@@ -1,0 +1,44 @@
+# FlowDesk — local dev datastores (Redis + TimescaleDB).
+#
+# Brings up the two backends the API/worker hard-require (REDIS_URL,
+# TIMESCALE_DSN). This is a DEV convenience stack for wiring the dashboard to a
+# real backend on historical replay; it is NOT a production deployment.
+#
+#   docker compose -f infra/docker-compose.yml up -d
+#
+# Credentials/ports match the .env.example defaults so the API picks them up
+# with no extra config:
+#   REDIS_URL=redis://localhost:6379/0
+#   TIMESCALE_DSN=postgres://flowdesk:flowdesk@localhost:5432/flowdesk
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: flowdesk-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  timescale:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: flowdesk-timescale
+    environment:
+      POSTGRES_USER: flowdesk
+      POSTGRES_PASSWORD: flowdesk
+      POSTGRES_DB: flowdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - flowdesk_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowdesk -d flowdesk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  flowdesk_pg:

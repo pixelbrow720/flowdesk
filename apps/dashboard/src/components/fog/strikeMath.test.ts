@@ -20,6 +20,7 @@ import {
   meanCurrent,
   sviTotalVariance,
   buildSmile,
+  buildCallPutSmile,
   type FrameLike,
 } from "./strikeMath.ts";
 
@@ -189,4 +190,49 @@ test("buildSmile: returns null for degenerate forward/strikes", () => {
   const p = { svi_a: 0.04, svi_b: 0.2, svi_rho: -0.5, svi_m: 0, svi_sigma: 0.1 };
   assert.equal(buildSmile([{ price: 7400 }], 0, p), null);
   assert.equal(buildSmile([], 7400, p), null);
+});
+
+test("buildCallPutSmile: call+put share ONE scale (divergence preserved)", () => {
+  const strikes = [{ price: 7400 }, { price: 7390 }, { price: 7380 }];
+  const iv = [
+    { strike: 7400, call_iv: 0.20, put_iv: 0.24 },
+    { strike: 7390, call_iv: 0.22, put_iv: 0.26 },
+    { strike: 7380, call_iv: 0.28, put_iv: 0.30 }, // 0.30 = global max, 0.20 = global min
+  ];
+  const out = buildCallPutSmile(strikes, iv);
+  assert.ok(out);
+  // Shared scale: lo=0.20, hi=0.30, span=0.10.
+  const p0 = out![0];
+  assert.ok(Math.abs(p0.callNorm! - 0.0) < 1e-12); // 0.20 -> 0 (global min)
+  assert.ok(Math.abs(p0.putNorm! - 0.4) < 1e-12); // (0.24-0.20)/0.10
+  // Put is consistently RIGHT of call at each strike (put-skew divergence kept).
+  for (const p of out!) {
+    assert.ok(p.putNorm! > p.callNorm!);
+  }
+});
+
+test("buildCallPutSmile: a missing side yields a null norm, both-missing skipped", () => {
+  const strikes = [{ price: 7400 }, { price: 7390 }, { price: 7380 }];
+  const iv = [
+    { strike: 7400, call_iv: 0.20, put_iv: null }, // put thin
+    { strike: 7390, call_iv: null, put_iv: null }, // both thin -> skipped
+    { strike: 7380, call_iv: 0.30, put_iv: 0.28 },
+  ];
+  const out = buildCallPutSmile(strikes, iv);
+  assert.ok(out);
+  assert.equal(out!.length, 2); // 7390 dropped
+  assert.equal(out![0].price, 7400);
+  assert.equal(out![0].putNorm, null);
+  assert.ok(out![0].callNorm != null);
+});
+
+test("buildCallPutSmile: null/empty/degenerate inputs return null", () => {
+  assert.equal(buildCallPutSmile([{ price: 7400 }], null), null);
+  assert.equal(buildCallPutSmile([{ price: 7400 }], []), null);
+  assert.equal(buildCallPutSmile([], [{ strike: 7400, call_iv: 0.2, put_iv: 0.2 }]), null);
+  // All IVs identical -> zero span -> null (no scale).
+  assert.equal(
+    buildCallPutSmile([{ price: 7400 }], [{ strike: 7400, call_iv: 0.2, put_iv: 0.2 }]),
+    null,
+  );
 });
