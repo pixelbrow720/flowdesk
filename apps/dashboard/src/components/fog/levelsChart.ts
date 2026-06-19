@@ -37,6 +37,9 @@ export interface LevelsFrameLike {
     abs_gamma_strike: number | null;
     hedge_wall: number | null;
   } | null;
+  theta_decay?: { net_theta: number; theta_sign: number } | null;
+  max_pain?: { strike: number | null } | null;
+  vol_expansion?: { expansion: number | null } | null;
 }
 
 /** One candlestick: UTC epoch seconds + OHLC. */
@@ -63,6 +66,11 @@ export interface SessionMetrics {
   netGamma: number | null; // USD per 1% move
   gexLongShare: number | null; // 0..100 (% of |GEX| that is positive)
   skew: number | null; // SVI slope (negative = put skew)
+  // Experimental 0DTE lenses (mirrors engine Snapshot optional fields).
+  // All optional because the engine emits them only when their flag is set.
+  thetaDecay?: number | null;
+  maxPain?: number | null;
+  volExpansion?: number | null;
 }
 
 /** One per-frame ratio time-series point (epoch seconds + value). */
@@ -88,7 +96,16 @@ export interface LevelsChartModel {
 const EMPTY: LevelsChartModel = {
   candles: [],
   levels: [],
-  metrics: { atmVol: null, expectedMove: null, netGamma: null, gexLongShare: null, skew: null },
+  metrics: {
+    atmVol: null,
+    expectedMove: null,
+    netGamma: null,
+    gexLongShare: null,
+    skew: null,
+    thetaDecay: null,
+    maxPain: null,
+    volExpansion: null,
+  },
   ratios: { gexLongShare: [], atmVol: [], skew: [] },
 };
 
@@ -263,6 +280,9 @@ export function buildMetrics(frames: LevelsFrameLike[]): SessionMetrics {
     netGamma: Number.isFinite(last.regime?.net_gamma) ? last.regime.net_gamma : null,
     gexLongShare: gexLongShareOf(last),
     skew: latestNonNull(frames, (f) => f.surface?.skew),
+    thetaDecay: latestNonNull(frames, (f) => f.theta_decay?.net_theta),
+    maxPain: latestNonNull(frames, (f) => f.max_pain?.strike),
+    volExpansion: latestNonNull(frames, (f) => f.vol_expansion?.expansion),
   };
 }
 

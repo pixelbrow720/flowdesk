@@ -48,6 +48,10 @@ Snapshot schema; **PRD #4** = regime; **PRD #9** = session state machine.
 | `surface` | `Surface \| null` | object (optional) | **EXPERIMENTAL** vol-surface summary: raw-SVI slice + ATM vol + expected move + skew. Absent/`null` when not captured (fewer than 5 non-thin strikes); additive, no version bump. Deterministic fit, not a price-validated signal. | FlowGreeks |
 | `ddoi` | `Ddoi \| null` | object (optional) | **EXPERIMENTAL** synthetic Dealer Directional OI GEX — an ALTERNATIVE basis to VOL (per-leg synthetic ΔOI from open/close trade classification, locked dealer-sign + gamma template). Absent/`null` when not captured; additive, no version bump. Read FLAT vs VOL on 8 days; not price-validated. | FlowGreeks |
 | `proprietary` | `Proprietary \| null` | object (optional) | **EXPERIMENTAL** reverse-engineered SpotGamma-style levels (Volatility Trigger / Absolute Gamma / Hedge Wall) on the OI-gamma basis. Absent/`null` when not captured; additive, no version bump. **INFERRED approximations — NOT official SpotGamma values.** | FlowGreeks |
+| `iv_smile` | `IvSmilePoint[] \| null` | array (optional) | **EXPERIMENTAL** per-strike call/put implied vol from the call and put quotes. Absent/`null` when not captured; additive, no version bump. Divergence between call_iv and put_iv is informative (quote microstructure). | FlowGreeks |
+| `theta_decay` | `ThetaDecaySnapshot \| null` | object (optional) | **EXPERIMENTAL** net cumulative dealer theta on the VOL basis (same scaling as `exposure_ext.net_chex`). Absent/`null` when not captured; additive, no version bump. Most informative at session open for 0DTE. | FlowGreeks |
+| `max_pain` | `MaxPainSnapshot \| null` | object (optional) | **EXPERIMENTAL** strike that minimises total option-holder payoff at expiry (retail heuristic, methodologically controversial). Absent/`null` when not computable; additive, no version bump. | FlowGreeks |
+| `vol_expansion` | `VolExpansionSnapshot \| null` | object (optional) | **EXPERIMENTAL** std dev of implied vols across all non-thin call+put strikes (wider = vol expansion, tighter = contraction). Absent/`null` when fewer than 2 non-thin strikes; additive, no version bump. Always >= 0. | FlowGreeks |
 
 ## `axis` (Axis)
 
@@ -290,3 +294,67 @@ is a price level in index points, `null` when not computable. Optional/additive
 | `oi_gamma_flip` | `number \| null` | index points | Zero-crossing of cumulative net OI-gamma (OI/static analogue of the VOL gamma flip). | FlowGreeks |
 | `abs_gamma_strike` | `number \| null` | index points | Strike of the largest total OI-gamma concentration. | FlowGreeks |
 | `hedge_wall` | `number \| null` | index points | Strike of the largest \|net OI-gamma\| (dominant net dealer hedging node). | FlowGreeks |
+
+## `iv_smile` (IvSmilePoint[], optional)
+
+Per-strike call/put implied vol from the chain's own quotes (`engine.exposure` already
+solved both sides per leg in `_solve_chain` — this lens just exposes them). Absent/`null`
+when not captured; additive, no version bump. Call IV is solved from the call quote, put IV
+from the put quote. For European options put-call parity makes these theoretically equal; in
+practice they diverge by quote microstructure (bid/ask, liquidity), and that call-vs-put
+divergence is the informative content. Either side is `null` when its quote was too thin/wide
+to solve. Annualised, per 1.00.
+
+| Field | Type | Unit | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `strike` | `number` | index points | Strike. | FlowGreeks |
+| `call_iv` | `number \| null` | annualised, per 1.00 | Call IV from the call quote. `null` if thin. | FlowGreeks |
+| `put_iv` | `number \| null` | annualised, per 1.00 | Put IV from the put quote. `null` if thin. | FlowGreeks |
+
+## `theta_decay` (ThetaDecaySnapshot, optional) — **EXPERIMENTAL**
+
+Net cumulative dealer theta decay on the SAME VOL basis and locked dealer signs as
+`exposure_ext.net_chex` — same `M·F·(1/365)` scaling (converts `black76.theta` from
+per-year to per-calendar-day). Optional/additive (mirrors `exposure_ext`): absent or
+`null` when not captured — does **not** bump `schema_version`. For a 0DTE book theta
+becomes unbounded as `T → 0`, so this lens is most informative at session open and least
+informative at the bell. See `engine.theta`.
+
+> **EXPERIMENTAL / NOT price-validated.** Structural only — `black76.theta` is FD-
+> validated, but the aggregate behaviour has never been checked against price. Consumers/FE
+> MUST label `theta_decay` as experimental, not authoritative.
+
+| Field | Type | Unit / domain | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `net_theta` | `number` | USD δ-notional per day | Net cumulative theta on the VOL basis with locked dealer signs (`+1` call / `-1` put, cumulative volume since RTH open). | FlowGreeks |
+| `theta_sign` | `-1 \| 0 \| 1` | enum | Sign of `net_theta`. | FlowGreeks |
+
+## `max_pain` (MaxPainSnapshot, optional) — **EXPERIMENTAL**
+
+The strike that minimises total option-holder payoff at expiry (sum of OI-weighted
+intrinsic values, both sides). Retail heuristic — popular but methodologically
+controversial (no published statistical edge in academic literature). Absent/`null`
+when not computable (chain has no non-thin strikes with OI); additive, no version
+bump. See `engine.max_pain`.
+
+> **EXPERIMENTAL retail heuristic, NOT price-validated.** Provided as a research
+> overlay; consumers MUST label it as an INFERRED heuristic, not an authoritative level.
+
+| Field | Type | Unit | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `strike` | `number \| null` | index points | Max-pain strike (OI-weighted payoff-minimising). `null` when not computable. | FlowGreeks |
+
+## `vol_expansion` (VolExpansionSnapshot, optional) — **EXPERIMENTAL**
+
+Std dev of implied volatilities across all non-thin call+put strikes — wider
+distribution = vol expansion, tighter = vol contraction. Always >= 0 (it's a std
+deviation). Absent/`null` when fewer than 2 non-thin strikes; additive, no version
+bump. See `engine.vol_expansion`.
+
+> **EXPERIMENTAL / NOT price-validated.** Simple proxy for cross-strike disagreement
+> about fair vol. Consumers/FE can color-code by thresholds but MUST label it as
+> experimental, not authoritative.
+
+| Field | Type | Unit | Meaning | Source |
+| --- | --- | --- | --- | --- |
+| `expansion` | `number \| null` | vol units (same as `atm_vol`) | Std dev of implied vols across non-thin call+put IVs. `null` when fewer than 2 samples. | FlowGreeks |

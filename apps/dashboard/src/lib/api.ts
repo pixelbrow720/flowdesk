@@ -82,6 +82,19 @@ export interface SnapshotIvSmilePoint {
   put_iv: number | null;
 }
 
+export interface SnapshotThetaDecay {
+  net_theta: number;
+  theta_sign: number;
+}
+
+export interface SnapshotMaxPain {
+  strike: number | null;
+}
+
+export interface SnapshotVolExpansion {
+  expansion: number | null;
+}
+
 export interface SnapshotRegime {
   net_gamma: number;
   sign: number;
@@ -118,6 +131,9 @@ export interface Snapshot {
   surface: SnapshotSurface | null;
   proprietary: SnapshotProprietary | null;
   iv_smile?: SnapshotIvSmilePoint[] | null;
+  theta_decay?: SnapshotThetaDecay | null;
+  max_pain?: SnapshotMaxPain | null;
+  vol_expansion?: SnapshotVolExpansion | null;
 }
 
 /**

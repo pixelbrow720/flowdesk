@@ -18,6 +18,7 @@ import {
 import { LevelsChartPanel } from "@/components/fog/LevelsChartPanel";
 import { buildLevelsChart, type LevelsChartModel } from "@/components/fog/levelsChart";
 import { buildFluxSeries, type FluxSeries } from "@/components/flux/fluxSeries";
+import { ArcPanel } from "@/components/arc/ArcPanel";
 import { TerminalShell } from "@/components/terminal/TerminalShell";
 import { PanelRule, SegToggle, Toggle } from "@/components/terminal/chrome";
 import { useTerminalFeed } from "@/lib/useTerminalFeed";
@@ -193,16 +194,19 @@ export default function FogPage() {
         <LevelsChartPanel model={levelsChart} flux={flux} className="grow" />
       </section>
 
-      {/* ARC section — scroll down. 3D vol surface lands here (placeholder). */}
+      {/* ARC section — scroll down. 3D vol surface σ(K, session-time) reconstructed
+          per minute from the engine's SVI fits; cursor marks the playhead minute. */}
       <section
         id="arc"
-        className="relative flex min-h-screen w-full flex-col items-center justify-center border-t border-rule px-8 py-24"
+        className="relative flex min-h-screen w-full flex-col border-t border-rule px-8 py-12"
       >
-        <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-bone-3">Arc · Volatility Surface</p>
-        <p className="mt-3 max-w-md text-center font-mono text-[11px] leading-relaxed tracking-wide text-bone-3/50">
-          3D SVI volatility surface σ(K, session-time) — coming next. Scroll up for
-          the Fog strike terminal.
-        </p>
+        <div className="mb-4 flex items-baseline gap-4">
+          <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-bone-3">Arc · Volatility Surface</p>
+          <p className="font-mono text-[10px] tracking-[0.2em] text-bone-3/50">
+            σ(K, t) — drag to orbit · scroll to zoom · crimson cursor = playhead
+          </p>
+        </div>
+        <ArcPanel frames={frames} playheadMinute={latest?.minute_index ?? -1} />
       </section>
     </TerminalShell>
   );

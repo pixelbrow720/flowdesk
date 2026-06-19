@@ -117,6 +117,7 @@ def main(argv: list[str]) -> int:
                     "LIVE", axis, t_expiry=t_expiry, stale=False, expired=False,
                     ohlc=ohlc, flux=flux, with_exposure_ext=True, with_surface=True,
                     with_proprietary=True, with_iv_smile=True,
+                    with_theta_decay=True, with_max_pain=True, with_vol_expansion=True,
                 )
                 frames.append(json.loads(snap.model_dump_json()))
                 ok += 1

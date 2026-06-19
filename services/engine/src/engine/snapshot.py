@@ -331,6 +331,9 @@ def build_snapshot(
     with_surface: bool = False,
     with_proprietary: bool = False,
     with_iv_smile: bool = False,
+    with_theta_decay: bool = False,
+    with_max_pain: bool = False,
+    with_vol_expansion: bool = False,
 ) -> Snapshot:
     """Assemble ONE validated Snapshot for ``instrument`` at ``ts_utc``.
 
@@ -482,6 +485,35 @@ def build_snapshot(
             for r in rows
         ]
 
+    # Theta decay (EXPERIMENTAL, optional/additive): net dealer theta on the
+    # VOL basis with locked dealer signs. Same thin-strike skip + same M·F·(1/365)
+    # scaling as exposure_ext (CHEX). Gated by an explicit flag (like
+    # with_exposure_ext); None unless requested. Does NOT touch the locked profile.
+    theta_decay = None
+    if with_theta_decay:
+        from engine.theta import build_theta_decay as _build_theta_decay
+
+        theta_decay = _build_theta_decay(rows, M, F, rate).to_dict()
+
+    # Max pain (EXPERIMENTAL, optional/additive): retail heuristic, OI-based,
+    # strike that minimises total option-holder payoff at expiry. Gated by an
+    # explicit flag; None unless requested or when chain has no non-thin strikes.
+    max_pain = None
+    if with_max_pain:
+        from engine.max_pain import build_max_pain as _build_max_pain
+
+        max_pain = _build_max_pain(F, rows).to_dict()
+
+    # Vol expansion (EXPERIMENTAL, optional/additive): std dev of implied
+    # volatilities across all non-thin strikes (call + put IVs). Magnitude only,
+    # always non-negative. Gated by an explicit flag; None unless requested or
+    # when fewer than 2 non-thin strikes.
+    vol_expansion = None
+    if with_vol_expansion:
+        from engine.vol_expansion import build_vol_expansion as _build_vol_expansion
+
+        vol_expansion = _build_vol_expansion(rows).to_dict()
+
     field = build_fog(
         rows, FieldAxis(smin, smax, step), F, M, rate, price_grid,
         smoothing_bw=smoothing_bw,
@@ -544,6 +576,9 @@ def build_snapshot(
         "ddoi": ddoi.to_dict() if ddoi is not None else None,
         "proprietary": proprietary.to_dict() if proprietary is not None else None,
         "iv_smile": iv_smile,
+        "theta_decay": theta_decay,
+        "max_pain": max_pain,
+        "vol_expansion": vol_expansion,
     }
     # parse_snapshot enforces the full pydantic contract (raises on drift).
     return parse_snapshot(payload)

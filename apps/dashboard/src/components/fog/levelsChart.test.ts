@@ -110,6 +110,9 @@ test("buildMetrics: GEX long share + latest surface metrics", () => {
       profile: [{ net_gex: 75 }, { net_gex: -25 }], // 75 of 100 abs is positive → 75%
       regime: { net_gamma: 1.5e9 },
       surface: { atm_vol: 0.2, expected_move: 35, skew: -0.4 },
+      theta_decay: { net_theta: -2.5e9, theta_sign: -1 },
+      max_pain: { strike: 7100 },
+      vol_expansion: { expansion: 0.08 },
     }),
   ];
   const m = buildMetrics(frames);
@@ -118,15 +121,21 @@ test("buildMetrics: GEX long share + latest surface metrics", () => {
   assert.equal(m.atmVol, 0.2);
   assert.equal(m.expectedMove, 35);
   assert.equal(m.skew, -0.4);
+  assert.equal(m.thetaDecay, -2.5e9);
+  assert.equal(m.maxPain, 7100);
+  assert.equal(m.volExpansion, 0.08);
 });
 
-test("buildMetrics: null surface yields null metrics, share null on empty profile", () => {
+test("buildMetrics: experimental fields fall back to null when absent", () => {
   const m = buildMetrics([frame({ ts: "2026-06-09T14:00:00Z", forward: 7100 })]);
   assert.equal(m.atmVol, null);
   assert.equal(m.expectedMove, null);
   assert.equal(m.skew, null);
   assert.equal(m.gexLongShare, null);
   assert.equal(m.netGamma, 0);
+  assert.equal(m.thetaDecay, null);
+  assert.equal(m.maxPain, null);
+  assert.equal(m.volExpansion, null);
 });
 
 test("buildRatios: per-frame series, surface lines skip null-surface frames", () => {

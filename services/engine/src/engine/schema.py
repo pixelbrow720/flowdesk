@@ -386,6 +386,59 @@ class IvSmilePoint(BaseModel):
     """Put implied vol from the put quote (annualised, per 1.00). None if thin."""
 
 
+class ThetaDecaySnapshot(BaseModel):
+    """Net cumulative dealer theta decay (EXPERIMENTAL — NOT price-validated).
+
+    Optional/additive (mirrors ``exposure_ext``/``surface``): ``None`` when not
+    captured, no ``schema_version`` bump. Aggregated on the SAME VOL basis and
+    locked dealer signs as ``exposure_ext.net_chex`` (same ``M·F·(1/365)``
+    scaling, same thin-strike skip). For a 0DTE book theta becomes unbounded
+    as ``T → 0``, so this lens is most informative at session open and least
+    informative at the bell. ``theta_sign`` follows the locked sign convention
+    (``+1`` / ``-1`` / ``0``). See ``engine.theta``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    net_theta: FiniteFloat
+    """Net cumulative theta on the VOL basis, USD dollar-delta per calendar day."""
+    theta_sign: RegimeSign
+    """Sign of ``net_theta``: -1 | 0 | 1."""
+
+
+class MaxPainSnapshot(BaseModel):
+    """Max-pain strike — retail heuristic (EXPERIMENTAL — NOT price-validated).
+
+    Optional/additive (mirrors ``proprietary``): ``None`` when not computable
+    (chain has no non-thin strikes), no ``schema_version`` bump. Strike that
+    minimises total option-holder payoff at expiry across all OI-weighted strikes
+    (``engine.max_pain``). Methodologically controversial — provided as a
+    research overlay; consumers MUST label it as an INFERRED retail heuristic,
+    not an authoritative level.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    strike: FiniteFloat | None = None
+    """Max-pain strike in index points, or ``None`` when not computable."""
+
+
+class VolExpansionSnapshot(BaseModel):
+    """Volatility expansion — std dev of IVs across strikes (EXPERIMENTAL).
+
+    Optional/additive (mirrors ``surface``): ``None`` when fewer than 2 non-thin
+    strikes, no ``schema_version`` bump. Wider distribution = vol expansion;
+    tighter = vol contraction. Always non-negative (it's a std deviation). See
+    ``engine.vol_expansion``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    expansion: FiniteFloat | None = None
+    """Std dev of implied volatilities across all non-thin call+put IVs, in
+    vol units (same as ``surface.atm_vol``). Always >= 0."""
+
+
 class Snapshot(BaseModel):
     """Canonical per-(instrument, minute) snapshot object. PRD #8 §3."""
 
@@ -439,6 +492,12 @@ class Snapshot(BaseModel):
     """Reverse-engineered SpotGamma-style levels (EXPERIMENTAL approximations). None when not captured."""
     iv_smile: list[IvSmilePoint] | None = None
     """Per-strike call/put implied-vol smile (EXPERIMENTAL). None when not captured."""
+    theta_decay: ThetaDecaySnapshot | None = None
+    """Net cumulative dealer theta decay (EXPERIMENTAL). None when not captured."""
+    max_pain: MaxPainSnapshot | None = None
+    """Max-pain strike — retail heuristic (EXPERIMENTAL). None when not captured."""
+    vol_expansion: VolExpansionSnapshot | None = None
+    """Volatility expansion — std dev of IVs across strikes (EXPERIMENTAL). None when not captured."""
 
     @field_validator("session_date")
     @classmethod

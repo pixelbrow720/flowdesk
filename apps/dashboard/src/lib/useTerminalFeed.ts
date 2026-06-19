@@ -40,7 +40,7 @@ export function useTerminalFeed(
   defaultInstrument: Instrument,
   sessionDate: string,
 ): TerminalFeed {
-  const [mode, setMode] = useState<TerminalMode>("live");
+  const [mode, setMode] = useState<TerminalMode>("replay");
   const [instrument, setInstrument] = useState<Instrument>(defaultInstrument);
 
   // Live owns the terminal in LIVE; replay owns it in REPLAY. The inactive one
