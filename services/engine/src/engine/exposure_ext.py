@@ -54,6 +54,7 @@ __all__ = [
     "CHEX_DAY_SCALE",
     "ExposureExtSnapshot",
     "net_vex_chex",
+    "vex_chex_by_strike",
     "build_exposure_ext",
 ]
 
@@ -71,20 +72,69 @@ class ExposureExtSnapshot:
     ``net_vex`` is USD dealer dollar-delta change per 1% IV move; ``net_chex`` is
     USD dealer dollar-delta drift per calendar day. Signs follow the locked GEX
     convention (``> 0`` turquoise / stabilising, ``< 0`` crimson / destabilising).
+
+    ``vex_by_strike`` / ``chex_by_strike`` are the per-strike decomposition on the
+    SAME ``strikes`` axis (index-aligned). Their sums equal ``net_vex`` / ``net_chex``
+    respectively (invariant, tested) — thin strikes are absent from all three lists.
     """
 
     net_vex: float
     vex_sign: int
     net_chex: float
     chex_sign: int
+    strikes: tuple[float, ...]
+    vex_by_strike: tuple[float, ...]
+    chex_by_strike: tuple[float, ...]
 
-    def to_dict(self) -> dict[str, float]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "net_vex": self.net_vex,
             "vex_sign": self.vex_sign,
             "net_chex": self.net_chex,
             "chex_sign": self.chex_sign,
+            "strikes": list(self.strikes),
+            "vex_by_strike": list(self.vex_by_strike),
+            "chex_by_strike": list(self.chex_by_strike),
         }
+
+
+def vex_chex_by_strike(
+    rows: Sequence[ChainRow],
+    M: float,
+    F: float,
+    rate: float,
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
+    """Per-strike (strikes, vex, chex) on the VOL basis. Skips thin strikes.
+
+    Returns three index-aligned tuples: the strike axis, the per-strike VEX
+    (USD/1% IV) and per-strike CHEX (USD/day). Already dollarized + dealer-signed,
+    so ``sum(vex) == net_vex`` and ``sum(chex) == net_chex`` (tested invariant).
+    """
+    vex_scale = M * F * VEX_VOL_PT_SCALE
+    chex_scale = M * F * CHEX_DAY_SCALE
+    strikes: list[float] = []
+    vex: list[float] = []
+    chex: list[float] = []
+    for r in rows:
+        if r.thin or r.call_iv is None or r.put_iv is None or r.t_expiry is None:
+            continue  # IV unsolved upstream -> do not fabricate a contribution
+        T = r.t_expiry
+        v_call = bs_vanna(F, r.strike, T, rate, r.call_iv)
+        v_put = bs_vanna(F, r.strike, T, rate, r.put_iv)
+        ch_call = bs_charm("call", F, r.strike, T, rate, r.call_iv)
+        ch_put = bs_charm("put", F, r.strike, T, rate, r.put_iv)
+        v = (
+            DEALER_SIGN_CALL * v_call * r.call_vol
+            + DEALER_SIGN_PUT * v_put * r.put_vol
+        ) * vex_scale
+        ch = (
+            DEALER_SIGN_CALL * ch_call * r.call_vol
+            + DEALER_SIGN_PUT * ch_put * r.put_vol
+        ) * chex_scale
+        strikes.append(r.strike)
+        vex.append(v)
+        chex.append(ch)
+    return tuple(strikes), tuple(vex), tuple(chex)
 
 
 def net_vex_chex(
@@ -129,7 +179,9 @@ def build_exposure_ext(
     rate: float,
 ) -> ExposureExtSnapshot:
     """Build the extended-exposure aggregate (net VEX + net CHEX, VOL-based)."""
-    net_vex, net_chex = net_vex_chex(rows, M, F, rate)
+    strikes, vex_by_strike, chex_by_strike = vex_chex_by_strike(rows, M, F, rate)
+    net_vex = sum(vex_by_strike)
+    net_chex = sum(chex_by_strike)
     vex_sign = 1 if net_vex > 0.0 else (-1 if net_vex < 0.0 else 0)
     chex_sign = 1 if net_chex > 0.0 else (-1 if net_chex < 0.0 else 0)
     return ExposureExtSnapshot(
@@ -137,4 +189,7 @@ def build_exposure_ext(
         vex_sign=vex_sign,
         net_chex=net_chex,
         chex_sign=chex_sign,
+        strikes=strikes,
+        vex_by_strike=vex_by_strike,
+        chex_by_strike=chex_by_strike,
     )

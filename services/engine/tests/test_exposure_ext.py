@@ -101,4 +101,13 @@ def test_build_aggregate_signs_and_keys() -> None:
     assert math.isclose(snap.net_chex, exp_chex, rel_tol=1e-12)
     assert snap.vex_sign == (1 if exp_vex > 0 else (-1 if exp_vex < 0 else 0))
     assert snap.chex_sign == (1 if exp_chex > 0 else (-1 if exp_chex < 0 else 0))
-    assert set(snap.to_dict()) == {"net_vex", "vex_sign", "net_chex", "chex_sign"}
+    assert set(snap.to_dict()) == {
+        "net_vex", "vex_sign", "net_chex", "chex_sign",
+        "strikes", "vex_by_strike", "chex_by_strike",
+    }
+    # Per-strike decomposition sums to the aggregate (invariant).
+    assert len(snap.strikes) == len(snap.vex_by_strike) == len(snap.chex_by_strike)
+    assert math.isclose(sum(snap.vex_by_strike), snap.net_vex, rel_tol=1e-12)
+    assert math.isclose(sum(snap.chex_by_strike), snap.net_chex, rel_tol=1e-12)
+    # Strike axis matches the input rows (thins excluded).
+    assert snap.strikes == (4990.0, 5000.0)

@@ -171,6 +171,12 @@ export interface ExposureExt {
   net_chex: number;
   /** Sign of `net_chex`: -1 | 0 | 1. */
   chex_sign: RegimeSign;
+  /** Strike axis (index points) for the per-strike decomposition. Thin strikes absent. */
+  strikes: number[];
+  /** Per-strike VEX, index-aligned to `strikes`. Sums to `net_vex`. EXPERIMENTAL. */
+  vex_by_strike: number[];
+  /** Per-strike CHEX, index-aligned to `strikes`. Sums to `net_chex`. EXPERIMENTAL. */
+  chex_by_strike: number[];
 }
 
 /**
@@ -515,6 +521,9 @@ export const ExposureExtSchema = z
     vex_sign: RegimeSignSchema,
     net_chex: finiteNumber,
     chex_sign: RegimeSignSchema,
+    strikes: z.array(finiteNumber),
+    vex_by_strike: z.array(finiteNumber),
+    chex_by_strike: z.array(finiteNumber),
   })
   .strict();
 

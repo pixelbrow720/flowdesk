@@ -56,11 +56,19 @@ function tExpiryFromMinuteIndex(minuteIndex: number): number {
  * Strike axis is in log-moneyness space (k = ln(K / F_ref)), evenly spaced.
  * Implied vol at each cell is `sqrt(w(k) / T)` where `T` is the per-frame
  * year-fraction to 16:00 ET (matches engine surface formula `svi_vol`).
+ *
+ * @param frames Snapshot frames (assumed chronological)
+ * @param pctBand Half-width of strike axis as fraction of forward (default 0.03)
+ * @param strikeCount Number of strikes to evaluate (default 50)
+ * @param binMinutes Bin frames into N-minute buckets; each bucket picks the LAST
+ *                    frame. Default 1 = no binning (per-minute). Use 5 to smooth
+ *                    per-minute SVI jitter into a 5-minute cadence.
  */
 export function buildVolSurface(
   frames: SnapshotLike[],
   pctBand: number = 0.03,
-  strikeCount: number = 50
+  strikeCount: number = 50,
+  binMinutes: number = 1
 ): VolSurfaceGrid {
   if (frames.length === 0) {
     return { strikes: [], forwardRef: 0, grid: [], minutes: [] };
@@ -73,15 +81,21 @@ export function buildVolSurface(
   const kStep = (kMax - kMin) / (strikeCount - 1);
   const strikes = Array.from({ length: strikeCount }, (_, i) => kMin + i * kStep);
 
-  const maxMinute = Math.max(...frames.map((f) => f.minute_index));
-  const minutes = Array.from({ length: maxMinute + 1 }, (_, i) => i);
+  // Bin frames: each bin picks the LAST frame (later overwrites earlier).
+  // binKeys stores the canonical minute_index for each bin (the bin's start).
+  const bins = new Map<number, SnapshotLike>();
+  const binSize = Math.max(1, binMinutes);
+  for (const f of frames) {
+    const binKey = Math.floor(f.minute_index / binSize) * binSize;
+    bins.set(binKey, f); // later frames overwrite → last-frame-wins
+  }
+  const minutes = Array.from(bins.keys()).sort((a, b) => a - b);
   const grid: (number | null)[][] = minutes.map(() => new Array(strikeCount).fill(null));
 
-  for (const frame of frames) {
+  for (let rowIdx = 0; rowIdx < minutes.length; rowIdx++) {
+    const frame = bins.get(minutes[rowIdx])!;
     if (!frame.surface) continue;
-    const t = frame.minute_index;
-    if (t >= grid.length) continue;
-    const T = tExpiryFromMinuteIndex(t);
+    const T = tExpiryFromMinuteIndex(frame.minute_index);
     if (T <= 0) continue; // past settlement; skip
     for (let i = 0; i < strikeCount; i++) {
       const k = strikes[i];
@@ -89,7 +103,7 @@ export function buildVolSurface(
       if (w > 0) {
         const iv = Math.sqrt(w / T);
         if (Number.isFinite(iv) && iv > 0) {
-          grid[t][i] = iv;
+          grid[rowIdx][i] = iv;
         }
       }
     }

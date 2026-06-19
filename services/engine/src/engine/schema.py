@@ -258,6 +258,12 @@ class ExposureExt(BaseModel):
     """Net charm exposure, USD dealer dollar-delta per calendar day. EXPERIMENTAL."""
     chex_sign: RegimeSign
     """Sign of ``net_chex``: -1 | 0 | 1."""
+    strikes: list[FiniteFloat] = Field(default_factory=list)
+    """Strike axis (index points) for the per-strike decomposition. Thin strikes absent."""
+    vex_by_strike: list[FiniteFloat] = Field(default_factory=list)
+    """Per-strike VEX, index-aligned to ``strikes``. Sums to ``net_vex`` (invariant)."""
+    chex_by_strike: list[FiniteFloat] = Field(default_factory=list)
+    """Per-strike CHEX, index-aligned to ``strikes``. Sums to ``net_chex`` (invariant)."""
 
 
 class TotalHedging(BaseModel):

@@ -22,19 +22,25 @@ export interface ArcPanelProps {
   frames: SnapshotLike[];
   /** Playhead minute_index for the "now" cursor plane. -1 hides the cursor. */
   playheadMinute: number;
+  /** Bin frames into N-minute buckets to smooth per-minute SVI jitter (default 1). */
+  binMinutes?: number;
   className?: string;
 }
 
 export function ArcPanel({
   frames,
   playheadMinute,
+  binMinutes = 1,
   className = "flex-1",
 }: ArcPanelProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cursorMeshRef = useRef<THREE.Mesh | null>(null);
 
-  // Build the surface grid once per frames change.
-  const surface = useMemo(() => buildVolSurface(frames), [frames]);
+  // Build the surface grid once per frames/bin change.
+  const surface = useMemo(
+    () => buildVolSurface(frames, 0.03, 50, binMinutes),
+    [frames, binMinutes],
+  );
   // 95th-percentile cap: the 0DTE wing IV (σ = sqrt(w/T)) blows up as T → 0 in
   // the last minutes; an un-clamped max would compress the whole surface relief.
   const { min: ivMin, max: ivMax } = useMemo(
@@ -62,11 +68,11 @@ export function ArcPanel({
     scene.background = new THREE.Color(0x000000);
 
     // Camera defaults tuned to match the classical vol-surface look (reference):
-    //   - FOV 50° (wider than previous 45°) so the surface reads less top-down
-    //   - Camera lower + pulled back so surface width dominates height
-    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 100);
-    camera.position.set(4.0, 1.6, 5.5);
-    camera.lookAt(0, 0.4, 0);
+    //   - FOV 55° so the surface reads less top-down
+    //   - Camera close + low so the surface fills most of the canvas
+    const camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 100);
+    camera.position.set(2.6, 1.3, 3.6);
+    camera.lookAt(0, 0.45, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -77,9 +83,9 @@ export function ArcPanel({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 2.0;
-    controls.maxDistance = 16;
-    controls.target.set(0, 0.4, 0); // world-space center, matches camera.lookAt
+    controls.minDistance = 1.5;
+    controls.maxDistance = 12;
+    controls.target.set(0, 0.45, 0); // world-space center, matches camera.lookAt
 
     // --- Lighting ------------------------------------------------------------
     // Subtle ambient + two soft directional lights. The custom shader does

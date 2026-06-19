@@ -19,6 +19,8 @@ import { LevelsChartPanel } from "@/components/fog/LevelsChartPanel";
 import { buildLevelsChart, type LevelsChartModel } from "@/components/fog/levelsChart";
 import { buildFluxSeries, type FluxSeries } from "@/components/flux/fluxSeries";
 import { ArcPanel } from "@/components/arc/ArcPanel";
+import { ArcHeatmap } from "@/components/arc/ArcHeatmapPanel";
+import { TotalHedgingSparklines } from "@/components/arc/TotalHedgingSparklines";
 import { TerminalShell } from "@/components/terminal/TerminalShell";
 import { PanelRule, SegToggle, Toggle } from "@/components/terminal/chrome";
 import { useTerminalFeed } from "@/lib/useTerminalFeed";
@@ -69,7 +71,13 @@ function genSyntheticStrikes(): StrikeDatum[] {
         diff5mNorm: (seed(a + 6) - 0.5) * 2,
       };
     };
-    return { price, gex: mk(1, 2, 3, 4, 5), dex: mk(8, 9, 10, 11, 12) };
+    return {
+      price,
+      gex: mk(1, 2, 3, 4, 5),
+      dex: mk(8, 9, 10, 11, 12),
+      vex: mk(13, 14, 15, 16, 17),
+      chex: mk(18, 19, 20, 21, 22),
+    };
   });
 }
 
@@ -80,6 +88,8 @@ export default function FogPage() {
   // IV-smile overlay toggle (default ON) + which per-strike metric the bars show.
   const [showSmile, setShowSmile] = useState(true);
   const [metric, setMetric] = useState<MetricKey>("gex");
+  // Arc binning: 1m (per-minute, shows SVI jitter) vs 5m (smoother trend).
+  const [arcBin, setArcBin] = useState<1 | 5>(5);
 
   const forward = latest?.forward ?? 5872;
 
@@ -163,10 +173,10 @@ export default function FogPage() {
       {/* FOG section — first screen: LEFT strike stack + RIGHT price/levels. */}
       <section id="fog" className="relative flex h-screen w-full items-stretch px-8 pt-24 pb-20">
         <div className="flex basis-[26%] shrink-0 flex-col">
-          {/* GEX/DEX + IV-smile controls sit right above the left strike stack. */}
+          {/* GEX/DEX/VEX/CHEX + IV-smile controls sit right above the left strike stack. */}
           <div className="flex items-center gap-2 pb-2 pl-1">
             <SegToggle
-              options={["GEX", "DEX"]}
+              options={["GEX", "DEX", "VEX", "CHEX"]}
               value={metricLabel}
               onChange={(v) => setMetric(v.toLowerCase() as MetricKey)}
             />
@@ -194,19 +204,44 @@ export default function FogPage() {
         <LevelsChartPanel model={levelsChart} flux={flux} className="grow" />
       </section>
 
-      {/* ARC section — scroll down. 3D vol surface σ(K, session-time) reconstructed
-          per minute from the engine's SVI fits; cursor marks the playhead minute. */}
+      {/* ARC section — two-panel surface terminal.
+           LEFT  : gamma-density heatmap (price × session-time, top-down view)
+           RIGHT : 3D vol surface σ(K, session-time) reconstructed per minute
+           ABOVE : Total-hedging sparklines (γ / charm / vanna, EXPERIMENTAL) */}
       <section
         id="arc"
         className="relative flex min-h-screen w-full flex-col border-t border-rule px-8 py-12"
       >
-        <div className="mb-4 flex items-baseline gap-4">
+        <div className="mb-4 flex items-center gap-4">
           <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-bone-3">Arc · Volatility Surface</p>
           <p className="font-mono text-[10px] tracking-[0.2em] text-bone-3/50">
             σ(K, t) — drag to orbit · scroll to zoom · crimson cursor = playhead
           </p>
+          <div className="ml-auto">
+            <SegToggle
+              options={["1m", "5m"]}
+              value={arcBin === 1 ? "1m" : "5m"}
+              onChange={(v) => setArcBin(v === "1m" ? 1 : 5)}
+            />
+          </div>
         </div>
-        <ArcPanel frames={frames} playheadMinute={latest?.minute_index ?? -1} />
+        <div className="mb-4">
+          <TotalHedgingSparklines frames={frames} />
+        </div>
+        <div className="grid grow grid-cols-2 gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-bone-3">
+              γ density · price × session-time
+            </p>
+            <ArcHeatmap frames={frames} playheadMinute={latest?.minute_index ?? -1} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-bone-3">
+              3D surface · σ(K, t)
+            </p>
+            <ArcPanel frames={frames} playheadMinute={latest?.minute_index ?? -1} binMinutes={arcBin} />
+          </div>
+        </div>
       </section>
     </TerminalShell>
   );

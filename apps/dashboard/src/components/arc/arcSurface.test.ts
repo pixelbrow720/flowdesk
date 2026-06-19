@@ -183,3 +183,52 @@ test("surfaceIVRange: hiPercentile caps the max below outliers", () => {
   assert.equal(r.min, 0.1);
   assert.equal(r.max, 0.9);
 });
+
+test("buildVolSurface: binMinutes=5 groups frames into 5-minute bins", () => {
+  // Frames 0..9 → two bins [0..4] and [5..9].
+  const frames = Array.from({ length: 10 }, (_, i) =>
+    frame(i, 7000, SAMPLE_SVI),
+  );
+  const s = buildVolSurface(frames, 0.03, 11, 5);
+  assert.equal(s.minutes.length, 2);
+  assert.deepEqual(s.minutes, [0, 5]);
+  // Bin 0 covers minutes 0..4; with default pctBand=0.03 and 11 strikes,
+  // all 11 ATM cells must be populated (we have a frame in that bin).
+  const bin0AtmIdx = s.strikes.reduce(
+    (best, k, i) => (Math.abs(k) < Math.abs(s.strikes[best]) ? i : best),
+    0,
+  );
+  assert.ok(s.grid[0][bin0AtmIdx] !== null);
+  assert.ok(s.grid[1][bin0AtmIdx] !== null);
+});
+
+test("buildVolSurface: binMinutes picks the LAST frame in each bin", () => {
+  // Two frames in bin [0..4]: minute 0 (SAMPLE_SVI_a=0.04) and minute 4 (SVI_a=0.99).
+  // The minute-4 fit must win, so the ATM vol must be derived from svi_a=0.99.
+  const bigSvi = { ...SAMPLE_SVI, svi_a: 0.99 };
+  const frames = [frame(0, 7000, SAMPLE_SVI), frame(4, 7000, bigSvi)];
+  const s = buildVolSurface(frames, 0.03, 11, 5);
+  assert.equal(s.minutes.length, 1);
+  const atmIdx = s.strikes.reduce(
+    (best, k, i) => (Math.abs(k) < Math.abs(s.strikes[best]) ? i : best),
+    0,
+  );
+  const atmVol = s.grid[0][atmIdx];
+  assert.ok(atmVol !== null);
+  // Expected = sqrt(svi_w(k) / T) at the minute-4 T (last frame's T wins).
+  const T = (390 - 4) / (60 * 24 * 365);
+  const k = s.strikes[atmIdx];
+  const d = k - bigSvi.svi_m;
+  const w = bigSvi.svi_a + bigSvi.svi_b * (bigSvi.svi_rho * d + Math.sqrt(d * d + bigSvi.svi_sigma ** 2));
+  const expected = Math.sqrt(w / T);
+  assert.ok(Math.abs(atmVol! - expected) < 1e-6);
+});
+
+test("buildVolSurface: binMinutes=1 preserves the existing per-minute behavior", () => {
+  // Default param must equal 1 so legacy callers (and the fog page) stay
+  // unchanged; one row per distinct minute_index.
+  const frames = [frame(0, 7000, SAMPLE_SVI), frame(1, 7000, SAMPLE_SVI)];
+  const s = buildVolSurface(frames, 0.03, 11);
+  assert.equal(s.minutes.length, 2);
+  assert.deepEqual(s.minutes, [0, 1]);
+});
