@@ -116,6 +116,7 @@ _SNAPSHOT_KEYS = {
     "profile", "fog", "levels", "ohlc", "flux", "synthetic_oi",
     "synthetic_oi_tiered", "synthetic_oi_decay", "exposure_ext",
     "total_hedging", "surface", "ddoi", "proprietary", "iv_smile",
+    "theta_decay", "max_pain", "vol_expansion",
 }
 
 

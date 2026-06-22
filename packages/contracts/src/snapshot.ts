@@ -171,6 +171,12 @@ export interface ExposureExt {
   net_chex: number;
   /** Sign of `net_chex`: -1 | 0 | 1. */
   chex_sign: RegimeSign;
+  /** Strike axis (index points) for the per-strike decomposition. Thin strikes absent. */
+  strikes: number[];
+  /** Per-strike VEX, index-aligned to `strikes`. Sums to `net_vex`. EXPERIMENTAL. */
+  vex_by_strike: number[];
+  /** Per-strike CHEX, index-aligned to `strikes`. Sums to `net_chex`. EXPERIMENTAL. */
+  chex_by_strike: number[];
 }
 
 /**
@@ -283,6 +289,39 @@ export interface IvSmilePoint {
   put_iv?: number | null;
 }
 
+/**
+ * Net cumulative dealer theta decay (EXPERIMENTAL — NOT price-validated).
+ * Mirrors `engine.theta`: same VOL basis + locked dealer signs + `M·F·(1/365)`
+ * scaling as `exposure_ext.net_chex`. For a 0DTE book theta becomes unbounded
+ * as T → 0, so the lens is most informative at session open.
+ */
+export interface ThetaDecaySnapshot {
+  /** Net cumulative theta on the VOL basis, USD dollar-delta per calendar day. */
+  net_theta: number;
+  /** Sign of `net_theta`: -1 | 0 | 1. */
+  theta_sign: -1 | 0 | 1;
+}
+
+/**
+ * Max-pain strike — retail heuristic (EXPERIMENTAL — NOT price-validated).
+ * Methodologically controversial. The strike that minimises total option-holder
+ * payoff at expiry across all OI-weighted strikes.
+ */
+export interface MaxPainSnapshot {
+  /** Max-pain strike in index points. null when not computable. */
+  strike: number | null;
+}
+
+/**
+ * Volatility expansion — std dev of implied volatilities across strikes
+ * (EXPERIMENTAL). Wider distribution = vol expansion; tighter = vol contraction.
+ * Always >= 0.
+ */
+export interface VolExpansionSnapshot {
+  /** Std dev of implied volatilities across all non-thin call+put IVs, in vol units. */
+  expansion: number | null;
+}
+
 /** The canonical per-(instrument, minute) snapshot object. PRD #8 §3. */
 export interface Snapshot {
   /** Schema version. MUST equal `SCHEMA_VERSION` (2). PRD #8 §3. */
@@ -337,6 +376,12 @@ export interface Snapshot {
   proprietary?: Proprietary | null;
   /** Per-strike call/put implied-vol smile (EXPERIMENTAL). null when not captured. */
   iv_smile?: IvSmilePoint[] | null;
+  /** Net cumulative dealer theta decay (EXPERIMENTAL). null when not captured. */
+  theta_decay?: ThetaDecaySnapshot | null;
+  /** Max-pain strike — retail heuristic (EXPERIMENTAL). null when not computable. */
+  max_pain?: MaxPainSnapshot | null;
+  /** Volatility expansion — std dev of IVs across strikes (EXPERIMENTAL). null when not captured. */
+  vol_expansion?: VolExpansionSnapshot | null;
 }
 
 /* ────────────────────── Runtime validators (zod) ────────────────────── */
@@ -476,6 +521,9 @@ export const ExposureExtSchema = z
     vex_sign: RegimeSignSchema,
     net_chex: finiteNumber,
     chex_sign: RegimeSignSchema,
+    strikes: z.array(finiteNumber),
+    vex_by_strike: z.array(finiteNumber),
+    chex_by_strike: z.array(finiteNumber),
   })
   .strict();
 
@@ -531,6 +579,28 @@ export const IvSmilePointSchema = z
   })
   .strict();
 
+/** Runtime schema for {@link ThetaDecaySnapshot}. */
+export const ThetaDecaySnapshotSchema = z
+  .object({
+    net_theta: finiteNumber,
+    theta_sign: RegimeSignSchema,
+  })
+  .strict();
+
+/** Runtime schema for {@link MaxPainSnapshot}. */
+export const MaxPainSnapshotSchema = z
+  .object({
+    strike: finiteNumber.nullable(),
+  })
+  .strict();
+
+/** Runtime schema for {@link VolExpansionSnapshot}. */
+export const VolExpansionSnapshotSchema = z
+  .object({
+    expansion: finiteNumber.nullable(),
+  })
+  .strict();
+
 /** Runtime schema for the full {@link Snapshot}. */
 export const SnapshotSchema = z
   .object({
@@ -560,6 +630,9 @@ export const SnapshotSchema = z
     ddoi: DdoiSchema.nullish(),
     proprietary: ProprietarySchema.nullish(),
     iv_smile: z.array(IvSmilePointSchema).nullish(),
+    theta_decay: ThetaDecaySnapshotSchema.nullish(),
+    max_pain: MaxPainSnapshotSchema.nullish(),
+    vol_expansion: VolExpansionSnapshotSchema.nullish(),
   })
   .strict();
 
@@ -608,6 +681,9 @@ export type SchemaContractInvariants = [
   Expect<Equals<z.infer<typeof DdoiSchema>, Ddoi>>,
   Expect<Equals<z.infer<typeof ProprietarySchema>, Proprietary>>,
   Expect<Equals<z.infer<typeof IvSmilePointSchema>, IvSmilePoint>>,
+  Expect<Equals<z.infer<typeof ThetaDecaySnapshotSchema>, ThetaDecaySnapshot>>,
+  Expect<Equals<z.infer<typeof MaxPainSnapshotSchema>, MaxPainSnapshot>>,
+  Expect<Equals<z.infer<typeof VolExpansionSnapshotSchema>, VolExpansionSnapshot>>,
   Expect<Equals<z.infer<typeof LevelsSchema>, Levels>>,
   Expect<Equals<z.infer<typeof SnapshotSchema>, Snapshot>>,
 ];

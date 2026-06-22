@@ -35,6 +35,9 @@ venv/
 # ── Dashboard derived snapshot assets (regenerable from engine) ──
 apps/dashboard/public/data/
 
+# ── Dashboard debug/screenshot captures (scratch, not history) ──
+apps/dashboard/arc-*.png
+
 # ── Analysis harness outputs (regenerable from data) ──
 /analysis/charts/
 /analysis/*.txt

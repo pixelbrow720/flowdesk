@@ -59,8 +59,28 @@ def main(argv: list[str]) -> int:
 
     from engine.feed import to_engine_chain
     from engine.feed.historical import HistoricalSimAdapter
-    from engine.flux import FluxState
+    from engine.flux import FluxState, aggressor_sign
     from engine.snapshot import MULTIPLIER, build_snapshot, t_expiry_from_clock
+
+    def net_flow_for(trades: object) -> object:
+        """Per-(strike, is_call) net aggressor-signed flow for synthetic-OI.
+
+        Mirrors ``api.worker.LiveWorker._net_flow_for`` so the offline-generated
+        sessions carry the SAME ``total_hedging`` (gamma/charm/vanna) the live
+        worker would publish. ``Sum(aggressor_sign * size)`` over the cumulative
+        ``[open, ts]`` trade window (B=+1, A=-1, N=0). Returns None when there is
+        no signed tape so ``total_hedging`` degrades to None like ``flux``.
+        """
+        if trades is None:
+            return None
+        flow: dict[tuple[float, bool], float] = {}
+        for tr in trades:
+            s = aggressor_sign(tr.side)
+            if s == 0:
+                continue
+            key = (float(tr.strike), bool(tr.is_call))
+            flow[key] = flow.get(key, 0.0) + s * float(tr.size)
+        return flow or None
 
     adapter = HistoricalSimAdapter(
         args.data_dir, quote_schema=args.quote_schema, rate=args.rate
@@ -112,11 +132,17 @@ def main(argv: list[str]) -> int:
                     flux_state.add(tr, forward, args.rate)
                 flux_consumed = len(trades)
                 flux = flux_state.snapshot()
+                # Per-leg net aggressor flow drives synthetic-OI #7 (total_hedging:
+                # gamma/charm/vanna). Computed over the SAME cumulative trade tape
+                # FLUX uses, so the offline session matches the live worker.
+                net_flow = net_flow_for(trades)
                 snap = build_snapshot(
                     instrument, ts, quotes, forward, args.rate,
                     "LIVE", axis, t_expiry=t_expiry, stale=False, expired=False,
-                    ohlc=ohlc, flux=flux, with_exposure_ext=True, with_surface=True,
+                    ohlc=ohlc, flux=flux, net_flow=net_flow, with_exposure_ext=True,
+                    with_surface=True,
                     with_proprietary=True, with_iv_smile=True,
+                    with_theta_decay=True, with_max_pain=True, with_vol_expansion=True,
                 )
                 frames.append(json.loads(snap.model_dump_json()))
                 ok += 1

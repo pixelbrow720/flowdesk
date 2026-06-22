@@ -22,6 +22,19 @@ export interface FrameLike {
     net_dex: number;
     interpolated: boolean;
   }[];
+  /**
+   * Optional per-strike VEX/CHEX decomposition (mirrors the optional
+   * `exposure_ext` field). When present, ``strikes[i]`` corresponds to
+   * ``vex_by_strike[i]`` and ``chex_by_strike[i]``. The strike axis is the
+   * engine's non-thin strike axis — a SUBSET of the profile axis (thins dropped).
+   * Legacy payloads (pre-2026-06-19) may have `exposure_ext` populated but with
+   * the per-strike arrays absent — every field here is optional and guarded.
+   */
+  exposure_ext?: {
+    strikes?: number[];
+    vex_by_strike?: number[];
+    chex_by_strike?: number[];
+  } | null;
 }
 
 /**
@@ -106,14 +119,19 @@ export interface StrikeDatum {
   price: number;
   gex: MetricSeries;
   dex: MetricSeries;
+  /** VEX/CHEX present only when the frame carried `exposure_ext` (EXPERIMENTAL). */
+  vex: MetricSeries;
+  chex: MetricSeries;
 }
 
-export type MetricKey = "gex" | "dex";
+export type MetricKey = "gex" | "dex" | "vex" | "chex";
 
 export interface StrikeModel {
   strikes: StrikeDatum[]; // sorted descending by price (top = highest strike)
   gexMaxAbs: number;
   dexMaxAbs: number;
+  vexMaxAbs: number;
+  chexMaxAbs: number;
 }
 
 interface Accum {
@@ -184,6 +202,8 @@ function buildSeries(a: Accum, maxAbs: number, diffMaxAbs: number): MetricSeries
 export function buildStrikeModel(frames: FrameLike[]): StrikeModel {
   const gex = new Map<number, Accum>();
   const dex = new Map<number, Accum>();
+  const vex = new Map<number, Accum>();
+  const chex = new Map<number, Accum>();
 
   for (const f of frames) {
     for (const p of f.profile) {
@@ -195,32 +215,70 @@ export function buildStrikeModel(frames: FrameLike[]): StrikeModel {
       if (d) pushAccum(d, p.net_dex);
       else dex.set(p.strike, emptyAccum(p.net_dex));
     }
+    // VEX/CHEX ride on the optional exposure_ext per-strike arrays (a subset of
+    // the profile axis — thins are absent). Index-aligned strikes/vex/chex.
+    // Tolerant of legacy payloads (pre-2026-06-19 JSON shipped without the
+    // per-strike arrays — exposure_ext existed but strikes was absent).
+    const ext = f.exposure_ext;
+    if (
+      ext &&
+      Array.isArray(ext.strikes) &&
+      Array.isArray(ext.vex_by_strike) &&
+      Array.isArray(ext.chex_by_strike) &&
+      ext.strikes.length > 0
+    ) {
+      for (let i = 0; i < ext.strikes.length; i++) {
+        const k = ext.strikes[i];
+        const v = ext.vex_by_strike[i] ?? 0;
+        const c = ext.chex_by_strike[i] ?? 0;
+        const av = vex.get(k);
+        if (av) pushAccum(av, v);
+        else vex.set(k, emptyAccum(v));
+        const ac = chex.get(k);
+        if (ac) pushAccum(ac, c);
+        else chex.set(k, emptyAccum(c));
+      }
+    }
   }
 
   // Per-metric session scales (start at 1 so empty input never divides by zero).
-  let gexMaxAbs = 1;
-  let gexDiffMax = 1;
-  for (const a of gex.values()) {
-    gexMaxAbs = Math.max(gexMaxAbs, Math.abs(a.latest), Math.abs(a.low), Math.abs(a.high));
-    const h = a.history;
-    gexDiffMax = Math.max(gexDiffMax, Math.abs(a.latest - (h[Math.max(0, h.length - 5)] ?? a.latest)));
-  }
-  let dexMaxAbs = 1;
-  let dexDiffMax = 1;
-  for (const a of dex.values()) {
-    dexMaxAbs = Math.max(dexMaxAbs, Math.abs(a.latest), Math.abs(a.low), Math.abs(a.high));
-    const h = a.history;
-    dexDiffMax = Math.max(dexDiffMax, Math.abs(a.latest - (h[Math.max(0, h.length - 5)] ?? a.latest)));
-  }
+  const scaleOf = (m: Map<number, Accum>): { maxAbs: number; diffMax: number } => {
+    let maxAbs = 1;
+    let diffMax = 1;
+    for (const a of m.values()) {
+      maxAbs = Math.max(maxAbs, Math.abs(a.latest), Math.abs(a.low), Math.abs(a.high));
+      const h = a.history;
+      diffMax = Math.max(diffMax, Math.abs(a.latest - (h[Math.max(0, h.length - 5)] ?? a.latest)));
+    }
+    return { maxAbs, diffMax };
+  };
+  const gexS = scaleOf(gex);
+  const dexS = scaleOf(dex);
+  const vexS = scaleOf(vex);
+  const chexS = scaleOf(chex);
+
+  const zeroSeries = (): MetricSeries => ({
+    current: 0, low: 0, high: 0, absCurrent: 0, absLow: 0, absHigh: 0,
+    diff5m: 0, diff30m: 0, diff60m: 0, diff5mNorm: 0,
+  });
 
   const strikes: StrikeDatum[] = Array.from(gex.keys()).map((price) => ({
     price,
-    gex: buildSeries(gex.get(price)!, gexMaxAbs, gexDiffMax),
-    dex: buildSeries(dex.get(price)!, dexMaxAbs, dexDiffMax),
+    gex: buildSeries(gex.get(price)!, gexS.maxAbs, gexS.diffMax),
+    dex: buildSeries(dex.get(price)!, dexS.maxAbs, dexS.diffMax),
+    // VEX/CHEX may be absent for this strike (thin) → zeroed series (no bar).
+    vex: vex.has(price) ? buildSeries(vex.get(price)!, vexS.maxAbs, vexS.diffMax) : zeroSeries(),
+    chex: chex.has(price) ? buildSeries(chex.get(price)!, chexS.maxAbs, chexS.diffMax) : zeroSeries(),
   }));
 
   strikes.sort((a, b) => b.price - a.price);
-  return { strikes, gexMaxAbs, dexMaxAbs };
+  return {
+    strikes,
+    gexMaxAbs: gexS.maxAbs,
+    dexMaxAbs: dexS.maxAbs,
+    vexMaxAbs: vexS.maxAbs,
+    chexMaxAbs: chexS.maxAbs,
+  };
 }
 
 /** SVI raw total-variance parameters (engine `surface.svi_*`). */

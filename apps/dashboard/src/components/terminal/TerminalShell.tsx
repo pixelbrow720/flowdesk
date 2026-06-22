@@ -27,6 +27,14 @@ import {
 import type { Instrument } from "@/lib/api";
 import type { TerminalFeed } from "@/lib/useTerminalFeed";
 
+/**
+ * Recorded replay sessions available under `public/data/<I>_<date>.json`.
+ * These are the 0DTE days decoded from the on-disk Databento archives
+ * (analysis/decode_zerodte.py → scripts/gen_session_snapshots.py). Keep this in
+ * sync with whatever session JSON has been generated into public/data.
+ */
+const REPLAY_DATES = ["2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10"] as const;
+
 export function TerminalShell({
   feed,
   toolbarExtra,
@@ -38,7 +46,7 @@ export function TerminalShell({
   header?: ReactNode;
   children: ReactNode;
 }) {
-  const { mode, setMode, instrument, setInstrument, status, awaitingData, replay } = feed;
+  const { mode, setMode, instrument, setInstrument, date, setDate, status, awaitingData, replay } = feed;
 
   return (
     <div className="relative min-h-screen w-full overflow-x-hidden bg-black text-bone-0">
@@ -46,6 +54,14 @@ export function TerminalShell({
       <div className="fixed right-6 top-[4.5rem] z-40 flex items-center gap-2 font-mono text-[11px] tracking-[0.16em]">
         <FeedBadge status={status} />
         {toolbarExtra}
+        {/* Replay session date — only meaningful (and shown) in REPLAY mode. */}
+        {mode === "replay" ? (
+          <SegToggle
+            options={REPLAY_DATES}
+            value={date}
+            onChange={setDate}
+          />
+        ) : null}
         <SegToggle
           options={["ES", "NQ"]}
           value={instrument}

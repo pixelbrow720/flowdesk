@@ -29,6 +29,9 @@ export interface TerminalFeed {
   setMode: (m: TerminalMode) => void;
   instrument: Instrument;
   setInstrument: (i: Instrument) => void;
+  /** Replay session date (YYYY-MM-DD). Selectable in REPLAY mode. */
+  date: string;
+  setDate: (d: string) => void;
   frames: Snapshot[];
   status: FeedStatus;
   latest: Snapshot | null;
@@ -40,13 +43,14 @@ export function useTerminalFeed(
   defaultInstrument: Instrument,
   sessionDate: string,
 ): TerminalFeed {
-  const [mode, setMode] = useState<TerminalMode>("live");
+  const [mode, setMode] = useState<TerminalMode>("replay");
   const [instrument, setInstrument] = useState<Instrument>(defaultInstrument);
+  const [date, setDate] = useState<string>(sessionDate);
 
   // Live owns the terminal in LIVE; replay owns it in REPLAY. The inactive one
   // is disabled so it opens no socket / does no fetch.
-  const live = useLiveSnapshots(instrument, sessionDate, mode === "live");
-  const replay = useReplaySnapshots(instrument, sessionDate, mode === "replay");
+  const live = useLiveSnapshots(instrument, date, mode === "live");
+  const replay = useReplaySnapshots(instrument, date, mode === "replay");
 
   const frames = mode === "replay" ? replay.frames : live.frames;
 
@@ -67,7 +71,7 @@ export function useTerminalFeed(
   const awaitingData = frames.length === 0 && status !== "error";
 
   return useMemo(
-    () => ({ mode, setMode, instrument, setInstrument, frames, status, latest, awaitingData, replay }),
-    [mode, instrument, frames, status, latest, awaitingData, replay],
+    () => ({ mode, setMode, instrument, setInstrument, date, setDate, frames, status, latest, awaitingData, replay }),
+    [mode, instrument, date, frames, status, latest, awaitingData, replay],
   );
 }

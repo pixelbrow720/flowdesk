@@ -547,6 +547,9 @@ class MinuteWorker:
             with_surface=True,
             with_proprietary=True,
             with_iv_smile=True,
+            with_theta_decay=True,
+            with_max_pain=True,
+            with_vol_expansion=True,
         )
         # Publish to Redis FIRST so the live terminal/WS stay healthy even when
         # Timescale is down; the durable write is best-effort and must never undo

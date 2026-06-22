@@ -336,6 +336,14 @@ function fmtNotional(v: number): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+/* ------------------------------------------------------------------ */
+/* MetricsStrip — latest session metrics (overlay strip below chart)   */
+/* ------------------------------------------------------------------ */
+
+// SessionMetrics now carries the 3 EXPERIMENTAL lenses (thetaDecay, maxPain,
+// volExpansion) as optional fields, so MetricsStrip can consume the type
+// directly without an extra wrapper.
+
 function MetricsStrip({ metrics }: { metrics: SessionMetrics }) {
   const items = useMemo(
     () => [
@@ -348,9 +356,20 @@ function MetricsStrip({ metrics }: { metrics: SessionMetrics }) {
         exp: false,
       },
       {
-        label: "GEX+ SHARE",
-        value: metrics.gexLongShare != null ? `${metrics.gexLongShare.toFixed(0)}%` : "—",
-        exp: false,
+        label: "NET θ/DAY",
+        value: metrics.thetaDecay != null ? fmtNotional(metrics.thetaDecay) : "—",
+        tone: metrics.thetaDecay != null ? (metrics.thetaDecay >= 0 ? "pos" : "neg") : undefined,
+        exp: true,
+      },
+      {
+        label: "MAX PAIN",
+        value: metrics.maxPain != null ? metrics.maxPain.toFixed(0) : "—",
+        exp: true,
+      },
+      {
+        label: "VOL σ-SPREAD",
+        value: metrics.volExpansion != null ? metrics.volExpansion.toFixed(3) : "—",
+        exp: true,
       },
       { label: "SKEW", value: metrics.skew != null ? metrics.skew.toFixed(2) : "—", exp: true },
     ],

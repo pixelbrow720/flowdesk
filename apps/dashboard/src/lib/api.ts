@@ -82,6 +82,32 @@ export interface SnapshotIvSmilePoint {
   put_iv: number | null;
 }
 
+export interface SnapshotThetaDecay {
+  net_theta: number;
+  theta_sign: number;
+}
+
+export interface SnapshotMaxPain {
+  strike: number | null;
+}
+
+export interface SnapshotVolExpansion {
+  expansion: number | null;
+}
+
+export interface SnapshotExposureExt {
+  net_vex: number;
+  vex_sign: -1 | 0 | 1;
+  net_chex: number;
+  chex_sign: -1 | 0 | 1;
+  /** Strike axis for per-strike decomposition. Thin strikes absent. Added 2026-06-19. */
+  strikes?: number[];
+  /** Per-strike VEX, index-aligned to `strikes`. EXPERIMENTAL. Added 2026-06-19. */
+  vex_by_strike?: number[];
+  /** Per-strike CHEX, index-aligned to `strikes`. EXPERIMENTAL. Added 2026-06-19. */
+  chex_by_strike?: number[];
+}
+
 export interface SnapshotRegime {
   net_gamma: number;
   sign: number;
@@ -118,6 +144,15 @@ export interface Snapshot {
   surface: SnapshotSurface | null;
   proprietary: SnapshotProprietary | null;
   iv_smile?: SnapshotIvSmilePoint[] | null;
+  theta_decay?: SnapshotThetaDecay | null;
+  max_pain?: SnapshotMaxPain | null;
+  vol_expansion?: SnapshotVolExpansion | null;
+  exposure_ext?: SnapshotExposureExt | null;
+  total_hedging?: {
+    gamma_hedge: number;
+    charm_hedge: number;
+    vanna_hedge: number;
+  } | null;
 }
 
 /**
