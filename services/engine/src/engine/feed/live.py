@@ -282,6 +282,21 @@ class LiveAdapter(FeedAdapter):
             return None
         return getter(instrument, ts)
 
+    # Optional method — front-future 1-minute OHLC. Mirrors
+    # HistoricalSimAdapter.get_ohlc; degrades to None when the client/book
+    # cannot build a candle so the worker leaves ``ohlc`` null (never fails
+    # the tick).
+    def get_ohlc(
+        self, instrument: str, ts: datetime
+    ) -> Optional[tuple[float, float, float, float]]:
+        self._check_instrument(instrument)
+        ensure_utc_minute(ts)
+        self._connect()
+        getter = getattr(self._client, "get_ohlc", None)
+        if getter is None:
+            return None
+        return getter(instrument, ts)
+
 
 # --------------------------------------------------------------------------- #
 # Real databento.Live wrapper (UNTESTED AGAINST A LIVE SOCKET).                #
@@ -484,6 +499,13 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
     def get_forward(self, instrument: str, ts: datetime) -> float:
         with self._lock:
             return self._book.get_forward(instrument, ts)
+
+    def get_ohlc(
+        self, instrument: str, ts: datetime
+    ) -> Optional[tuple[float, float, float, float]]:
+        with self._lock:
+            self._maybe_reset(ts)
+            return self._book.get_ohlc(instrument, ts)
 
     def get_flux_trades(self, instrument: str, ts: datetime) -> list[Any]:
         with self._lock:

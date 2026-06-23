@@ -516,9 +516,10 @@ class MinuteWorker:
         forward = float(chain.forward)
         axis = _axis_from_chain(instrument, chain)
         # Front-future OHLC for the minute (mirrors the offline generator at
-        # scripts/gen_session_snapshots.py). LiveAdapter has no get_ohlc / can
-        # raise; guard like get_chain above and degrade to None on miss --
-        # never fail the whole tick on a missing OHLC.
+        # scripts/gen_session_snapshots.py). Both HistoricalSimAdapter and
+        # LiveAdapter implement get_ohlc (the latter returns None when the book
+        # can't build a candle); guard like get_chain above and degrade to None
+        # on miss -- never fail the whole tick on a missing OHLC.
         try:
             ohlc = self._feed.get_ohlc(instrument, ts_utc)
         except Exception as exc:

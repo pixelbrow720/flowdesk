@@ -398,6 +398,29 @@ class LiveBook:
         ts = ensure_utc_minute(ts)
         return self._forward(instr, ts, self._select_0dte_expiry(instr, ts))
 
+    def get_ohlc(
+        self, instrument: str, ts: datetime
+    ) -> Optional[tuple[float, float, float, float]]:
+        """Front-future OHLC over the minute ``[ts, ts+60s)`` from trade prices.
+
+        Returns ``(open, high, low, close)`` in index points, or ``None`` when no
+        futures trade printed in that minute (caller leaves ``ohlc`` null — never
+        fabricated). Mirrors :meth:`HistoricalSimAdapter.get_ohlc`: the future
+        chosen is the front contract (same as :meth:`_forward`) so the candle
+        close aligns with the snapshot forward.
+        """
+        instr = instrument.upper()
+        ts = ensure_utc_minute(ts)
+        end = ts + timedelta(minutes=1)
+        for fut in self._front_future(instr, ts):
+            series = self._fut_trades.get(fut.instrument_id)
+            if not series:
+                continue
+            window = [px for (event, px) in series if ts <= event < end]
+            if window:
+                return (window[0], max(window), min(window), window[-1])
+        return None
+
     def get_flux_trades(self, instrument: str, ts: datetime) -> list["FluxTrade"]:
         """Signed option trades over ``[RTH open, ts]`` for FLUX (chronological)."""
         from engine.flux import FluxTrade

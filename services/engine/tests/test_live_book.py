@@ -343,3 +343,54 @@ def test_decode_px_no_float_epsilon() -> None:
     assert decode_px(520_000_000_000_000) == 520000.0
     assert decode_px(5_800_000_000_000) == 5800.0
 
+
+# --------------------------------------------------------------------------- #
+# get_ohlc — front-future 1-minute candle (mirrors HistoricalSimAdapter).      #
+# --------------------------------------------------------------------------- #
+def _seed_front_future(book: LiveBook) -> None:
+    """Register the front future (iid 1) with no trades yet."""
+    book.add_definition(
+        1, raw_symbol="ESM6", instrument_class="F", strike=None,
+        expiration=_ns(datetime(2026, 6, 19, 13, 30, tzinfo=timezone.utc)), asset="ES",
+    )
+
+
+def test_get_ohlc_from_front_future_trades() -> None:
+    """OHLC = (first, max, min, last) of front-future trades in [ts, ts+60s)."""
+    book = LiveBook()
+    _seed_front_future(book)
+    # Four prints inside the TS minute, in arrival order.
+    book.add_trade(1, ts=_ns(TS), price=_px(5805.0), size=2, side="N")
+    book.add_trade(1, ts=_ns(TS.replace(second=10)), price=_px(5808.0), size=1, side="N")
+    book.add_trade(1, ts=_ns(TS.replace(second=20)), price=_px(5802.0), size=1, side="N")
+    book.add_trade(1, ts=_ns(TS.replace(second=50)), price=_px(5806.0), size=3, side="N")
+    ohlc = book.get_ohlc("ES", TS)
+    assert ohlc == pytest.approx((5805.0, 5808.0, 5802.0, 5806.0))
+
+
+def test_get_ohlc_none_when_no_future_trade_in_minute() -> None:
+    """None when the front future printed no trade in the minute (never fabricated)."""
+    book = LiveBook()
+    _seed_front_future(book)
+    # A print one minute earlier — outside [ts, ts+60s).
+    earlier = datetime(2026, 6, 9, 14, 29, tzinfo=timezone.utc)
+    book.add_trade(1, ts=_ns(earlier), price=_px(5805.0), size=2, side="N")
+    assert book.get_ohlc("ES", TS) is None
+
+
+def test_get_ohlc_excludes_next_minute_print() -> None:
+    """A print at exactly ts+60s belongs to the NEXT minute (half-open window)."""
+    book = LiveBook()
+    _seed_front_future(book)
+    book.add_trade(1, ts=_ns(TS), price=_px(5805.0), size=2, side="N")
+    next_min = datetime(2026, 6, 9, 14, 31, tzinfo=timezone.utc)
+    book.add_trade(1, ts=_ns(next_min), price=_px(5999.0), size=2, side="N")
+    ohlc = book.get_ohlc("ES", TS)
+    assert ohlc == pytest.approx((5805.0, 5805.0, 5805.0, 5805.0))
+
+
+def test_get_ohlc_none_without_front_future() -> None:
+    """None when there is no front future at all (cannot build a candle)."""
+    book = LiveBook()
+    assert book.get_ohlc("ES", TS) is None
+

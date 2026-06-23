@@ -124,6 +124,38 @@ def test_armed_path_uses_factory_not_real_client(monkeypatch: pytest.MonkeyPatch
 
 
 # --------------------------------------------------------------------------- #
+# get_ohlc — front-future candle, delegated to the client/book.               #
+# --------------------------------------------------------------------------- #
+class FakeOhlcClient(FakeLiveClient):
+    """FakeLiveClient that also exposes get_ohlc (like the real LiveBook)."""
+
+    def get_ohlc(
+        self, instrument: str, ts: datetime
+    ) -> tuple[float, float, float, float]:
+        return (5000.0, 5010.0, 4995.0, 5005.0)
+
+
+def test_get_ohlc_refuses_without_arming(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LIVE_FEED_ARMED", raising=False)
+    adapter = LiveAdapter(client_factory=lambda **_: FakeOhlcClient())
+    with pytest.raises(LiveFeedNotArmed):
+        adapter.get_ohlc(INSTRUMENT, TS)
+
+
+def test_get_ohlc_delegates_to_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    _arm(monkeypatch)
+    adapter = LiveAdapter(client_factory=lambda **_: FakeOhlcClient())
+    assert adapter.get_ohlc(INSTRUMENT, TS) == (5000.0, 5010.0, 4995.0, 5005.0)
+
+
+def test_get_ohlc_none_when_client_lacks_method(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A client without get_ohlc degrades to None (never raises)."""
+    _arm(monkeypatch)
+    adapter = LiveAdapter(client_factory=lambda **_: FakeLiveClient())
+    assert adapter.get_ohlc(INSTRUMENT, TS) is None
+
+
+# --------------------------------------------------------------------------- #
 # Circuit breaker.                                                             #
 # --------------------------------------------------------------------------- #
 def test_breaker_opens_after_threshold_failures(monkeypatch: pytest.MonkeyPatch) -> None:
