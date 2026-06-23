@@ -1,7 +1,7 @@
 # LiveAdapter — threat model & deploy rail
 
-**Status:** APPROVED, implementation in progress
-**Date:** 2026-06-15
+**Status:** APPROVED, implemented (rail + minute-assembly complete 2026-06-18; remaining gap: `LiveAdapter.get_ohlc` — live candles degrade to None until wired)
+**Date:** 2026-06-15 (status updated 2026-06-22)
 **Scope:** the realtime Databento path (`engine/feed/live.py`) + the `FEED_MODE=live` rail in the api worker.
 
 > The Databento account on this project has been locked **twice** in the past

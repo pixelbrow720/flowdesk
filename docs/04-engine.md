@@ -239,6 +239,38 @@ SpotGamma does not publish these formulas, so they will NOT match its numbers**
 locked VOL-based `levels` (`levels.py`), which remain the authoritative key levels —
 `proprietary` does NOT replace them. EXPERIMENTAL.
 
+### `theta.py` (optional output — EXPERIMENTAL)
+Net cumulative dealer theta decay on the **VOL basis** + locked dealer signs
+(`+1` call / `-1` put, cumulative volume since RTH open):
+`net_theta = (sign_c·θ_c·cvol + sign_p·θ_p·pvol) · M · F · (1/365)`.
+`M·F` dollarises (one `F` — theta is a time-derivative, not w.r.t. `F`);
+`THETA_DAY_SCALE = 1/365` converts the per-year `black76.theta` to per calendar
+day (mirrors `CHEX_DAY_SCALE`). Thin strikes skipped. Emitted as the optional
+`theta_decay` field, gated by `with_theta_decay`. Structural / NOT price-validated.
+
+### `max_pain.py` (optional output — EXPERIMENTAL)
+The strike that minimises total option-holder payoff at expiry —
+`argmin_K Σ (|F−K|·OI_side)` across call+put legs. A popular **retail heuristic**,
+NOT a validated price magnet (no published statistical edge). The `M` scale is
+constant across K so it is omitted (does not change the argmin). Thin strikes
+skipped; `None` when no non-thin strikes. Emitted as the optional `max_pain`
+field, gated by `with_max_pain`. INFERRED retail heuristic — consumers MUST label
+it as such.
+
+### `vol_expansion.py` (optional output — EXPERIMENTAL)
+Standard deviation of implied vol across non-thin strikes (call + put IVs):
+`vol_expansion = std(call_ivs + put_ivs)`. A magnitude (always ≥ 0): high = vol
+expansion / cross-strike disagreement, low = contraction / agreement. `None` when
+fewer than 2 non-thin strikes. Emitted as the optional `vol_expansion` field,
+gated by `with_vol_expansion`. Structural / NOT price-validated.
+
+### `iv_smile` (optional output — EXPERIMENTAL)
+Per-strike call/put implied-vol smile (`call_iv` / `put_iv` per strike, either
+nullable). The engine already solves these per-strike IVs in `_solve_chain`; this
+field simply exposes them. Emitted as the optional `iv_smile` list, gated by
+`with_iv_smile`. Renders as the turquoise (call) / crimson (put) dot overlay on
+the strike ladder.
+
 ### `snapshot.py`
 The assembler. `build_snapshot(...)` runs the pipeline and returns a validated
 `Snapshot`. **Pure and calendar-free** — it receives the resolved

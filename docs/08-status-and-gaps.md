@@ -1,5 +1,15 @@
 # 08 — Status & Gaps (the honest map)
 
+> **CURRENCY NOTE (2026-06-22):** `schema_version` is now **2**, bumped in commit
+> `2b13ae2` (the HIRO→FLUX / TRACE→FOG rename). Audit blocks below dated
+> 2026-06-14 that say "schema_version stays 1 / untouched" were accurate at the
+> time of those decisions (the listed changes were individually non-breaking);
+> the version moved to 2 later in the rename commit. The canonical value lives in
+> `schema.py` ↔ `snapshot.ts` ↔ `CONTRACT.md` (all `2`). Three additive
+> EXPERIMENTAL fields landed after this doc's main body was written —
+> `theta_decay`, `max_pain`, `vol_expansion` (commit `af2ef7d`), plus `iv_smile`
+> (commit `2d36cd6`) — all optional/nullable, documented in `docs/04-engine.md`.
+
 This is the document to read when the project "feels done but lacking." It is the
 backlog. The backend is **code-complete and well-engineered**, but it is built on
 the **methodologically weakest version of the core signal** and is
@@ -354,17 +364,30 @@ to defend against the F1–F7 failure modes catalogued in
   and locked Snapshot contract stay byte-for-byte unchanged when the
   mode flips.
 
-**Test status:** 13 dedicated `test_live_adapter.py` tests + 2 updated
-shape-/refusal-coverage tests in `test_historical.py`. Engine 415 passed,
-API 116 passed. **No code path in CI ever imports the real `databento`
-package.**
+**Test status:** 13 dedicated `test_live_adapter.py` tests + 23
+`test_live_book.py` tests covering the assembly + shape-/refusal-coverage
+tests in `test_historical.py`. **No code path in CI ever imports the real
+`databento` package.**
+
+**Minute-assembly is now BUILT (update 2026-06-18).** The deferred assembly
+logic shipped: `engine/feed/live_book.py` (`LiveBook`) is a pure, network-free
+per-minute assembler — 0DTE expiry selection, cumulative VOL since RTH open,
+latest OI, put-call-parity / front-future forward, and the signed FLUX tape —
+mirroring `HistoricalSimAdapter` byte-for-byte. The `_DatabentoLiveClient` shell
+in `live.py` seeds today's definitions once via a bounded Historical HTTP pull
+(a live stream does NOT resend definitions for instruments listed before the
+subscription opens), then routes definition/statistics/trades/quote records into
+the book. The DBN wire-format mapping is taken from the spec + the project's
+`convert_dbn_to_csv.py` and is marked provisional until an operator validates it
+through the runbook.
 
 **Remaining (deferred, not on the critical path):**
 
-- The actual minute-assembly logic (definition + OI + cumulative VOL +
-  top-of-book mid wired to the realtime stream) ships in a follow-up;
-  the FakeLiveClient seam means the assembly code can be developed
-  against recorded fixtures in isolation.
+- **`LiveAdapter.get_ohlc` is missing** — the worker (`worker.py:522`) calls it,
+  but only `HistoricalSimAdapter` implements it, so live candle (`ohlc`) data
+  silently degrades to `None`. Everything else (GEX/DEX/VEX/FLUX/levels/surface)
+  computes fine on live. Fix: assemble a 1-minute OHLC from the book's
+  `_fut_trades` front-future series.
 - Crash-loop detector via on-disk arm-attempts log is documented in §5
   of the threat model but not yet implemented (lower priority — the
   in-process breaker + the explicit second key already cover the
