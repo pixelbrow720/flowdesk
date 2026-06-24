@@ -266,16 +266,21 @@ async def serve(websocket: WebSocket, instrument: str) -> None:
             return
 
     # --- gating BEFORE accept (PRD #8 AC-A5, T-09) ---
-    session = parse_session_cookie(websocket.cookies.get(SESSION_COOKIE))
-    if session is None:
-        await websocket.close(code=WS_CLOSE_NO_SESSION)
-        return
-    # Data-plane entitlement freshness: re-check the role on the WS handshake too,
-    # not only on /api/me (CRITICAL #1). Deny-only; honors active grace like REST.
-    session = await _ws_refresh_entitlement(websocket, session)
-    if not session.has_desk and not has_active_grace(session):
-        await websocket.close(code=WS_CLOSE_NO_DESK)
-        return
+    # LOCAL-ONLY escape hatch: DEV_AUTH_BYPASS=1 skips the DESK gate entirely
+    # (mirrors api.security.require_desk). NEVER set this in a public deploy.
+    import os as _os
+
+    if _os.environ.get("DEV_AUTH_BYPASS", "").strip() != "1":
+        session = parse_session_cookie(websocket.cookies.get(SESSION_COOKIE))
+        if session is None:
+            await websocket.close(code=WS_CLOSE_NO_SESSION)
+            return
+        # Data-plane entitlement freshness: re-check the role on the WS handshake too,
+        # not only on /api/me (CRITICAL #1). Deny-only; honors active grace like REST.
+        session = await _ws_refresh_entitlement(websocket, session)
+        if not session.has_desk and not has_active_grace(session):
+            await websocket.close(code=WS_CLOSE_NO_DESK)
+            return
     if instrument not in VALID_INSTRUMENTS:
         await websocket.close(code=WS_CLOSE_BAD_INSTRUMENT)
         return

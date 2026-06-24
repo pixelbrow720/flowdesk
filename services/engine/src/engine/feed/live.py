@@ -402,6 +402,16 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
 
         now = datetime.now(timezone.utc)
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # The Databento Historical API has a publishing lag (observed ~10–20 min).
+        # Requesting end=now can return 422 because the dataset hasn't caught up
+        # yet. Buffer the end by 20 minutes so the seed succeeds even during the
+        # lag window — definitions from earlier today are still valid for the
+        # rest of the session.
+        try:
+            from datetime import timedelta
+        except ImportError:
+            pass
+        end = now - timedelta(minutes=20)
         try:
             hist = db.Historical(key=self._api_key)
             data = hist.timeseries.get_range(
@@ -410,7 +420,7 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
                 stype_in="parent",
                 symbols=self._SYMBOLS,
                 start=start.strftime("%Y-%m-%dT%H:%M"),
-                end=now.strftime("%Y-%m-%dT%H:%M"),
+                end=end.strftime("%Y-%m-%dT%H:%M"),
             )
         except Exception as exc:
             raise LiveFeedNotAvailable(

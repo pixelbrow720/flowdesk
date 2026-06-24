@@ -77,7 +77,18 @@ def require_desk(
     * has DESK               -> allow
     * within revocation grace-> allow (PRD #6 §5)
     * otherwise              -> 403 FORBIDDEN
+
+    LOCAL-ONLY ESCAPE HATCH: ``DEV_AUTH_BYPASS=1`` makes every caller a synthetic
+    DESK operator with NO session cookie. Intended for local dev/demo when Discord
+    OAuth is unreachable. It DISABLES all access control — it must NEVER be set in
+    a public/Vercel deploy. Default OFF; only the exact value "1" enables it.
     """
+    if os.environ.get("DEV_AUTH_BYPASS", "").strip() == "1":
+        return Session(
+            discord_id="dev-auth-bypass",
+            has_desk=True,
+            is_member=True,
+        )
     sess = require_session(session)
     if sess.has_desk:
         return sess
