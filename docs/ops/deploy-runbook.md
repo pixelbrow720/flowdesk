@@ -131,9 +131,12 @@ to live:
 6. Watch the circuit-breaker metric for 30 min. Expected pattern: 0
    failures. One isolated reconnect with a successful follow-up: OK.
    Two consecutive failures: investigate. ≥5 in 5 min: the breaker
-   trips automatically and the worker degrades to `historical` for
-   the rest of the process lifetime; do NOT auto-restart — page the
-   team.
+   trips and STAYS open for the rest of the process lifetime. The worker
+   then raises `LiveFeedDegraded` every tick → the session goes STALE
+   holding the last live frame. It does NOT switch to fresh historical
+   replay data (there is no live→historical fallback; `self._feed` is
+   never swapped). Do NOT auto-restart — page the team; recovery is a
+   human restart.
 7. Document the flip in the post-deploy ledger (date, time, on-caller,
    first-30-min observations).
 
