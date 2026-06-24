@@ -103,6 +103,43 @@ def _validate_cors_config(origins: list[str], *, allow_credentials: bool) -> Non
         )
 
 
+def _validate_auth_config() -> None:
+    """Fail-fast auth-config validation called at app build (live-readiness).
+
+    Two misconfigs boot clean today but break only once real traffic arrives —
+    exactly the kind of silent failure that surfaces at market open:
+
+      1. Blank ``SESSION_SECRET`` -> a request carrying a session cookie raises
+         an uncaught ``SignatureError`` -> HTTP 500 instead of a clean 401.
+      2. Blank ``DESK_ROLE_ID`` / ``DISCORD_DESK_ROLE_ID`` -> the DESK gate
+         (``role_id in roles``) can never match -> every authenticated user is
+         locked out (403/4403). A silent, total lockout.
+
+    Refuse to boot when either is empty so the misconfig screams in CI/staging,
+    not in prod. ``AUTH_CONFIG_OPTIONAL=1`` opts out (dev / unit tests that do
+    not exercise the auth path), mirroring the existing CORS guard's posture.
+    """
+    if os.environ.get("AUTH_CONFIG_OPTIONAL", "").strip() == "1":
+        return
+    if not os.environ.get("SESSION_SECRET", "").strip():
+        raise RuntimeError(
+            "SESSION_SECRET is empty. A blank signing key turns every "
+            "cookie-bearing request into an HTTP 500 instead of a clean 401. "
+            "Set SESSION_SECRET (e.g. `openssl rand -hex 32`) or set "
+            "AUTH_CONFIG_OPTIONAL=1 for a no-auth dev boot. Refusing to boot."
+        )
+    if not (
+        os.environ.get("DESK_ROLE_ID", "").strip()
+        or os.environ.get("DISCORD_DESK_ROLE_ID", "").strip()
+    ):
+        raise RuntimeError(
+            "DESK_ROLE_ID (or DISCORD_DESK_ROLE_ID) is empty. A blank DESK role "
+            "id silently locks out EVERY user (the role gate can never match). "
+            "Set it to the DESK role snowflake or set AUTH_CONFIG_OPTIONAL=1 for "
+            "a no-auth dev boot. Refusing to boot."
+        )
+
+
 def _feed_mode() -> str:
     return os.environ.get("FEED_MODE", "historical")
 
@@ -282,6 +319,7 @@ def create_app() -> FastAPI:
 
     _origins = _cors_origins()
     _validate_cors_config(_origins, allow_credentials=True)
+    _validate_auth_config()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_origins,
