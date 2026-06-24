@@ -149,9 +149,16 @@ class LiveAdapter(FeedAdapter):
         client_factory: Optional[Callable[..., Any]] = None,
         time_source: Callable[[], float] = time.monotonic,
         rate: float = 0.0,
+        quote_schema: str = "mbp-1",
     ) -> None:
         self.api_key = api_key
         self.dataset = dataset
+        # Top-of-book schema to subscribe live. Defaults to mbp-1 (tick), but the
+        # operator can pick the cheaper per-minute bbo-1m via QUOTE_SCHEMA — same
+        # knob the historical adapter honors. Matching it live keeps the live
+        # message volume in the envelope the operator sized for, which matters on
+        # a rate-limited account (see live-feed-threat-model.md).
+        self.quote_schema = quote_schema
         # Continuous risk-free rate, used only for the put-call parity forward
         # fallback inside the book (matches HistoricalSimAdapter); for 0DTE T is
         # tiny so the default 0.0 is negligible.
@@ -177,8 +184,9 @@ class LiveAdapter(FeedAdapter):
     def _check_breaker(self) -> None:
         if self._breaker.opened:
             raise LiveFeedDegraded(
-                "live feed circuit breaker is OPEN; degrading to historical "
-                "for the rest of the process lifetime (human restart required)."
+                "live feed circuit breaker is OPEN; the session will hold the "
+                "last frame and report STALE for the rest of the process "
+                "lifetime (NO switch to historical data; human restart required)."
             )
 
     # -- connect ----------------------------------------------------------- #
@@ -191,7 +199,9 @@ class LiveAdapter(FeedAdapter):
         reaches this branch without injecting a factory, that's a bug.
         """
         if self._client_factory is not None:
-            return self._client_factory(api_key=self.api_key, dataset=self.dataset)
+            return self._client_factory(
+                api_key=self.api_key, dataset=self.dataset, quote_schema=self.quote_schema
+            )
 
         if not self.api_key:
             raise LiveFeedNotAvailable(
@@ -202,7 +212,10 @@ class LiveAdapter(FeedAdapter):
         # tested (test_live_book.py); only the socket/threading shell below is
         # untested-against-live and pragma-excluded.
         return _DatabentoLiveClient(  # pragma: no cover - real network
-            api_key=self.api_key, dataset=self.dataset, rate=self.rate
+            api_key=self.api_key,
+            dataset=self.dataset,
+            rate=self.rate,
+            quote_schema=self.quote_schema,
         )
 
     def _connect(self) -> None:
@@ -320,10 +333,15 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
 
     # Parent symbols cover both options (.OPT) and futures (.FUT) for ES & NQ.
     _SYMBOLS = ["ES.OPT", "ES.FUT", "NQ.OPT", "NQ.FUT"]
-    _QUOTE_SCHEMA = "mbp-1"
+    _QUOTE_SCHEMA_DEFAULT = "mbp-1"
 
     def __init__(
-        self, *, api_key: Optional[str], dataset: str, rate: float = 0.0
+        self,
+        *,
+        api_key: Optional[str],
+        dataset: str,
+        rate: float = 0.0,
+        quote_schema: str = "mbp-1",
     ) -> None:
         import threading
 
@@ -337,6 +355,9 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
             )
         self._api_key = api_key
         self._dataset = dataset
+        # Operator-chosen top-of-book schema (mbp-1 tick OR bbo-1m per-minute).
+        # bbo-1m is far lower volume — the right default on a rate-limited account.
+        self._quote_schema = quote_schema or self._QUOTE_SCHEMA_DEFAULT
         self._book = LiveBook(rate=rate)
         self._lock = threading.Lock()
         self._session_date: Any = None
@@ -356,7 +377,7 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
         # subscription: it won't resend existing instruments (hence the seed
         # above), but it DOES deliver NEWLY-listed strikes created after we
         # connect (common as 0DTE price drifts), so the chain stays complete.
-        for schema in ("definition", "statistics", "trades", self._QUOTE_SCHEMA):
+        for schema in ("definition", "statistics", "trades", self._quote_schema):
             self._client.subscribe(
                 dataset=dataset,
                 schema=schema,

@@ -305,13 +305,27 @@ def test_connect_is_idempotent_after_success(monkeypatch: pytest.MonkeyPatch) ->
 # Anti-account-lock invariant: no real databento import in the test path.      #
 # --------------------------------------------------------------------------- #
 def test_module_does_not_eagerly_import_databento() -> None:
-    """The 'databento' package is imported inside _open_client only."""
-    import sys
-    import importlib
-    import engine.feed.live as live_mod
+    """The 'databento' package is imported inside _open_client only.
 
-    importlib.reload(live_mod)
-    assert "databento" not in sys.modules
+    Checked in a SUBPROCESS on purpose: importlib.reload() of engine.feed.live
+    swaps the module's class objects in place, which breaks isinstance() for any
+    LiveAdapter built afterwards (the test file's top-level import keeps the old
+    class). A subprocess verifies the invariant without polluting this process's
+    sys.modules / class identities.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import sys, engine.feed.live\n"
+        "assert 'databento' not in sys.modules, 'databento imported eagerly'\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_open_client_uses_factory_when_provided(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -327,9 +341,74 @@ def test_open_client_uses_factory_when_provided(monkeypatch: pytest.MonkeyPatch)
     adapter = LiveAdapter(api_key="not-a-real-key", client_factory=factory)
     chain = adapter.get_chain(INSTRUMENT, TS)
     assert chain.ts == TS
-    # Factory received api_key + dataset kwargs only; we never tried to
-    # actually authenticate against Databento.
-    assert captured == {"api_key": "not-a-real-key", "dataset": "GLBX.MDP3"}
+    # Factory received api_key + dataset + quote_schema kwargs only; we never
+    # tried to actually authenticate against Databento.
+    assert captured == {
+        "api_key": "not-a-real-key",
+        "dataset": "GLBX.MDP3",
+        "quote_schema": "mbp-1",
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Quote schema plumbing (account-safety): the live client must subscribe to    #
+# the operator-chosen QUOTE_SCHEMA, not always the high-volume mbp-1 tick       #
+# stream. bbo-1m is the cheaper per-minute BBO the historical adapter uses.     #
+# --------------------------------------------------------------------------- #
+def test_live_adapter_passes_quote_schema_to_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A quote_schema given to LiveAdapter reaches the client factory."""
+    _arm(monkeypatch)
+    captured: dict[str, Any] = {}
+
+    def factory(**kw: Any) -> Any:
+        captured.update(kw)
+        return FakeLiveClient()
+
+    adapter = LiveAdapter(
+        api_key="not-a-real-key", client_factory=factory, quote_schema="bbo-1m"
+    )
+    adapter.get_chain(INSTRUMENT, TS)
+    assert captured["quote_schema"] == "bbo-1m"
+
+
+def test_live_adapter_default_quote_schema_is_mbp1(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Back-compatible default: mbp-1 when no quote_schema is supplied."""
+    _arm(monkeypatch)
+    captured: dict[str, Any] = {}
+
+    def factory(**kw: Any) -> Any:
+        captured.update(kw)
+        return FakeLiveClient()
+
+    adapter = LiveAdapter(api_key="not-a-real-key", client_factory=factory)
+    adapter.get_chain(INSTRUMENT, TS)
+    assert captured["quote_schema"] == "mbp-1"
+
+
+def test_make_adapter_live_threads_quote_schema_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """make_adapter('live') honors QUOTE_SCHEMA env, mirroring the historical path."""
+    from engine.feed import make_adapter
+
+    _arm(monkeypatch)
+    monkeypatch.setenv("QUOTE_SCHEMA", "bbo-1m")
+    adapter = make_adapter("live", api_key="not-a-real-key")
+    assert isinstance(adapter, LiveAdapter)
+    assert adapter.quote_schema == "bbo-1m"
+
+
+def test_make_adapter_live_explicit_quote_schema_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit quote_schema arg overrides the env var."""
+    from engine.feed import make_adapter
+
+    _arm(monkeypatch)
+    monkeypatch.setenv("QUOTE_SCHEMA", "mbp-1")
+    adapter = make_adapter("live", api_key="not-a-real-key", quote_schema="bbo-1m")
+    assert isinstance(adapter, LiveAdapter)
+    assert adapter.quote_schema == "bbo-1m"
 
 
 # --------------------------------------------------------------------------- #

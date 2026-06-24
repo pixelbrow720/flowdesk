@@ -72,5 +72,10 @@ def make_adapter(
                 "Refusing to construct LiveAdapter without explicit arming "
                 "(see docs/architecture/live-feed-threat-model.md)."
             )
-        return LiveAdapter(api_key=api_key)
+        # Honor the operator's QUOTE_SCHEMA live too (mirrors the historical
+        # branch above). Defaulting live to the high-volume mbp-1 tick stream
+        # while the operator picked bbo-1m would silently blow past the message
+        # budget they sized for on a rate-limited account.
+        schema = quote_schema or os.environ.get("QUOTE_SCHEMA") or "mbp-1"
+        return LiveAdapter(api_key=api_key, quote_schema=schema)
     raise ValueError(f"unknown FEED_MODE {feed_mode!r}; expected 'historical' or 'live'")
