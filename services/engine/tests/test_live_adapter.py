@@ -330,3 +330,74 @@ def test_open_client_uses_factory_when_provided(monkeypatch: pytest.MonkeyPatch)
     # Factory received api_key + dataset kwargs only; we never tried to
     # actually authenticate against Databento.
     assert captured == {"api_key": "not-a-real-key", "dataset": "GLBX.MDP3"}
+
+
+# --------------------------------------------------------------------------- #
+# Record-router regression (databento_dbn 0.80 class names).                   #
+# --------------------------------------------------------------------------- #
+# databento_dbn names the records ``InstrumentDefMsg`` / ``StatMsg`` /
+# ``TradeMsg`` and, for top-of-book, the ALL-CAPS ``MBP1Msg`` / ``BBOMsg``.
+# The router in ``_DatabentoLiveClient._on_record`` keys on the class name; a
+# case-SENSITIVE ``"Mbp1" in rtype`` check silently dropped every quote on 0.80
+# (chain ends up with no bid/ask -> no IV). This guards the case-insensitive fix.
+class _RecHd:
+    def __init__(self, iid: int) -> None:
+        self.instrument_id = iid
+
+
+class _RecordingBook:
+    """Captures which LiveBook mutator the router dispatched to."""
+
+    def __init__(self) -> None:
+        self.routed: list[str] = []
+
+    def add_definition(self, iid: int, **kw: Any) -> None:
+        self.routed.append("definition")
+
+    def add_statistic(self, iid: int, **kw: Any) -> None:
+        self.routed.append("statistic")
+
+    def add_trade(self, iid: int, **kw: Any) -> None:
+        self.routed.append("trade")
+
+    def add_quote(self, iid: int, **kw: Any) -> None:
+        self.routed.append("quote")
+
+
+def _make_record(class_name: str, **fields: Any) -> Any:
+    """Build a stub DBN record whose ``type().__name__`` is *class_name*."""
+    fields.setdefault("hd", _RecHd(1))
+    fields.setdefault("ts_event", int(TS.timestamp() * 1_000_000_000))
+    return type(class_name, (), fields)()
+
+
+@pytest.mark.parametrize(
+    ("class_name", "expected"),
+    [
+        ("InstrumentDefMsg", "definition"),
+        ("StatMsg", "statistic"),
+        ("TradeMsg", "trade"),
+        ("MBP1Msg", "quote"),   # 0.80 top-of-book (was silently dropped)
+        ("BBOMsg", "quote"),    # 0.80 per-minute BBO
+        ("CMBP1Msg", "quote"),
+        ("CBBOMsg", "quote"),
+    ],
+)
+def test_on_record_routes_databento_080_class_names(class_name: str, expected: str) -> None:
+    """Each real databento_dbn 0.80 record name routes to the right book mutator."""
+    import threading
+
+    from engine.feed.live import _DatabentoLiveClient
+
+    stub = _DatabentoLiveClient.__new__(_DatabentoLiveClient)  # bypass network __init__
+    stub._lock = threading.Lock()
+    stub._book = _RecordingBook()
+
+    record = _make_record(
+        class_name,
+        bid_px_00=int(5804.0 * 1_000_000_000),
+        ask_px_00=int(5806.0 * 1_000_000_000),
+    )
+    _DatabentoLiveClient._on_record(stub, record)
+
+    assert stub._book.routed == [expected]

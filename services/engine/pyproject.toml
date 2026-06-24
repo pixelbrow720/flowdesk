@@ -23,8 +23,14 @@ dev = [
 # Only needed to RUN scripts/ingest_databento.py against the live Databento API
 # (network + subscription required). Not needed for the engine, the historical
 # adapter, or the test suite. Pin to your account's supported SDK (see README).
+# NOTE: databento<0.80 caps numpy<2.0, which is UNSATISFIABLE against the
+# numpy==2.0.1 core pin above (the [ingest] install silently resolves to nothing).
+# 0.80.0 is the first line that supports numpy 2.x; its record class names
+# (MBP1Msg/BBOMsg, all-caps) and enum .value encodings are what feed/live.py and
+# feed/live_book.py decode. Validated statically against the installed SDK, NOT
+# yet against a live socket (see live-feed-threat-model.md).
 ingest = [
-    "databento==0.34.0",
+    "databento>=0.80,<0.81",
 ]
 
 [tool.setuptools.packages.find]

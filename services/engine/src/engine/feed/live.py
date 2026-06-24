@@ -451,7 +451,13 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
                     size=getattr(record, "size", 0),
                     side=getattr(record, "side", "N"),
                 )
-            elif "Mbp1" in rtype or "Bbo" in rtype or "Mbp" in rtype:
+            elif "mbp" in rtype.lower() or "bbo" in rtype.lower():
+                # databento_dbn 0.80 names the top-of-book records ``MBP1Msg`` /
+                # ``BBOMsg`` (also CBBOMsg / CMBP1Msg / MBP10Msg). Match
+                # case-INSENSITIVELY: the older spec exposed mixed-case names and a
+                # case-sensitive ``in`` check silently dropped every quote on 0.80,
+                # leaving the chain with no bid/ask (no IV). Validated against the
+                # installed databento_dbn class names, not a live socket.
                 bid, ask = self._top_of_book(record)
                 self._book.add_quote(iid, ts=ts, bid=bid, ask=ask)
 
