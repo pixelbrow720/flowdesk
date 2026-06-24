@@ -412,6 +412,35 @@ def test_make_adapter_live_explicit_quote_schema_wins(
 
 
 # --------------------------------------------------------------------------- #
+# Seed-window regression (live.py _seed_definitions).                          #
+# --------------------------------------------------------------------------- #
+# CME Globex opens ~17:00 ET the prior calendar day (= ~21:00 UTC). The full   #
+# instrument-definition snapshot (all daily 0DTE chains) arrives then. A seed  #
+# window starting at 00:00 UTC today misses that entire block, leaving only    #
+# intraday quarterly updates ($25 spacing) — exactly the bug observed at        #
+# 10:55 ET 2026-06-24: 23 923 symbology mappings, zero daily $5 roots.        #
+def test_seed_window_includes_prior_session_open() -> None:
+    """The seed window MUST cover the prior calendar day's UTC session-open.
+
+    CME Globex session opens ~21:00 UTC the day before. If start=00:00 UTC
+    today, the seed misses the full daily-0DTE snapshot. This test verifies
+    the _seed_definitions source computes start with a timedelta(days=N)
+    offset, not just now.replace(...) which starts at 00:00 UTC today.
+    """
+    import inspect
+    from engine.feed.live import _DatabentoLiveClient
+
+    src = inspect.getsource(_DatabentoLiveClient._seed_definitions)
+    # The fix: start must include a timedelta(days=N) offset. A bare
+    # now.replace(hour=0, ...) starts at 00:00 UTC today and misses the
+    # ~21:00 UTC prior-day session-open snapshot (all daily 0DTE chains).
+    assert "timedelta(days=" in src or "timedelta(days =" in src, (
+        "_seed_definitions computes start at 00:00 UTC today, missing the "
+        "CME session-open snapshot at ~21:00 UTC prior day. "
+        "Use: start = (now - timedelta(days=1)).replace(...)"
+    )
+
+# --------------------------------------------------------------------------- #
 # Record-router regression (databento_dbn 0.80 class names).                   #
 # --------------------------------------------------------------------------- #
 # databento_dbn names the records ``InstrumentDefMsg`` / ``StatMsg`` /

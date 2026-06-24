@@ -332,7 +332,16 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
     """
 
     # Parent symbols cover both options (.OPT) and futures (.FUT) for ES & NQ.
-    _SYMBOLS = ["ES.OPT", "ES.FUT", "NQ.OPT", "NQ.FUT"]
+    #
+    # IMPORTANT: ES daily/weekly 0DTE options live under a SEPARATE parent
+    # (EW.OPT) from ES quarterlies (ES.OPT). Without EW.OPT the live book
+    # assembles with $25 quarterly strikes instead of the contract's $5 0DTE
+    # grid. NQ daily/weekly options ARE under NQ.OPT (same parent), so no
+    # separate NQ weekly parent is needed.
+    _SYMBOLS = [
+        "ES.OPT", "ES.FUT", "NQ.OPT", "NQ.FUT",
+        "EW.OPT",  # ES weekly/daily 0DTE options ($5 spacing)
+    ]
     _QUOTE_SCHEMA_DEFAULT = "mbp-1"
 
     def __init__(
@@ -398,19 +407,21 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
         to the live-stream request budget.
         """
         import databento as db  # type: ignore[import-not-found]
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
 
         now = datetime.now(timezone.utc)
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        # CME Globex session opens at ~17:00 ET the prior calendar day (= ~21:00
+        # UTC). The full instrument-definition snapshot (all daily 0DTE chains,
+        # including $5 strikes) is delivered then. A seed window starting at
+        # 00:00 UTC today would miss that entire block, leaving only intraday
+        # quarterly updates ($25 spacing). Go back one full UTC day to guarantee
+        # coverage.
+        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         # The Databento Historical API has a publishing lag (observed ~10–20 min).
         # Requesting end=now can return 422 because the dataset hasn't caught up
         # yet. Buffer the end by 20 minutes so the seed succeeds even during the
         # lag window — definitions from earlier today are still valid for the
         # rest of the session.
-        try:
-            from datetime import timedelta
-        except ImportError:
-            pass
         end = now - timedelta(minutes=20)
         try:
             hist = db.Historical(key=self._api_key)
