@@ -1,0 +1,13 @@
+# Build context is services/ — keep the image lean and deterministic.
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.egg-info/
+**/.venv/
+**/venv/
+**/tests/
+**/mocks/
+**/node_modules/
+*.log

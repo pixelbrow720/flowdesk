@@ -1,0 +1,107 @@
+# FlowDesk — full backend stack (api + worker + Redis + TimescaleDB).
+#
+# This is the "git clone && docker compose up" entrypoint for a teammate who
+# just wants the backend running on HISTORICAL replay (the beta-safe mode).
+#
+#   cp .env.example .env          # fill in Discord creds + SESSION_SECRET
+#   docker compose up -d --build
+#   curl http://localhost:8000/healthz
+#
+# Live feed is deliberately OFF here (FEED_MODE=historical, LIVE_FEED_ARMED unset).
+# Arming live is an operator procedure — see docs/ops/deploy-runbook.md §5.
+#
+# DATA_DIR must hold the per-schema cached CSVs (definition/ statistics/ trades/
+# bbo-1m/). It is bind-mounted read-only from ./data/cache by default.
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: flowdesk-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  timescale:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: flowdesk-timescale
+    environment:
+      POSTGRES_USER: flowdesk
+      POSTGRES_PASSWORD: flowdesk
+      POSTGRES_DB: flowdesk
+    ports:
+      - "5432:5432"
+    volumes:
+      - flowdesk_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowdesk -d flowdesk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./services
+      dockerfile: Dockerfile
+    image: flowdesk-backend:latest
+    container_name: flowdesk-api
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescale:
+        condition: service_healthy
+    environment:
+      # Datastores point at the compose service names (not localhost).
+      REDIS_URL: redis://redis:6379/0
+      TIMESCALE_DSN: postgres://flowdesk:flowdesk@timescale:5432/flowdesk
+      FEED_MODE: historical
+      DATA_DIR: /data/cache
+      QUOTE_SCHEMA: ${QUOTE_SCHEMA:-bbo-1m}
+      SOFR_RATE: ${SOFR_RATE:-0.0531}
+      # Auth / app config — supply via .env (see .env.example).
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?set DISCORD_CLIENT_ID in .env}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?set DISCORD_CLIENT_SECRET in .env}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_DESK_ROLE_ID: ${DISCORD_DESK_ROLE_ID:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4325,http://localhost:4321}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+      COOKIE_INSECURE: ${COOKIE_INSECURE:-1}
+    volumes:
+      - ./data/cache:/data/cache:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    image: flowdesk-backend:latest
+    container_name: flowdesk-worker
+    depends_on:
+      api:
+        # Wait for the api image to be built + migrations applied on boot.
+        condition: service_started
+      redis:
+        condition: service_healthy
+      timescale:
+        condition: service_healthy
+    command: ["python", "-m", "api.worker"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      TIMESCALE_DSN: postgres://flowdesk:flowdesk@timescale:5432/flowdesk
+      FEED_MODE: historical
+      DATA_DIR: /data/cache
+      QUOTE_SCHEMA: ${QUOTE_SCHEMA:-bbo-1m}
+      SOFR_RATE: ${SOFR_RATE:-0.0531}
+    volumes:
+      - ./data/cache:/data/cache:ro
+
+volumes:
+  flowdesk_pg:
