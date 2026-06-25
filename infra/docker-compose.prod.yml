@@ -1,0 +1,55 @@
+# FlowDesk — PRODUCTION overlay for a single VPS (Docker).
+#
+# Layers ON TOP of the root docker-compose.yml (it does NOT replace it). It adds
+# what a 24/7 public deployment needs that the dev stack omits:
+#   - `restart: unless-stopped` on every service, so the stack survives crashes
+#     and host reboots once the Docker daemon is enabled (`systemctl enable docker`).
+#   - a Caddy TLS reverse proxy in front of the API: automatic Let's Encrypt
+#     certs, HTTP->HTTPS redirect, and WebSocket pass-through. The browser talks
+#     HTTPS/WSS to api.<your-domain>; Caddy forwards to the api container over
+#     the private compose network.
+#
+# The base file already binds the API host port to 127.0.0.1 only, so the API is
+# never reachable on a public interface — Caddy (80/443) is the sole entrypoint.
+#
+# Usage on the VPS (from the repo root):
+#   docker compose -f docker-compose.yml -f infra/docker-compose.prod.yml up -d --build
+#
+# FEED_MODE stays `historical` and LIVE_FEED_ARMED stays unset — same beta-safe
+# posture as the base file. Arming live is an operator procedure: docs/ops/deploy-runbook.md §5.
+
+services:
+  redis:
+    restart: unless-stopped
+
+  timescale:
+    restart: unless-stopped
+
+  api:
+    restart: unless-stopped
+
+  worker:
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: flowdesk-caddy
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Domain + email for the Caddyfile (automatic TLS). Set both in .env.
+      FLOWDESK_API_DOMAIN: ${FLOWDESK_API_DOMAIN:?set FLOWDESK_API_DOMAIN in .env, e.g. api.flowdesk.flowjob.id}
+      FLOWDESK_TLS_EMAIL: ${FLOWDESK_TLS_EMAIL:?set FLOWDESK_TLS_EMAIL in .env for Let's Encrypt}
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,35 @@
+# FlowDesk — Caddy reverse proxy (production, single VPS).
+#
+# Caddy terminates TLS (automatic Let's Encrypt) and forwards to the api
+# container over the private compose network. It handles the WebSocket upgrade
+# transparently, so both REST (/api/*) and WS (/ws, /ws/ticks) work over WSS.
+#
+# {$FLOWDESK_API_DOMAIN} and {$FLOWDESK_TLS_EMAIL} are injected from the
+# environment by docker-compose.prod.yml (set them in .env).
+
+{
+	email {$FLOWDESK_TLS_EMAIL}
+}
+
+{$FLOWDESK_API_DOMAIN} {
+	# Forward everything to the api container. `reverse_proxy` upgrades
+	# WebSocket connections automatically (no extra config needed).
+	reverse_proxy api:8000
+
+	# Security headers. HSTS is safe here because Caddy serves HTTPS only.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Caddy sets the response server token; drop it.
+		-Server
+	}
+
+	encode gzip zstd
+
+	log {
+		output stdout
+		format console
+	}
+}

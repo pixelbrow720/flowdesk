@@ -17,7 +17,9 @@ services:
     image: redis:7-alpine
     container_name: flowdesk-redis
     ports:
-      - "6379:6379"
+      # Loopback only — api/worker reach Redis over the compose network
+      # (redis:6379). Never expose unauthenticated Redis on a public interface.
+      - "127.0.0.1:6379:6379"
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -33,7 +35,9 @@ services:
       POSTGRES_PASSWORD: flowdesk
       POSTGRES_DB: flowdesk
     ports:
-      - "5432:5432"
+      # Loopback only — api/worker reach Postgres over the compose network
+      # (timescale:5432). Never expose the DB (weak default creds) publicly.
+      - "127.0.0.1:5432:5432"
     volumes:
       - flowdesk_pg:/var/lib/postgresql/data
     healthcheck:
@@ -73,7 +77,11 @@ services:
     volumes:
       - ./data/cache:/data/cache:ro
     ports:
-      - "8000:8000"
+      # Bind to loopback only — never expose the API directly on a public
+      # interface. Dev `curl localhost:8000` still works; in production Caddy
+      # (infra/docker-compose.prod.yml) reaches it over the compose network and
+      # is the sole public entrypoint (80/443).
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
       interval: 10s
