@@ -34,15 +34,6 @@ export interface ArcGammaTableProps {
   className?: string;
 }
 
-export interface ArcGammaTableProps {
-  frames: HeatmapFrame[];
-  /** Playhead minute_index for the "now" row marker. -1 hides it. */
-  playheadMinute: number;
-  /** Cap on minute rows displayed (default 14). */
-  maxMinuteRows?: number;
-  className?: string;
-}
-
 export function ArcGammaTable({
   frames,
   playheadMinute,

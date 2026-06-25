@@ -379,15 +379,16 @@ limited beta (50-100 seats), referral-only invites.
   - Fix: Toggle off by default, user must explicitly enable
   - File: Fog page toggle state
 
-- [ ] **Remove dead `regl` dependency**
+- [cancelled] **Remove dead `regl` dependency** — premise wrong (verified 2026-06-25)
   - File: `apps/dashboard/package.json`
-  - Issue: `regl` listed but unclear if used (legacy from deleted heatmap)
-  - Fix: Verify no imports, remove from package.json if dead
+  - Finding: `regl` is NOT dead — it is imported by `apps/dashboard/src/components/fog/glHeatmap.ts`
+    (the WebGL heatmap renderer). Do NOT remove. Integration plan also adds three/regl to FlowJob.
 
-- [ ] **Fix duplicate interface in ArcGammaTable**
+- [x] **Fix duplicate interface in ArcGammaTable** ✅ (2026-06-25)
   - File: `apps/dashboard/src/components/arc/ArcGammaTable.tsx`
-  - Issue: Duplicate interface declaration at lines 28-34 and 37-44
-  - Fix: Remove duplicate, keep one
+  - Issue: `export interface ArcGammaTableProps` declared twice identically (lines 28-35 & 37-44)
+  - Fix: removed the duplicate block, kept one
+  - Verified: dashboard typecheck PASS, build PASS (8/8 static), node:test 72 passed
 
 - [ ] **Add functional settings page**
   - Features: Default instrument, default lens, theme toggle, EXPERIMENTAL toggle
