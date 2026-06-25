@@ -371,6 +371,13 @@ def create_app() -> FastAPI:
     async def health() -> HealthResponse:
         return HealthResponse(status="ok", feed_mode=_feed_mode(), version=__version__)
 
+    # ----- liveness probe (unauthenticated, no body schema) -----
+    # Plain 200 for container / k8s health checks. docker-compose.yml and the
+    # deploy runbook both target /healthz; keep this route in lockstep with them.
+    @app.get("/healthz", include_in_schema=False)
+    async def healthz() -> JSONResponse:
+        return JSONResponse(status_code=200, content={"status": "ok"})
+
     # ----- snapshot (DESK-gated). /api/snapshot is the TASK path; -----
     # ----- /api/snapshot/latest is the PRD #8 §6 path (alias).    -----
     @app.get("/api/snapshot", response_model=Snapshot)
