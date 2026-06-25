@@ -302,11 +302,13 @@ limited beta (50-100 seats), referral-only invites.
   - Added: Auth gate BEFORE accept (same as `/ws`)
   - Added: Rate-limiting, heartbeat, instrument validation
   - Verified: 123/123 API tests passed
+  - Committed: `a1330bd feat(phase-0): security hardening, UX resilience, live tick stream`
 
 - [x] **Add `DEV_AUTH_BYPASS` prod-boot guard** ✅ (2026-06-25)
   - Added: Boot-time check in `_validate_auth_config()` (main.py)
   - Refuses to boot jika `DEV_AUTH_BYPASS=*` and `AUTH_CONFIG_OPTIONAL != "1"`
   - Verified: 123/123 API tests passed, 0 regressions
+  - Committed: `a1330bd`
 
 - [x] **Implement crash-loop detector (F3 mitigation)** ✅ (2026-06-25)
   - Added: `_CrashLoopGuard` class in `services/engine/src/engine/feed/live.py`
@@ -316,12 +318,14 @@ limited beta (50-100 seats), referral-only invites.
   - Unarmed boots never pollute the ledger
   - Default path: `~/.flowdesk/live-arm-attempts.log` (override via `LIVE_ARM_LOG_PATH`)
   - Verified: 472/472 engine tests passed (11 new tests + 14 updated)
+  - Committed: `a1330bd`
 
 - [x] **Dynamic import Three.js / ArcPanel** ✅ (2026-06-25)
   - Added: `next/dynamic` import in `apps/dashboard/src/app/fog/page.tsx`
   - ArcPanel lazy-loaded (not in initial bundle)
   - Bundle size: `/fog` route 177 kB First Load JS (Three.js chunk loaded on demand)
   - Verified: typecheck ✅, build ✅ (8/8 static pages)
+  - Committed: `a1330bd`
 
 - [x] **Add React Error Boundaries** ✅ (2026-06-25)
   - Created: `apps/dashboard/src/components/ErrorBoundary.tsx`
@@ -329,6 +333,7 @@ limited beta (50-100 seats), referral-only invites.
   - Fallback UI: user-friendly messages ("Strike bars unavailable", "Price chart unavailable", etc.)
   - Retry button + console logging
   - Verified: typecheck ✅, build ✅ (177 kB First Load JS)
+  - Committed: `a1330bd`
 
 #### Business Critical Setup
 
