@@ -17,6 +17,7 @@
 /* EXPERIMENTAL levels/metrics are unvalidated (AGENTS.md gap #1).      */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLiveTicks } from "@/lib/useLiveTicks";
 import {
   createChart,
   CandlestickSeries,
@@ -32,6 +33,7 @@ import {
 import type { LevelsChartModel, SessionMetrics } from "@/components/fog/levelsChart";
 import type { FluxSeries } from "@/components/flux/fluxSeries";
 import { DropdownChecklist, type ChecklistItem } from "@/components/terminal/chrome";
+import type { Instrument } from "@/lib/api";
 
 // Levels shown by default (the non-experimental ones).
 const DEFAULT_ON = new Set(["call_wall", "put_wall", "gamma_flip"]);
@@ -53,10 +55,12 @@ const FLUX_LINES = [
 ] as const;
 
 export function LevelsChartPanel({
+  instrument,
   model,
   flux,
   className = "flex-1",
 }: {
+  instrument: Instrument;
   model: LevelsChartModel;
   flux?: FluxSeries;
   className?: string;
@@ -190,6 +194,14 @@ export function LevelsChartPanel({
       fluxLineRef.current = {};
     };
   }, []);
+
+  // Live candle updates: poll /ws/ticks every 5s to refresh the in-progress
+  // 1-min candle (body/wick moves live). Arc panel is unaffected (per-minute).
+  const [liveSeries, setLiveSeries] = useState<ISeriesApi<"Candlestick"> | null>(null);
+  useEffect(() => {
+    setLiveSeries(seriesRef.current);
+  }, []);
+  useLiveTicks(instrument, liveSeries);
 
   // Feed candles + overlay data when the model changes.
   useEffect(() => {

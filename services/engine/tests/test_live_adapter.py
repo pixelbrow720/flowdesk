@@ -30,9 +30,11 @@ from engine.feed.live import (
     BREAKER_WINDOW_SECONDS,
     RECONNECT_MAX_ATTEMPTS,
     LiveAdapter,
+    LiveFeedCrashLoop,
     LiveFeedDegraded,
     LiveFeedNotArmed,
     LiveFeedNotAvailable,
+    _CrashLoopGuard,
 )
 
 
@@ -88,6 +90,15 @@ def _arm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIVE_FEED_ARMED", "1")
 
 
+def _isolated_guard() -> "_CrashLoopGuard":
+    """Create a crash-loop guard with an isolated temp path for testing."""
+    import tempfile
+    from pathlib import Path
+
+    log_path = Path(tempfile.mkdtemp()) / "arm-attempts.log"
+    return _CrashLoopGuard(path=str(log_path))
+
+
 # --------------------------------------------------------------------------- #
 # Arming gate.                                                                 #
 # --------------------------------------------------------------------------- #
@@ -116,7 +127,7 @@ def test_armed_path_uses_factory_not_real_client(monkeypatch: pytest.MonkeyPatch
     """Smoke: with arming + factory, get_chain returns a chain shape."""
     _arm(monkeypatch)
     fake = FakeLiveClient()
-    adapter = LiveAdapter(client_factory=lambda **_: fake)
+    adapter = LiveAdapter(client_factory=lambda **_: fake, crash_loop_guard=_isolated_guard())
     chain = adapter.get_chain(INSTRUMENT, TS)
     assert isinstance(chain, OptionChainMinute)
     assert chain.ts == TS
@@ -137,21 +148,21 @@ class FakeOhlcClient(FakeLiveClient):
 
 def test_get_ohlc_refuses_without_arming(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LIVE_FEED_ARMED", raising=False)
-    adapter = LiveAdapter(client_factory=lambda **_: FakeOhlcClient())
+    adapter = LiveAdapter(client_factory=lambda **_: FakeOhlcClient(), crash_loop_guard=_isolated_guard())
     with pytest.raises(LiveFeedNotArmed):
         adapter.get_ohlc(INSTRUMENT, TS)
 
 
 def test_get_ohlc_delegates_to_client(monkeypatch: pytest.MonkeyPatch) -> None:
     _arm(monkeypatch)
-    adapter = LiveAdapter(client_factory=lambda **_: FakeOhlcClient())
+    adapter = LiveAdapter(client_factory=lambda **_: FakeOhlcClient(), crash_loop_guard=_isolated_guard())
     assert adapter.get_ohlc(INSTRUMENT, TS) == (5000.0, 5010.0, 4995.0, 5005.0)
 
 
 def test_get_ohlc_none_when_client_lacks_method(monkeypatch: pytest.MonkeyPatch) -> None:
     """A client without get_ohlc degrades to None (never raises)."""
     _arm(monkeypatch)
-    adapter = LiveAdapter(client_factory=lambda **_: FakeLiveClient())
+    adapter = LiveAdapter(client_factory=lambda **_: FakeLiveClient(), crash_loop_guard=_isolated_guard())
     assert adapter.get_ohlc(INSTRUMENT, TS) is None
 
 
@@ -168,7 +179,7 @@ def test_breaker_opens_after_threshold_failures(monkeypatch: pytest.MonkeyPatch)
         attempts["n"] += 1
         raise RuntimeError(f"connect failure #{attempts['n']}")
 
-    adapter = LiveAdapter(client_factory=factory, time_source=clock)
+    adapter = LiveAdapter(client_factory=factory, time_source=clock, crash_loop_guard=_isolated_guard())
     # No-op sleep; advance the fake clock so the breaker window logic is
     # exercised against real-ish timestamps.
     monkeypatch.setattr(adapter, "_sleep", lambda s: clock.advance(s))
@@ -197,7 +208,7 @@ def test_breaker_does_not_open_within_threshold(monkeypatch: pytest.MonkeyPatch)
             raise RuntimeError(f"flake {attempts['n']}")
         return fake
 
-    adapter = LiveAdapter(client_factory=factory, time_source=clock)
+    adapter = LiveAdapter(client_factory=factory, time_source=clock, crash_loop_guard=_isolated_guard())
     monkeypatch.setattr(adapter, "_sleep", lambda s: clock.advance(s))
     chain = adapter.get_chain(INSTRUMENT, TS)
     assert isinstance(chain, OptionChainMinute)
@@ -209,7 +220,7 @@ def test_breaker_does_not_open_within_threshold(monkeypatch: pytest.MonkeyPatch)
 def test_breaker_open_persists_across_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """Once OPEN, no auto-recovery — even the test cannot reset it."""
     _arm(monkeypatch)
-    adapter = LiveAdapter(client_factory=lambda **_: FakeLiveClient())
+    adapter = LiveAdapter(client_factory=lambda **_: FakeLiveClient(), crash_loop_guard=_isolated_guard())
     adapter._breaker.opened = True
 
     with pytest.raises(LiveFeedDegraded):
@@ -248,7 +259,7 @@ def test_reconnect_caps_at_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None
         attempts["n"] += 1
         raise RuntimeError("flake")
 
-    adapter = LiveAdapter(client_factory=factory, time_source=clock)
+    adapter = LiveAdapter(client_factory=factory, time_source=clock, crash_loop_guard=_isolated_guard())
     monkeypatch.setattr(adapter, "_sleep", lambda s: clock.advance(s))
     with pytest.raises(LiveFeedNotAvailable):
         adapter.get_chain(INSTRUMENT, TS)
@@ -268,7 +279,7 @@ def test_reconnect_backoff_is_exponential_capped_at_60(
         attempts["n"] += 1
         raise RuntimeError("flake")
 
-    adapter = LiveAdapter(client_factory=factory, time_source=clock)
+    adapter = LiveAdapter(client_factory=factory, time_source=clock, crash_loop_guard=_isolated_guard())
 
     def fake_sleep(s: float) -> None:
         sleeps.append(s)
@@ -293,7 +304,7 @@ def test_connect_is_idempotent_after_success(monkeypatch: pytest.MonkeyPatch) ->
         factory_calls["n"] += 1
         return fake
 
-    adapter = LiveAdapter(client_factory=factory)
+    adapter = LiveAdapter(client_factory=factory, crash_loop_guard=_isolated_guard())
     adapter.get_chain(INSTRUMENT, TS)
     adapter.get_chain(INSTRUMENT, TS)
     adapter.get_forward(INSTRUMENT, TS)
@@ -338,7 +349,7 @@ def test_open_client_uses_factory_when_provided(monkeypatch: pytest.MonkeyPatch)
         captured.update(kw)
         return sentinel
 
-    adapter = LiveAdapter(api_key="not-a-real-key", client_factory=factory)
+    adapter = LiveAdapter(api_key="not-a-real-key", client_factory=factory, crash_loop_guard=_isolated_guard())
     chain = adapter.get_chain(INSTRUMENT, TS)
     assert chain.ts == TS
     # Factory received api_key + dataset + quote_schema kwargs only; we never
@@ -365,7 +376,7 @@ def test_live_adapter_passes_quote_schema_to_factory(monkeypatch: pytest.MonkeyP
         return FakeLiveClient()
 
     adapter = LiveAdapter(
-        api_key="not-a-real-key", client_factory=factory, quote_schema="bbo-1m"
+        api_key="not-a-real-key", client_factory=factory, quote_schema="bbo-1m", crash_loop_guard=_isolated_guard()
     )
     adapter.get_chain(INSTRUMENT, TS)
     assert captured["quote_schema"] == "bbo-1m"
@@ -380,7 +391,7 @@ def test_live_adapter_default_quote_schema_is_mbp1(monkeypatch: pytest.MonkeyPat
         captured.update(kw)
         return FakeLiveClient()
 
-    adapter = LiveAdapter(api_key="not-a-real-key", client_factory=factory)
+    adapter = LiveAdapter(api_key="not-a-real-key", client_factory=factory, crash_loop_guard=_isolated_guard())
     adapter.get_chain(INSTRUMENT, TS)
     assert captured["quote_schema"] == "mbp-1"
 
@@ -509,3 +520,197 @@ def test_on_record_routes_databento_080_class_names(class_name: str, expected: s
     _DatabentoLiveClient._on_record(stub, record)
 
     assert stub._book.routed == [expected]
+
+
+# --------------------------------------------------------------------------- #
+# Crash-loop detector (F3 — k8s restart storm defense).                        #
+# --------------------------------------------------------------------------- #
+class TestCrashLoopGuard:
+    """Unit tests for _CrashLoopGuard: the on-disk arm-attempt ledger.
+
+    The ledger is append-only and survives process restarts — exactly the
+    point of the F3 defense (catches a Kubernetes restart storm before the
+    in-process breaker can even spin up). Each test uses an isolated tmpdir
+    so the operator's real ledger at ~/.flowdesk/ is never touched.
+    """
+
+    def test_allows_arms_within_threshold(self, tmp_path: Any) -> None:
+        """Up to max_arms entries inside the window is fine."""
+        from engine.feed.live import CRASH_LOOP_MAX_ARMS
+
+        log = tmp_path / "arms.log"
+        guard = _CrashLoopGuard(path=str(log))
+        # Exactly max_arms attempts should NOT trip the detector.
+        for _ in range(CRASH_LOOP_MAX_ARMS):
+            guard.check_and_record()  # must not raise
+        assert log.exists()
+
+    def test_refuses_when_over_threshold(self, tmp_path: Any) -> None:
+        """One more arm past the threshold raises LiveFeedCrashLoop."""
+        from engine.feed.live import CRASH_LOOP_MAX_ARMS
+
+        log = tmp_path / "arms.log"
+        guard = _CrashLoopGuard(path=str(log))
+        # Push one entry past the threshold -> refuse on the 4th call.
+        for _ in range(CRASH_LOOP_MAX_ARMS):
+            guard.check_and_record()
+        with pytest.raises(LiveFeedCrashLoop) as exc_info:
+            guard.check_and_record()
+        assert "crash-loop detected" in str(exc_info.value)
+
+    def test_old_entries_outside_window_dont_count(self, tmp_path: Any) -> None:
+        """Arms older than CRASH_LOOP_WINDOW_SECONDS are dropped from the roll."""
+        from engine.feed.live import CRASH_LOOP_MAX_ARMS, CRASH_LOOP_WINDOW_SECONDS
+
+        log = tmp_path / "arms.log"
+        # Pre-seed the log with CRASH_LOOP_MAX_ARMS ancient entries.
+        with log.open("w") as fh:
+            for i in range(CRASH_LOOP_MAX_ARMS):
+                fh.write(f"{float(i)}\n")  # timestamps from 1970, way outside window
+
+        # Inject a clock that's far past the window so all seeded entries are ancient.
+        now = [float(CRASH_LOOP_WINDOW_SECONDS * 20)]
+        guard = _CrashLoopGuard(path=str(log), wall_clock=lambda: now[0])
+        # max_arms fresh calls should succeed: the ancient entries are all dropped.
+        for _ in range(CRASH_LOOP_MAX_ARMS):
+            guard.check_and_record()
+        # The (max_arms+1)th call trips it: now we have max_arms+1 recent entries.
+        with pytest.raises(LiveFeedCrashLoop):
+            guard.check_and_record()
+
+    def test_fails_open_on_read_error(self, tmp_path: Any, caplog: Any) -> None:
+        """If the log can't be read, don't refuse — fail open with a warning."""
+        import logging
+        from unittest.mock import patch
+
+        log = tmp_path / "arms.log"
+        guard = _CrashLoopGuard(path=str(log))
+        with patch("builtins.open", side_effect=OSError("disk I/O")):
+            with caplog.at_level(logging.WARNING, logger="engine.feed.live"):
+                # Must NOT raise LiveFeedCrashLoop.
+                guard.check_and_record()
+        assert any("failing open" in r.message for r in caplog.records)
+
+    def test_fails_open_on_append_error(self, tmp_path: Any, caplog: Any) -> None:
+        """If the log can't be written, don't refuse — fail open with a warning."""
+        import logging
+        from unittest.mock import patch
+
+        log = tmp_path / "arms.log"
+        guard = _CrashLoopGuard(path=str(log))
+        real_open = __builtins__["open"] if isinstance(__builtins__, dict) else open  # type: ignore[index]
+
+        def selective_open(path, mode="r", *a, **kw):  # type: ignore[no-untyped-def]
+            if "a" in mode:
+                raise OSError("disk I/O")
+            return real_open(path, mode, *a, **kw)
+
+        with patch("builtins.open", side_effect=selective_open):
+            with caplog.at_level(logging.WARNING, logger="engine.feed.live"):
+                # Must NOT raise LiveFeedCrashLoop — fail open.
+                guard.check_and_record()
+        assert any("failing open" in r.message for r in caplog.records)
+
+    def test_creates_parent_directory(self, tmp_path: Any) -> None:
+        """If the ledger's parent dir doesn't exist, create it on first append."""
+        log = tmp_path / "deep" / "nested" / "dir" / "arms.log"
+        guard = _CrashLoopGuard(path=str(log))
+        guard.check_and_record()
+        assert log.exists()
+        assert log.read_text().strip() != ""
+
+    def test_tolerates_garbage_lines(self, tmp_path: Any) -> None:
+        """Human-edited / partial lines are dropped, not crashed on."""
+        from engine.feed.live import CRASH_LOOP_MAX_ARMS
+
+        log = tmp_path / "arms.log"
+        # Pre-seed garbage; the parser drops it, not crash, and the roll is 0.
+        log.write_text("# comment\n   \nnot-a-number\n")
+        guard = _CrashLoopGuard(path=str(log))
+        for _ in range(CRASH_LOOP_MAX_ARMS):
+            guard.check_and_record()  # must not raise
+
+
+# --------------------------------------------------------------------------- #
+# Crash-loop integration with LiveAdapter.                                     #
+# --------------------------------------------------------------------------- #
+def test_live_adapter_refuses_when_crash_loop_trips(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fresh LiveAdapter refuses to connect if the ledger is already hot.
+
+    Simulates the k8s-restart-storm scenario: the operator's ledger file
+    already has CRASH_LOOP_MAX_ARMS recent entries. The next boot must
+    refuse BEFORE opening any client.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from engine.feed.live import CRASH_LOOP_MAX_ARMS
+
+    _arm(monkeypatch)
+    log = Path(tempfile.mkdtemp()) / "arms.log"
+    # Pre-seed the ledger with max_arms recent entries.
+    import time as _time
+
+    now = _time.time()
+    with log.open("w") as fh:
+        for i in range(CRASH_LOOP_MAX_ARMS):
+            fh.write(f"{now + i}\n")
+
+    guard = _CrashLoopGuard(path=str(log))
+    adapter = LiveAdapter(
+        client_factory=lambda **_: FakeLiveClient(),
+        crash_loop_guard=guard,
+    )
+    with pytest.raises(LiveFeedCrashLoop):
+        adapter.get_chain(INSTRUMENT, TS)
+
+
+def test_unarmed_boot_does_not_pollute_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unarmed boot must never touch the arm-attempt log (F1, F4).
+
+    Stray/unarmed boots shouldn't pollute the ledger — otherwise a CI run
+    or a FEED_MODE=historical boot could accidentally trip the detector
+    for the next real-armed boot.
+    """
+    import tempfile
+    from pathlib import Path
+
+    monkeypatch.delenv("LIVE_FEED_ARMED", raising=False)
+    log = Path(tempfile.mkdtemp()) / "arms.log"
+    guard = _CrashLoopGuard(path=str(log))
+    adapter = LiveAdapter(
+        client_factory=lambda **_: FakeLiveClient(),
+        crash_loop_guard=guard,
+    )
+    with pytest.raises(LiveFeedNotArmed):
+        adapter.get_chain(INSTRUMENT, TS)
+    # Ledger must not have been touched.
+    assert not log.exists()
+
+
+def test_live_arm_log_path_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LIVE_ARM_LOG_PATH env var overrides the default ledger path."""
+    import tempfile
+    from pathlib import Path
+
+    from engine.feed.live import _default_arm_log_path
+
+    override = str(Path(tempfile.mkdtemp()) / "custom-arms.log")
+    monkeypatch.setenv("LIVE_ARM_LOG_PATH", override)
+    assert _default_arm_log_path() == override
+
+
+def test_live_arm_log_path_defaults_to_flowdesk_dir(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without LIVE_ARM_LOG_PATH, the ledger lives under ~/.flowdesk/."""
+    from engine.feed.live import _default_arm_log_path
+
+    monkeypatch.delenv("LIVE_ARM_LOG_PATH", raising=False)
+    assert _default_arm_log_path().endswith(
+        os.path.join(".flowdesk", "live-arm-attempts.log")
+    )
+
+
+# `os` is needed for os.path.join above.
+import os  # noqa: E402

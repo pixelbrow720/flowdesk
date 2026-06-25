@@ -319,10 +319,123 @@ async def serve(websocket: WebSocket, instrument: str) -> None:
 
 
 def register_ws_routes(app: FastAPI) -> None:
-    """Register ``/ws`` on the FastAPI app."""
+    """Register ``/ws`` and ``/ws/ticks`` on the FastAPI app."""
 
     @app.websocket("/ws")
     async def ws_stream(  # pragma: no cover - thin wrapper around serve()
         websocket: WebSocket, instrument: str = Query(...)
     ) -> None:
         await serve(websocket, instrument)
+
+    @app.websocket("/ws/ticks")
+    async def ws_ticks(  # pragma: no cover - real-time trade tick stream
+        websocket: WebSocket, instrument: str = Query(...)
+    ) -> None:
+        """Stream front-future trade ticks for live candle updates (5s throttled).
+
+        Reads from Redis ``flowdesk:now:{instrument}`` snapshot every 5s and emits
+        a minimal tick payload ``{"type":"tick","price":float,"time":int}`` with
+        the current front-future trade price. Used by the frontend to update the
+        in-progress 1-minute candle in real-time (body/wick moves live).
+
+        DESK-gated (same auth as /ws). Auth gate runs BEFORE accept to prevent
+        unauthenticated connections (mirrors ``serve()``).
+        """
+        import json as _json
+        import time as _time
+
+        # --- rate-limit BEFORE cookie/session work (same as /ws) ---
+        limiter = getattr(websocket.app.state, "rate_limiter", None)
+        if limiter is not None:
+            verdict = await limiter.check("ws_handshake", websocket)
+            if not verdict.allowed:
+                await websocket.close(code=WS_CLOSE_RATE_LIMITED)
+                return
+
+        # --- gating BEFORE accept (same as serve(), PRD #8 AC-A5, T-09) ---
+        if os.environ.get("DEV_AUTH_BYPASS", "").strip() != "1":
+            session = parse_session_cookie(websocket.cookies.get(SESSION_COOKIE))
+            if session is None:
+                await websocket.close(code=WS_CLOSE_NO_SESSION)
+                return
+            session = await _ws_refresh_entitlement(websocket, session)
+            if not session.has_desk and not has_active_grace(session):
+                await websocket.close(code=WS_CLOSE_NO_DESK)
+                return
+
+        if instrument not in VALID_INSTRUMENTS:
+            await websocket.close(code=WS_CLOSE_BAD_INSTRUMENT)
+            return
+
+        state_store = getattr(websocket.app.state, "state_store", None)
+        if state_store is None:
+            await websocket.close(code=WS_CLOSE_UNAVAILABLE)
+            return
+
+        await websocket.accept()
+
+        # --- tick stream: poll every 5s, emit price changes ---
+        last_price: float | None = None
+        last_minute_idx: int | None = None
+        heartbeat_interval = heartbeat_interval_s()
+        try:
+            while True:
+                # Interleave heartbeat with tick polling:
+                # sleep 5s for tick, but also send ping every heartbeat_interval.
+                poll_task = asyncio.create_task(asyncio.sleep(5.0))
+                hb_task = asyncio.create_task(asyncio.sleep(heartbeat_interval))
+                done, pending = await asyncio.wait(
+                    {poll_task, hb_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                for p in pending:
+                    p.cancel()
+                    try:
+                        await p
+                    except BaseException:
+                        pass
+
+                if hb_task in done:
+                    await websocket.send_json({"type": "ping"})
+                    continue  # next iteration will re-sleep for tick
+
+                # tick poll is done — fetch current snapshot
+                snap = await state_store.get_now(instrument)
+                if snap is None:
+                    continue
+                forward = snap.get("forward")
+                ohlc = snap.get("ohlc")
+                minute_idx = snap.get("minute_index")
+                ts = snap.get("ts")
+                if forward is None:
+                    continue
+                price = float(forward)
+                # Only send if price changed or we're in a new candle
+                if price == last_price and minute_idx == last_minute_idx:
+                    continue
+                last_price = price
+                last_minute_idx = minute_idx
+                # Build minimal OHLC from snapshot forward
+                o = ohlc.get("open", price) if ohlc else price
+                h = ohlc.get("high", price) if ohlc else price
+                l = ohlc.get("low", price) if ohlc else price
+                c = price
+                ts_epoch = (
+                    int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp())
+                    if ts
+                    else int(_time.time())
+                )
+                msg = _json.dumps({
+                    "type": "tick",
+                    "time": ts_epoch,
+                    "o": o, "h": h, "l": l, "c": c,
+                    "minute_index": minute_idx,
+                })
+                await websocket.send_text(msg)
+        except (asyncio.CancelledError, WebSocketDisconnect):
+            pass
+        except Exception:
+            try:
+                await websocket.close()
+            except Exception:
+                pass

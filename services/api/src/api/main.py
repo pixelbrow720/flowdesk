@@ -106,7 +106,7 @@ def _validate_cors_config(origins: list[str], *, allow_credentials: bool) -> Non
 def _validate_auth_config() -> None:
     """Fail-fast auth-config validation called at app build (live-readiness).
 
-    Two misconfigs boot clean today but break only once real traffic arrives —
+    Three misconfigs boot clean today but break only once real traffic arrives —
     exactly the kind of silent failure that surfaces at market open:
 
       1. Blank ``SESSION_SECRET`` -> a request carrying a session cookie raises
@@ -114,8 +114,11 @@ def _validate_auth_config() -> None:
       2. Blank ``DESK_ROLE_ID`` / ``DISCORD_DESK_ROLE_ID`` -> the DESK gate
          (``role_id in roles``) can never match -> every authenticated user is
          locked out (403/4403). A silent, total lockout.
+      3. ``DEV_AUTH_BYPASS`` set (any value) -> all access control is disabled;
+         every caller becomes a synthetic DESK operator. This must NEVER reach
+         a production deploy.
 
-    Refuse to boot when either is empty so the misconfig screams in CI/staging,
+    Refuse to boot when any of these holds so the misconfig screams in CI/staging,
     not in prod. ``AUTH_CONFIG_OPTIONAL=1`` opts out (dev / unit tests that do
     not exercise the auth path), mirroring the existing CORS guard's posture.
     """
@@ -137,6 +140,14 @@ def _validate_auth_config() -> None:
             "id silently locks out EVERY user (the role gate can never match). "
             "Set it to the DESK role snowflake or set AUTH_CONFIG_OPTIONAL=1 for "
             "a no-auth dev boot. Refusing to boot."
+        )
+    if os.environ.get("DEV_AUTH_BYPASS", "").strip():
+        raise RuntimeError(
+            "DEV_AUTH_BYPASS is set in the environment. This env var disables ALL "
+            "access control (every caller is treated as a synthetic DESK operator) "
+            "and must NEVER be set in a production/public deploy. "
+            "Unset DEV_AUTH_BYPASS or set AUTH_CONFIG_OPTIONAL=1 for a no-auth dev "
+            "boot. Refusing to boot."
         )
 
 

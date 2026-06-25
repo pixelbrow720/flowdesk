@@ -1,6 +1,8 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
   StrikeGutter,
   MetricBarPanel,
@@ -18,13 +20,17 @@ import {
 import { LevelsChartPanel } from "@/components/fog/LevelsChartPanel";
 import { buildLevelsChart, type LevelsChartModel } from "@/components/fog/levelsChart";
 import { buildFluxSeries, type FluxSeries } from "@/components/flux/fluxSeries";
-import { ArcPanel } from "@/components/arc/ArcPanel";
 import { ArcGammaTable } from "@/components/arc/ArcGammaTable";
 import { TotalHedgingSparklines } from "@/components/arc/TotalHedgingSparklines";
 import { TerminalShell } from "@/components/terminal/TerminalShell";
 import { PanelRule, SegToggle, Toggle } from "@/components/terminal/chrome";
 import { useTerminalFeed } from "@/lib/useTerminalFeed";
 import type { Instrument, SnapshotSurface } from "@/lib/api";
+
+const ArcPanel = dynamic(
+  () => import("@/components/arc/ArcPanel").then((mod) => mod.ArcPanel),
+  { ssr: false, loading: () => <p>Loading 3D surface...</p> },
+);
 
 /**
  * Fog — 0DTE GEX/DEX strike terminal (price/strike axis).
@@ -190,18 +196,22 @@ export default function FogPage() {
               majorShortPrice={majorShortPrice}
             />
             <PanelRule label={metricLabel} />
-          <MetricBarPanel
-            strikes={strikes}
-            metric={metric}
-            label={metricLabel}
-            smile={smile}
-            callPutSmile={callPutSmile}
-            showSmile={showSmile}
-          />
+          <ErrorBoundary fallback={<p className="p-4 font-mono text-[11px] text-bone-3">Strike bars unavailable.</p>}>
+            <MetricBarPanel
+              strikes={strikes}
+              metric={metric}
+              label={metricLabel}
+              smile={smile}
+              callPutSmile={callPutSmile}
+              showSmile={showSmile}
+            />
+          </ErrorBoundary>
           </div>
         </div>
         <PanelRule label="PRICE · LEVELS" />
-        <LevelsChartPanel model={levelsChart} flux={flux} className="grow" />
+        <ErrorBoundary fallback={<p className="p-4 font-mono text-[11px] text-bone-3">Price chart unavailable.</p>}>
+          <LevelsChartPanel instrument={instrument} model={levelsChart} flux={flux} className="grow" />
+        </ErrorBoundary>
       </section>
 
       {/* ARC section — two-panel surface terminal.
@@ -230,20 +240,26 @@ export default function FogPage() {
             total hedging · γ / charm / vanna
             <span className="ml-2 text-bone-3/40">EXPERIMENTAL · live-only</span>
           </p>
-          <TotalHedgingSparklines frames={frames} />
+          <ErrorBoundary fallback={<p className="p-2 font-mono text-[10px] text-bone-3">Sparklines unavailable.</p>}>
+            <TotalHedgingSparklines frames={frames} />
+          </ErrorBoundary>
         </div>
         <div className="grid h-[800px] grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6">
           <div className="flex min-w-0 flex-col gap-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-bone-3">
               γ density · price × minute
             </p>
-            <ArcGammaTable frames={frames} playheadMinute={latest?.minute_index ?? -1} />
+            <ErrorBoundary fallback={<p className="p-2 font-mono text-[10px] text-bone-3">Gamma table unavailable.</p>}>
+              <ArcGammaTable frames={frames} playheadMinute={latest?.minute_index ?? -1} />
+            </ErrorBoundary>
           </div>
           <div className="flex min-w-0 flex-col gap-2">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-bone-3">
               3D surface · σ(K, t)
             </p>
-            <ArcPanel frames={frames} playheadMinute={latest?.minute_index ?? -1} binMinutes={arcBin} />
+            <ErrorBoundary fallback={<p className="p-2 font-mono text-[10px] text-bone-3">3D surface unavailable. Try refreshing.</p>}>
+              <ArcPanel frames={frames} playheadMinute={latest?.minute_index ?? -1} binMinutes={arcBin} />
+            </ErrorBoundary>
           </div>
         </div>
       </section>

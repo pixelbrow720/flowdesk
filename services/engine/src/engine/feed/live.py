@@ -46,10 +46,13 @@ __all__ = [
     "LiveFeedNotAvailable",
     "LiveFeedNotArmed",
     "LiveFeedDegraded",
+    "LiveFeedCrashLoop",
     "BREAKER_FAILURE_THRESHOLD",
     "BREAKER_WINDOW_SECONDS",
     "RECONNECT_MAX_ATTEMPTS",
     "RECONNECT_MAX_WALL_SECONDS",
+    "CRASH_LOOP_MAX_ARMS",
+    "CRASH_LOOP_WINDOW_SECONDS",
 ]
 
 log = logging.getLogger(__name__)
@@ -66,6 +69,10 @@ BREAKER_WINDOW_SECONDS: int = 300
 RECONNECT_MAX_ATTEMPTS: int = 5
 #: Total wall-time cap (seconds) within a single ``_connect()`` invocation.
 RECONNECT_MAX_WALL_SECONDS: int = 300
+#: Max arm attempts allowed within the crash-loop window.
+CRASH_LOOP_MAX_ARMS: int = 3
+#: Rolling window (seconds) over which CRASH_LOOP_MAX_ARMS is counted.
+CRASH_LOOP_WINDOW_SECONDS: int = 600
 
 
 # --------------------------------------------------------------------------- #
@@ -93,6 +100,16 @@ class LiveFeedDegraded(LiveFeedNotAvailable):
 
     The worker must treat this as a permanent (process-lifetime) downgrade
     to ``historical``. There is no automatic recovery; a human restarts.
+    """
+
+
+class LiveFeedCrashLoop(LiveFeedNotAvailable):
+    """Too many arm attempts in a short window — crash-loop detected.
+
+    More than ``CRASH_LOOP_MAX_ARMS`` within ``CRASH_LOOP_WINDOW_SECONDS``
+    on-disk log entries means the process is cycling; refuse to start so
+    a human can investigate. The log file path is configurable via the
+    ``LIVE_ARM_LOG_PATH`` env var (default: ``~/.flowdesk/live-arm-attempts.log``).
     """
 
 
@@ -127,6 +144,123 @@ class _BreakerState:
 
 
 # --------------------------------------------------------------------------- #
+# Crash-loop detector (F3).                                                   #
+# --------------------------------------------------------------------------- #
+def _default_arm_log_path() -> str:
+    """Default on-disk path for the arm-attempts log.
+
+    Returns ``~/.flowdesk/live-arm-attempts.log``; the operator can override
+    with the ``LIVE_ARM_LOG_PATH`` env var. This is a fresh process-level
+    counter (not the in-memory breaker) that catches the
+    crash-then-instantly-restart scenario where k8s / systemd loops faster
+    than any in-process logic can react.
+    """
+    override = os.environ.get("LIVE_ARM_LOG_PATH", "").strip()
+    if override:
+        return override
+    return os.path.join(os.path.expanduser("~"), ".flowdesk", "live-arm-attempts.log")
+
+
+class _CrashLoopGuard:
+    """Persistent, on-disk arm-attempt ledger (F3 crash-loop detector).
+
+    Each successful ``_check_armed()`` appends a unix-timestamp line to the
+    arm-attempts log. A subsequent arm reads the log and refuses if more than
+    ``CRASH_LOOP_MAX_ARMS`` entries fall inside the ``CRASH_LOOP_WINDOW_SECONDS``
+    window. This survives process restarts — the whole point of the F3
+    defense — and is intentionally NOT cleared by a successful connect
+    (that would defeat the detector on a restart storm).
+
+    The log is append-only and append is best-effort: if the filesystem is
+    read-only or the directory cannot be created, the guard FAILS OPEN (no
+    refuse) but emits a loud warning. Account-lock prevention cannot be
+    more reliable than the operator's filesystem.
+    """
+
+    def __init__(
+        self,
+        *,
+        path: Optional[str] = None,
+        max_arms: int = CRASH_LOOP_MAX_ARMS,
+        window_seconds: int = CRASH_LOOP_WINDOW_SECONDS,
+        wall_clock: Callable[[], float] = time.time,
+    ) -> None:
+        self._path = path or _default_arm_log_path()
+        self._max_arms = max_arms
+        self._window_seconds = window_seconds
+        self._now = wall_clock
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    def _read_recent(self) -> list[float]:
+        """Return timestamps from the log file inside the window."""
+        try:
+            with open(self._path, "r", encoding="utf-8") as fh:
+                raw = fh.read()
+        except FileNotFoundError:
+            return []
+        except OSError as exc:
+            log.warning(
+                "live_feed.crash_loop.read_failed path=%s err=%s; "
+                "failing open (no refuse)",
+                self._path, exc,
+            )
+            return []
+        cutoff = self._now() - self._window_seconds
+        out: list[float] = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ts = float(line.split()[0])
+            except (ValueError, IndexError):
+                # Tolerate human-edited / partial lines: drop, don't crash.
+                continue
+            if ts >= cutoff:
+                out.append(ts)
+        return out
+
+    def _append(self) -> None:
+        """Append one timestamp line for this arm attempt. Best-effort."""
+        try:
+            parent = os.path.dirname(self._path)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(self._path, "a", encoding="utf-8") as fh:
+                fh.write(f"{self._now():.6f}\n")
+        except OSError as exc:
+            log.warning(
+                "live_feed.crash_loop.append_failed path=%s err=%s; "
+                "failing open (no refuse)",
+                self._path, exc,
+            )
+
+    def check_and_record(self) -> None:
+        """Append this arm, then raise if the recent-arms threshold is exceeded.
+
+        Order matters: we record FIRST so the storm is visible in the log,
+        THEN refuse on the next read. A refused boot still leaves a trail.
+        """
+        self._append()
+        recent = self._read_recent()
+        if len(recent) > self._max_arms:
+            log.error(
+                "live_feed.crash_loop.detected path=%s recent_arms=%d "
+                "max=%d window_seconds=%d",
+                self._path, len(recent), self._max_arms, self._window_seconds,
+            )
+            raise LiveFeedCrashLoop(
+                f"crash-loop detected: {len(recent)} arm attempts in the last "
+                f"{self._window_seconds}s exceeds threshold {self._max_arms}; "
+                f"inspect {self._path} and clear it before re-arming (see "
+                f"docs/architecture/live-feed-threat-model.md, F3)."
+            )
+
+
+# --------------------------------------------------------------------------- #
 # LiveAdapter.                                                                 #
 # --------------------------------------------------------------------------- #
 class LiveAdapter(FeedAdapter):
@@ -150,6 +284,7 @@ class LiveAdapter(FeedAdapter):
         time_source: Callable[[], float] = time.monotonic,
         rate: float = 0.0,
         quote_schema: str = "mbp-1",
+        crash_loop_guard: Optional["_CrashLoopGuard"] = None,
     ) -> None:
         self.api_key = api_key
         self.dataset = dataset
@@ -167,6 +302,10 @@ class LiveAdapter(FeedAdapter):
         self._client_factory = client_factory
         self._time = time_source
         self._breaker = _BreakerState()
+        # F3 crash-loop detector: persistent across restarts. Tests inject a
+        # tmp-path + fake-wall-clock guard so they stay deterministic, sub-second,
+        # and never pollute the operator's real ledger at ~/.flowdesk/.
+        self._crash_loop_guard = crash_loop_guard or _CrashLoopGuard()
 
     # -- gating ------------------------------------------------------------ #
     @staticmethod
@@ -180,6 +319,10 @@ class LiveAdapter(FeedAdapter):
                 "LiveAdapter is not armed. Set LIVE_FEED_ARMED=1 to acknowledge "
                 "real-account contact (see docs/architecture/live-feed-threat-model.md)."
             )
+        # F3: only count an "arm" once the operator has explicitly armed. This
+        # sits AFTER the not-armed refuse so a stray/unarmed process boot never
+        # pollutes the crash-loop ledger (and never trips it either).
+        self._crash_loop_guard.check_and_record()
 
     def _check_breaker(self) -> None:
         if self._breaker.opened:

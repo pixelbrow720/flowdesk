@@ -34,6 +34,12 @@ export function wsUrlFor(instrument: Instrument): string {
   return `${ws}/ws?instrument=${instrument}`;
 }
 
+/** WS: real-time tick stream for live candle updates (5s throttled). */
+export function wsTicksUrlFor(instrument: Instrument): string {
+  const ws = API_BASE_URL.replace(/^http(s?):\/\//, (_m, s) => `ws${s}://`);
+  return `${ws}/ws/ticks?instrument=${instrument}`;
+}
+
 /** Static last-resort: a pre-generated full-session JSON under public/data. */
 export function staticUrlFor(instrument: Instrument, date: string): string {
   return `/data/${instrument}_${date}.json`;
