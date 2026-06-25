@@ -89,8 +89,10 @@ Three ecosystems are managed **separately**:
 
 ## 4. Verification — run after EVERY change
 
-There is **no CI** (`.github/` does not exist) and no pre-commit hook. The
-checks below are the *only* gate; you must run them locally.
+CI exists (`.github/workflows/ci.yml`, 2 jobs: `python` runs engine+api pytest
+as a hard gate with ruff/mypy advisory; `contracts` runs the TS typecheck + zod
+validate). There is no pre-commit hook. Run the checks below locally too — CI is
+a backstop, not a substitute for verifying before you push.
 
 ```bash
 # Engine — both linters are strict and gated by mypy strict mode.

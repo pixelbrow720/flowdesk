@@ -20,8 +20,9 @@ the **methodologically weakest version of the core signal** and is
 - **Deterministic, pure engine** with a golden fixture. Same inputs → same Snapshot.
 - **Cross-language contract** byte-for-byte mirrored (pydantic ↔ zod), with a
   validate step that accepts the example and rejects malformed input.
-- **Good test coverage** of the plumbing: 442 engine tests, 116 API tests
-  (re-counted via `pytest --collect-only` on 2026-06-19), closed-form Black-76
+- **Good test coverage** of the plumbing: 472 engine tests, 123 API tests
+  (re-counted via `pytest` on 2026-06-25; was 442/116 on 2026-06-19 before the
+  Phase 0 security-hardening additions), closed-form Black-76
   checks, IV convergence, exposure signs, field invariant, level extraction,
   FLUX signing, auth/entitlement/state.
 - **Clean separation**: engine is calendar-free; the API owns time/state.

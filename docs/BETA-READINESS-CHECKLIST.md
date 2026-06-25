@@ -280,7 +280,9 @@ limited beta (50-100 seats), referral-only invites.
 **Business gaps:**
 - TAM very small (niche within niche)
 - Validation 2/10 = high churn risk (traders outcome-driven, churn in 1-2 months if no edge)
-- No billing/payment system (Stripe/Paddle)
+- Billing not handled inside FlowDesk itself — it lives externally at flowjob.id
+  (Midtrans + Supabase), with the DESK Discord role as the access gate. This is a
+  deliberate split, not a gap; the dependency on flowjob.id is the real risk to track.
 - No social proof/testimonials
 - Discord dependency for auth
 - No expandability to other instruments in roadmap
@@ -466,7 +468,7 @@ limited beta (50-100 seats), referral-only invites.
   - Action: Prioritize by impact/frequency
 
 - [ ] **Monitor churn rate**
-  - Metric: Monthly churn rate via Stripe dashboard
+  - Metric: Monthly churn rate via the flowjob.id billing dashboard (Midtrans + Supabase)
   - Target: <10% for beta
   - Action: If churn >15%, interview 5 churned users within 48h
 
@@ -548,7 +550,7 @@ limited beta (50-100 seats), referral-only invites.
 - [ ] **Create affiliate program**
   - Commission: 20-30% recurring for first 12 months
   - Target: Trading educators, content creators, Discord community leaders
-  - Platform: Rewardful or custom Stripe integration
+  - Platform: built on flowjob.id's existing Midtrans + Supabase billing (not Stripe — FlowDesk has no Stripe integration)
 
 - [ ] **Build community features**
   - In-app: User profiles, shared levels annotation, chat
