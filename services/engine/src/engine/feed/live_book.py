@@ -45,8 +45,9 @@ as provisional until an operator validates it through the runbook.
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import TYPE_CHECKING, Optional
 from zoneinfo import ZoneInfo
 
@@ -456,6 +457,65 @@ class LiveBook:
                 )
         out.sort(key=lambda r: r[0])
         return [tr for _, tr in out]
+
+    # -- diagnostics (read-only; no behaviour change) ---------------------- #
+    def describe_definitions(self, instr: str, ts: datetime) -> str:
+        """Summarise the option definitions in the book, grouped by expiry.
+
+        Pure/read-only. Built for the live-seed diagnostic: when the live chain
+        shows the wrong strike grid, this answers the decisive question —
+        was the $5 daily 0DTE grid SEEDED at all, or seeded-but-not-SELECTED?
+
+        For each expiry (ET date) it reports: leg count, near-money strike
+        spacing mode (the $5-vs-$25 tell), root-symbol prefixes, and how many
+        legs already carry a quote (the ``_coverage`` signal that
+        :meth:`_select_0dte_expiry` uses). The expiry this book WOULD pick for
+        ``ts`` is flagged ``<-- SELECTED``.
+        """
+        instr = instr.upper()
+        ts = ensure_utc_minute(ts)
+        session_date = ts.astimezone(NY_TZ).date()
+        selected = self._select_0dte_expiry(instr, ts)
+
+        # Bucket option legs by their ET expiry date.
+        by_exp: dict[date, list[LiveLegDef]] = {}
+        for d in self._defs.values():
+            if d.instrument != instr or d.kind not in ("call", "put"):
+                continue
+            if d.expiration is None or d.strike is None:
+                continue
+            key = d.expiration.astimezone(NY_TZ).date()
+            by_exp.setdefault(key, []).append(d)
+
+        lines = [
+            f"[live-diag] {instr} @ {ts.isoformat()} session_date={session_date} "
+            f"total_opt_legs={sum(len(v) for v in by_exp.values())} "
+            f"selected_expiry={selected.isoformat() if selected else None}"
+        ]
+        for exp_date in sorted(by_exp):
+            legs = by_exp[exp_date]
+            strikes = sorted({float(d.strike) for d in legs if d.strike is not None})
+            # Near-money spacing mode: diffs between consecutive strikes in a
+            # band around the current forward (falls back to all strikes).
+            try:
+                fwd = self._forward(instr, ts, None)
+            except Exception:
+                fwd = strikes[len(strikes) // 2] if strikes else 0.0
+            band = [s for s in strikes if abs(s - fwd) <= 250.0] or strikes
+            diffs = Counter(
+                round(band[i + 1] - band[i], 2) for i in range(len(band) - 1)
+            )
+            spacing = diffs.most_common(3)
+            roots = Counter(d.raw_symbol.split(" ")[0][:3] for d in legs if d.raw_symbol)
+            quoted = sum(1 for d in legs if d.instrument_id in self._quotes)
+            is_same_day = exp_date == session_date
+            mark = " <-- SELECTED" if selected and exp_date == selected.astimezone(NY_TZ).date() else ""
+            lines.append(
+                f"  exp {exp_date} same_day={is_same_day} legs={len(legs)} "
+                f"quoted_legs={quoted} near_money_spacing={spacing} "
+                f"roots={dict(roots.most_common(4))}{mark}"
+            )
+        return "\n".join(lines)
 
     # -- internals --------------------------------------------------------- #
     def _select_0dte_expiry(self, instr: str, ts: datetime) -> Optional[datetime]:

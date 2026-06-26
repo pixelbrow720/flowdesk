@@ -394,3 +394,77 @@ def test_get_ohlc_none_without_front_future() -> None:
     book = LiveBook()
     assert book.get_ohlc("ES", TS) is None
 
+
+# --------------------------------------------------------------------------- #
+# describe_definitions — read-only seed diagnostic for the $5-vs-$25 bug.       #
+# The decisive question: was the $5 daily-0DTE grid SEEDED, and is it SELECTED, #
+# or only a coarse $25 quarterly grid? Encodes the 2026-06-25 diagnosis.        #
+# --------------------------------------------------------------------------- #
+def _seed_five_dollar_grid(book: LiveBook) -> None:
+    """Seed a clean $5 daily-0DTE grid (5800..5820) with quotes, plus a front future."""
+    book.add_definition(
+        1, raw_symbol="ESM6", instrument_class="F", strike=None,
+        expiration=_ns(datetime(2026, 6, 19, 13, 30, tzinfo=timezone.utc)), asset="ES",
+    )
+    book.add_quote(1, ts=_ns(TS), bid=_px(5804.0), ask=_px(5806.0))  # forward ~5805
+    iid = 100
+    for strike in (5800.0, 5805.0, 5810.0, 5815.0, 5820.0):
+        book.add_definition(
+            iid, raw_symbol=f"E2BM6 C{int(strike)}", instrument_class="C",
+            strike=_px(strike), expiration=_ns(EXPIRY), asset="E2B",
+        )
+        book.add_quote(iid, ts=_ns(TS), bid=_px(10.0), ask=_px(12.0))
+        iid += 1
+
+
+def test_describe_definitions_reports_five_dollar_spacing_and_selected() -> None:
+    """A seeded $5 daily grid is reported with $5 spacing and flagged SELECTED."""
+    book = LiveBook()
+    _seed_five_dollar_grid(book)
+    out = book.describe_definitions("ES", TS)
+    # Header names the instrument and the expiry the book WOULD select.
+    assert "[live-diag] ES" in out
+    assert "selected_expiry=2026-06-09" in out
+    # The same-day $5 expiry line shows 5.0 spacing, has quotes, and is SELECTED.
+    line = next(ln for ln in out.splitlines() if "exp 2026-06-09" in ln)
+    assert "same_day=True" in line
+    assert "(5.0," in line  # near-money spacing mode is $5
+    assert "quoted_legs=5" in line
+    assert "<-- SELECTED" in line
+
+
+def test_describe_definitions_exposes_quarterly_contaminant_spacing() -> None:
+    """A $25 quarterly grid on a DIFFERENT expiry is reported with $25 spacing.
+
+    This is the diagnostic tell for the live bug: when the $5 daily grid is NOT
+    seeded, only the coarse $25 expiry remains and the chain falls back to it.
+    """
+    book = LiveBook()
+    _seed_five_dollar_grid(book)
+    # A later quarterly expiry, $25 grid, NO quotes (definition-only contaminant).
+    quarterly_exp = datetime(2026, 6, 19, 20, 0, tzinfo=timezone.utc)
+    iid = 200
+    for strike in (5775.0, 5800.0, 5825.0, 5850.0):
+        book.add_definition(
+            iid, raw_symbol=f"ESM6 C{int(strike)}", instrument_class="C",
+            strike=_px(strike), expiration=_ns(quarterly_exp), asset="ES",
+        )
+        iid += 1
+    out = book.describe_definitions("ES", TS)
+    q_line = next(ln for ln in out.splitlines() if "exp 2026-06-19" in ln)
+    assert "same_day=False" in q_line
+    assert "(25.0," in q_line  # quarterly $25 spacing tell
+    assert "quoted_legs=0" in q_line
+    assert "<-- SELECTED" not in q_line  # the quoted same-day $5 grid wins
+    # And the same-day $5 grid is still the SELECTED one.
+    daily_line = next(ln for ln in out.splitlines() if "exp 2026-06-09" in ln)
+    assert "<-- SELECTED" in daily_line
+
+
+def test_describe_definitions_empty_book_is_safe() -> None:
+    """No definitions -> a header with zero legs and no selected expiry (no crash)."""
+    book = LiveBook()
+    out = book.describe_definitions("ES", TS)
+    assert "total_opt_legs=0" in out
+    assert "selected_expiry=None" in out
+

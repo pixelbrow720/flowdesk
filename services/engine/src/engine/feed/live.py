@@ -524,6 +524,24 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
         seeded = self._seed_definitions()
         log.warning("live feed: seeded %d instrument definitions from Historical", seeded)
 
+        # DIAGNOSTIC (read-only): dump what the seed actually captured, grouped
+        # by expiry, so a wrong strike grid in the live chain is debuggable from
+        # logs alone. The decisive question this answers: was the $5 daily-0DTE
+        # grid SEEDED at all (right expiry present with $5 near-money spacing),
+        # or only quarterly ($25) expiries — which would force _select_0dte_expiry
+        # to fall back to a coarse contract. Logged once at boot for ES and NQ.
+        try:
+            from datetime import datetime as _dt, timezone as _tz
+
+            _now = _dt.now(_tz.utc)
+            for _instr in ("ES", "NQ"):
+                log.warning(
+                    "live feed seed diagnostic:\n%s",
+                    self._book.describe_definitions(_instr, _now),
+                )
+        except Exception as _diag_exc:  # never let diagnostics break boot
+            log.warning("live feed seed diagnostic failed (non-fatal): %s", _diag_exc)
+
         self._client = db.Live(key=api_key)
         # Live-stream the DYNAMIC schemas only. We also keep a live `definition`
         # subscription: it won't resend existing instruments (hence the seed
