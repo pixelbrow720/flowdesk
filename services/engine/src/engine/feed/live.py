@@ -73,6 +73,12 @@ RECONNECT_MAX_WALL_SECONDS: int = 300
 CRASH_LOOP_MAX_ARMS: int = 3
 #: Rolling window (seconds) over which CRASH_LOOP_MAX_ARMS is counted.
 CRASH_LOOP_WINDOW_SECONDS: int = 600
+#: Lookback (days) for the definition seed pull. The `definition` schema is a
+#: point-in-time change stream, so today's 0DTE grid is only returned if its
+#: listing/re-publish dates fall in [start, end). CME lists daily/weekly 0DTE
+#: chains ~2-3 weeks ahead and re-publishes weekly; 45 days comfortably covers
+#: the listing of any same-day expiry while staying one bounded HTTP request.
+SEED_LOOKBACK_DAYS: int = 45
 
 
 # --------------------------------------------------------------------------- #
@@ -474,17 +480,34 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
     ``get_chain`` / ``get_forward`` / ``get_flux_trades`` readers (lock-guarded).
     """
 
-    # Parent symbols cover both options (.OPT) and futures (.FUT) for ES & NQ.
+    # Parent symbols for the live subscription + the definition seed.
     #
-    # IMPORTANT: ES daily/weekly 0DTE options live under a SEPARATE parent
-    # (EW.OPT) from ES quarterlies (ES.OPT). Without EW.OPT the live book
-    # assembles with $25 quarterly strikes instead of the contract's $5 0DTE
-    # grid. NQ daily/weekly options ARE under NQ.OPT (same parent), so no
-    # separate NQ weekly parent is needed.
-    _SYMBOLS = [
-        "ES.OPT", "ES.FUT", "NQ.OPT", "NQ.FUT",
-        "EW.OPT",  # ES weekly/daily 0DTE options ($5 spacing)
-    ]
+    # ROOT-CAUSE FIX (2026-06-26, verified against real GLBX definitions):
+    # The daily/weekly 0DTE families do NOT live under `ES.OPT`/`EW.OPT`.
+    # `ES.OPT` resolves to the QUARTERLY E-mini options only; `EW.OPT` to the
+    # monthly/standard weeklies. Today's 0DTE (e.g. Fri 2026-06-26) carries the
+    # parent `asset` root `EW4` (ES) / `QN4` (NQ), and the Mon-Thu dailies use
+    # `E{week}{A..D}` / `Q{week}{A..D}`. With only ES.OPT/EW.OPT the seed + stream
+    # never receive today's $5 daily grid, so the chain falls back to a wrong
+    # far/quarterly expiry (the live $25 / 4-days-out bug). Enumerate the full
+    # daily + weekly parent families so any weekday's 0DTE is covered; the
+    # same-day expiry filter in LiveBook drops the non-today families.
+    #
+    # ES daily roots: E{1..5}{A..D} (Mon-Thu, 5 weeks) + EW{1..4} (Fri) + EW (EOM)
+    #                 + ES (quarterly). NQ mirrors with Q{1..5}{A..D} + QN{1..4}
+    #                 + QNE + NQ. NOTE: parent-string resolution for these daily
+    #                 roots is confirmed present in real definition data but the
+    #                 LIVE-edge `.OPT` parent resolution must be confirmed by the
+    #                 bounded probe before trusting a live run (see daily note).
+    _ES_DAILY_ROOTS = [f"E{w}{d}" for w in range(1, 6) for d in ("A", "B", "C", "D")]
+    _ES_WEEKLY_ROOTS = ["EW1", "EW2", "EW3", "EW4", "EW"]
+    _NQ_DAILY_ROOTS = [f"Q{w}{d}" for w in range(1, 6) for d in ("A", "B", "C", "D")]
+    _NQ_WEEKLY_ROOTS = ["QN1", "QN2", "QN3", "QN4", "QNE"]
+    _SYMBOLS = (
+        ["ES.FUT", "NQ.FUT", "ES.OPT", "NQ.OPT"]
+        + [f"{r}.OPT" for r in _ES_DAILY_ROOTS + _ES_WEEKLY_ROOTS]
+        + [f"{r}.OPT" for r in _NQ_DAILY_ROOTS + _NQ_WEEKLY_ROOTS]
+    )
     _QUOTE_SCHEMA_DEFAULT = "mbp-1"
 
     def __init__(
@@ -571,13 +594,21 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
         from datetime import datetime, timedelta, timezone
 
         now = datetime.now(timezone.utc)
-        # CME Globex session opens at ~17:00 ET the prior calendar day (= ~21:00
-        # UTC). The full instrument-definition snapshot (all daily 0DTE chains,
-        # including $5 strikes) is delivered then. A seed window starting at
-        # 00:00 UTC today would miss that entire block, leaving only intraday
-        # quarterly updates ($25 spacing). Go back one full UTC day to guarantee
-        # coverage.
-        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Seed window must span the full PUBLICATION history of today's 0DTE
+        # definitions, NOT just the prior session. The `definition` schema is a
+        # POINT-IN-TIME change stream: a `get_range` returns only definition
+        # records PUBLISHED inside [start, end), not every instrument active in
+        # the window (verified against the Databento docs + real GLBX archives,
+        # security_update_action A/M/D). Today's daily 0DTE grid is listed weeks
+        # ahead (e.g. the 2026-06-26 EW4 $5 grid was first published 2026-05-31,
+        # re-published 2026-06-07, then only sparse near-money increments since).
+        # A `now - 1 day` window therefore catches only those sparse increments
+        # — a near-empty grid — even with the correct parent symbols. Go back far
+        # enough to include the listing/weekly-republish, while staying a single
+        # bounded HTTP request (NOT a stream) so the rate-limited account is safe.
+        start = (now - timedelta(days=SEED_LOOKBACK_DAYS)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         # The Databento Historical API has a publishing lag (observed ~10–20 min).
         # Requesting end=now can return 422 because the dataset hasn't caught up
         # yet. Buffer the end by 20 minutes so the seed succeeds even during the
@@ -611,6 +642,7 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
                 strike=getattr(r, "strike_price", None),
                 expiration=getattr(r, "expiration", None),
                 asset=getattr(r, "asset", ""),
+                underlying=getattr(r, "underlying", ""),
             )
             n += 1
         if n == 0:
@@ -637,6 +669,7 @@ class _DatabentoLiveClient:  # pragma: no cover - real network / threading
                     strike=getattr(record, "strike_price", None),
                     expiration=getattr(record, "expiration", None),
                     asset=getattr(record, "asset", ""),
+                    underlying=getattr(record, "underlying", ""),
                 )
             elif "Stat" in rtype:
                 self._book.add_statistic(

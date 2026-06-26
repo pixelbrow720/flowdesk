@@ -97,6 +97,36 @@ def test_instrument_of() -> None:
     assert instrument_of("", "???") is None
 
 
+def test_instrument_of_underlying_rejects_lookalikes() -> None:
+    """The settling future (`underlying`) is the reliable discriminator.
+
+    Verified against real GLBX definitions for the 2026-06-26 expiry: micro
+    E-mini (asset EX4, underlying MESU6) and Ether options (asset ETH,
+    underlying ETHM6) share an `E`-rooted asset and a daily 0DTE expiry. The
+    old asset-prefix heuristic mis-tagged both as ES, polluting the ES chain
+    with a foreign strike grid. With the underlying they are rejected.
+    """
+    # Full-size daily 0DTE roots resolve correctly via underlying.
+    assert instrument_of("EW4", "EW4M6 C6800", "ESU6") == "ES"
+    assert instrument_of("E4D", "E4DM6 C6800", "ESU6") == "ES"
+    assert instrument_of("QN4", "QN4M6 C25000", "NQU6") == "NQ"
+    assert instrument_of("Q4D", "Q4DM6 C25000", "NQU6") == "NQ"
+    # Look-alikes sharing an E-root + same expiry are REJECTED by underlying.
+    assert instrument_of("EX4", "EX4M6 C6800", "MESU6") is None  # micro E-mini
+    assert instrument_of("ETH", "ETHM6 C2500", "ETHM6") is None  # Ether option
+    assert instrument_of("MQ4", "MQ4M6 C25000", "MNQU6") is None  # micro NQ
+    # underlying takes precedence over a (would-be ES) asset prefix.
+    assert instrument_of("E2B", "E2BM6 C5800", "MESU6") is None
+
+
+def test_instrument_of_falls_back_without_underlying() -> None:
+    """Absent an underlying (some futures defs), the asset/root heuristic stands
+    so existing callers/tests that omit it keep working."""
+    assert instrument_of("E2B", "E2BM6 C5800") == "ES"
+    assert instrument_of("Q2B", "Q2BM6 P20000") == "NQ"
+    assert instrument_of("ES", "ESM6", "") == "ES"
+
+
 # --------------------------------------------------------------------------- #
 # Assembly: a small ES chain with a future + two strikes.                      #
 # --------------------------------------------------------------------------- #
@@ -220,6 +250,76 @@ def test_0dte_expiry_selection_prefers_quoted_legs() -> None:
     # 5800 + 5810 = 2 strikes only (the contaminant shares 5800 but maps to the
     # other expiry, which is not selected).
     assert chain.strikes() == [5800.0, 5810.0]
+
+
+def test_micro_and_foreign_lookalikes_excluded_from_chain() -> None:
+    """A real-data contamination case: micro E-mini (MESU6) and Ether (ETHM6)
+    options share an E-root and the same 0DTE expiry as full-size ES. They must
+    NOT appear in the ES chain. Reproduces the live-path gap where no upstream
+    underlying filter exists (the historical CSV path is pre-filtered).
+    """
+    book = LiveBook()
+    # Front future + a legit full-size ES 0DTE strike (underlying ESU6).
+    book.add_definition(
+        1, raw_symbol="ESU6", instrument_class="F", strike=None,
+        expiration=_ns(datetime(2026, 9, 18, 13, 30, tzinfo=timezone.utc)),
+        asset="ES", underlying="ESU6",
+    )
+    book.add_quote(1, ts=_ns(TS), bid=_px(5804.0), ask=_px(5806.0))
+    book.add_definition(
+        10, raw_symbol="EW4M6 C5800", instrument_class="C", strike=_px(5800.0),
+        expiration=_ns(EXPIRY), asset="EW4", underlying="ESU6",
+    )
+    book.add_quote(10, ts=_ns(TS), bid=_px(10.0), ask=_px(12.0))
+    # Contaminants: same ET expiry date, E-rooted asset, but foreign underlying.
+    book.add_definition(
+        20, raw_symbol="EX4M6 C5807", instrument_class="C", strike=_px(5807.0),
+        expiration=_ns(EXPIRY), asset="EX4", underlying="MESU6",  # micro E-mini
+    )
+    book.add_quote(20, ts=_ns(TS), bid=_px(2.0), ask=_px(3.0))
+    book.add_definition(
+        30, raw_symbol="ETHM6 C2500", instrument_class="C", strike=_px(2500.0),
+        expiration=_ns(EXPIRY), asset="ETH", underlying="ETHM6",  # Ether option
+    )
+    book.add_quote(30, ts=_ns(TS), bid=_px(5.0), ask=_px(6.0))
+    chain = book.get_chain("ES", TS)
+    # Only the full-size ES strike survives; micro 5807 + Ether 2500 are dropped.
+    assert chain.strikes() == [5800.0]
+
+
+def test_no_same_day_expiry_yields_empty_chain_not_wrong_grid() -> None:
+    """No same-day 0DTE expiry seeded -> empty option chain (awaiting data),
+    NOT a silent fall-back to a far future / quarterly expiry.
+
+    Reproduces the 2026-06-26 live bug: when today's $5 0DTE definitions were
+    never seeded, _select_0dte_expiry fell back to ``future[0]`` and emitted the
+    WRONG expiry's grid (ES a 4-day-out $5 expiry; NQ a 3-month $250 quarterly).
+    For a 0DTE product the only valid expiry is today's; absent it, the chain
+    must be empty so the UI shows awaiting-data instead of a wrong grid.
+    """
+    book = LiveBook()
+    # Front future so the forward still resolves (awaiting OPTION data, not forward).
+    book.add_definition(
+        1, raw_symbol="ESM6", instrument_class="F", strike=None,
+        expiration=_ns(datetime(2026, 6, 19, 13, 30, tzinfo=timezone.utc)), asset="ES",
+    )
+    book.add_quote(1, ts=_ns(TS), bid=_px(5804.0), ask=_px(5806.0))
+    # ONLY a far-future expiry (4 trading days out), WITH quotes — mirrors the
+    # live ES case where today's 0DTE was never seeded so a future expiry won.
+    future_exp = datetime(2026, 6, 30, 20, 0, tzinfo=timezone.utc)
+    iid = 100
+    for strike in (5800.0, 5805.0, 5810.0):
+        book.add_definition(
+            iid, raw_symbol=f"E2BM6 C{int(strike)}", instrument_class="C",
+            strike=_px(strike), expiration=_ns(future_exp), asset="E2B",
+        )
+        book.add_quote(iid, ts=_ns(TS), bid=_px(10.0), ask=_px(12.0))
+        iid += 1
+    # The selector must REFUSE (no same-day expiry), not pick the far expiry.
+    assert book._select_0dte_expiry("ES", TS) is None
+    # And get_chain must emit no option rows (empty = awaiting data).
+    chain = book.get_chain("ES", TS)
+    assert chain.strikes() == []
 
 
 def test_reset_session_clears_volume_keeps_defs() -> None:

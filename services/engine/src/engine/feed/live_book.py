@@ -192,13 +192,42 @@ def decode_side(raw: object) -> str:
     return s if s in ("B", "A", "N") else "N"
 
 
-def instrument_of(asset: object, raw_symbol: object) -> Optional[str]:
-    """Map a definition ``asset`` / ``raw_symbol`` to ``"ES"`` or ``"NQ"``.
+def instrument_of(
+    asset: object, raw_symbol: object, underlying: object = ""
+) -> Optional[str]:
+    """Map a definition to ``"ES"`` or ``"NQ"`` (full-size E-mini only).
 
-    Mirrors ``scripts/convert_dbn_to_csv.py``: futures asset is literally ES/NQ;
-    option roots start with ``E`` (-> ES) or ``Q`` (-> NQ). Falls back to the
-    symbol root when the asset is ambiguous.
+    The ``underlying`` (the futures contract the option settles into) is the
+    most reliable discriminator and is used FIRST when present: full-size /ES
+    options carry an ``ES``-rooted underlying (e.g. ``ESU6``), /NQ options an
+    ``NQ``-rooted one (``NQU6``). Using it REJECTS look-alikes that share an
+    option-root prefix but are a DIFFERENT product:
+
+    * Micro E-mini — root ``EX4`` / ``MQ4`` etc., underlying ``MESU6`` /
+      ``MNQU6`` (settles into the micro future; ``M`` prefix, so an ``ES`` / ``NQ``
+      ``startswith`` already excludes it).
+    * Options on other ``E``-rooted futures, e.g. Ether (``ETH`` / ``ETHM6``).
+
+    Both expire on the same dates as /ES & /NQ daily 0DTE and would otherwise
+    pollute the chain with a foreign strike grid (verified against real GLBX
+    definitions for the 2026-06-26 expiry: ``EX4``/``MESU6`` and ``ETH``/``ETHM6``
+    were mis-tagged ``ES`` by the old asset-prefix heuristic). The historical CSV
+    path is pre-filtered to ``ES``/``NQ`` underlyings upstream, so this guard
+    matters on the LIVE path, where no such filter exists.
+
+    Falls back to the ``asset`` / ``raw_symbol`` root heuristic only when
+    ``underlying`` is absent (e.g. some futures definitions): futures asset is
+    literally ES/NQ; option roots start with ``E`` (-> ES) or ``Q`` (-> NQ).
     """
+    u = str(underlying or "").strip().upper()
+    if u:
+        # Micro (MES*/MNQ*) starts with "M"; an "ES"/"NQ" prefix match already
+        # excludes it. Any other underlying (ETH*, BTC*, ...) is a foreign product.
+        if u.startswith("ES"):
+            return "ES"
+        if u.startswith("NQ"):
+            return "NQ"
+        return None
     a = str(asset or "").strip().upper()
     if a == "ES":
         return "ES"
@@ -289,8 +318,16 @@ class LiveBook:
         strike: object,
         expiration: object,
         asset: object = "",
+        underlying: object = "",
     ) -> None:
-        """Register/replace one instrument definition."""
+        """Register/replace one instrument definition.
+
+        ``underlying`` (the settling futures contract, e.g. ``ESU6``) is the
+        reliable product discriminator: it rejects micro E-mini (``MESU6``) and
+        other ``E``-rooted look-alikes (Ether ``ETHM6``) that share a daily 0DTE
+        expiry. It is optional so existing callers/tests keep working; when
+        absent ``instrument_of`` falls back to the asset/root heuristic.
+        """
         kind = decode_class(instrument_class)
         if kind is None:
             return
@@ -302,7 +339,7 @@ class LiveBook:
             kind=kind,
             strike=strike_f,
             expiration=exp,
-            instrument=instrument_of(asset, raw_symbol),
+            instrument=instrument_of(asset, raw_symbol, underlying),
         )
 
     def add_statistic(
@@ -377,7 +414,11 @@ class LiveBook:
                 continue
             if d.strike is None:
                 continue
-            if expiry is not None and d.expiration is not None and d.expiration != expiry:
+            if expiry is None:
+                # No valid same-day 0DTE expiry -> emit NO option rows (awaiting
+                # data), never fall through to other expiries' strikes.
+                continue
+            if d.expiration is not None and d.expiration != expiry:
                 continue
             bid, ask = self._latest_quote(iid, ts)
             rows.append(
@@ -545,8 +586,12 @@ class LiveBook:
 
                 return max(same_day, key=_coverage)
             return same_day[0]
-        future = [e for e in expiries if e.astimezone(NY_TZ).date() >= session_date]
-        return future[0] if future else expiries[-1]
+        # 0DTE product: the ONLY valid expiry is the same-day one. If today's
+        # 0DTE definitions were never seeded (the 2026-06-26 live bug, where the
+        # daily $5 grid was absent and a far/quarterly expiry would otherwise win),
+        # REFUSE rather than silently emit the wrong grid. Returning None makes
+        # get_chain produce an empty "awaiting data" chain — honest, not wrong.
+        return None
 
     def _latest_quote(
         self, iid: int, ts: datetime

@@ -423,32 +423,68 @@ def test_make_adapter_live_explicit_quote_schema_wins(
 
 
 # --------------------------------------------------------------------------- #
-# Seed-window regression (live.py _seed_definitions).                          #
+# Seed-query regression (live.py _seed_definitions + _SYMBOLS).                #
 # --------------------------------------------------------------------------- #
-# CME Globex opens ~17:00 ET the prior calendar day (= ~21:00 UTC). The full   #
-# instrument-definition snapshot (all daily 0DTE chains) arrives then. A seed  #
-# window starting at 00:00 UTC today misses that entire block, leaving only    #
-# intraday quarterly updates ($25 spacing) — exactly the bug observed at        #
-# 10:55 ET 2026-06-24: 23 923 symbology mappings, zero daily $5 roots.        #
-def test_seed_window_includes_prior_session_open() -> None:
-    """The seed window MUST cover the prior calendar day's UTC session-open.
+# ROOT CAUSE (verified against real GLBX definitions 2026-06-26): today's 0DTE
+# definitions are NOT served by `ES.OPT`/`EW.OPT` (those resolve to quarterly /
+# standard-weekly only) and the `definition` schema is a POINT-IN-TIME change
+# stream, so a `now - 1 day` seed window catches only sparse near-money
+# increments of today's grid. The fix has two parts: (1) enumerate the full
+# daily/weekly parent families, (2) widen the seed lookback to span the listing
+# /re-publish of today's expiry.
+def test_seed_symbols_cover_daily_and_weekly_families() -> None:
+    """The subscription/seed symbol set MUST include the daily + weekly 0DTE
+    parent families for BOTH instruments, not just ES.OPT/NQ.OPT/EW.OPT.
 
-    CME Globex session opens ~21:00 UTC the day before. If start=00:00 UTC
-    today, the seed misses the full daily-0DTE snapshot. This test verifies
-    the _seed_definitions source computes start with a timedelta(days=N)
-    offset, not just now.replace(...) which starts at 00:00 UTC today.
+    Real GLBX data: Fri 2026-06-26 0DTE lives under parent `EW4` (ES) / `QN4`
+    (NQ); Mon-Thu dailies under `E{w}{A..D}` / `Q{w}{A..D}`. Without these the
+    seed never receives today's $5 grid and the chain falls back to the wrong
+    far/quarterly expiry.
     """
-    import inspect
     from engine.feed.live import _DatabentoLiveClient
 
+    syms = set(_DatabentoLiveClient._SYMBOLS)
+    # Futures + quarterly options still present.
+    assert {"ES.FUT", "NQ.FUT", "ES.OPT", "NQ.OPT"} <= syms
+    # Daily families (a representative sample across weekdays/weeks).
+    assert "E4D.OPT" in syms  # ES Thursday daily
+    assert "EW4.OPT" in syms  # ES Friday weekly (today's 2026-06-26 root)
+    assert "Q4D.OPT" in syms  # NQ Thursday daily
+    assert "QN4.OPT" in syms  # NQ Friday weekly
+    # Full Mon-Thu daily coverage for both instruments (5 weeks x 4 days).
+    for w in range(1, 6):
+        for d in ("A", "B", "C", "D"):
+            assert f"E{w}{d}.OPT" in syms, f"missing ES daily root E{w}{d}"
+            assert f"Q{w}{d}.OPT" in syms, f"missing NQ daily root Q{w}{d}"
+
+
+def test_seed_window_spans_listing_publication_history() -> None:
+    """The seed window MUST look back far enough to include the listing /
+    re-publish dates of today's 0DTE definitions.
+
+    The `definition` schema is a point-in-time change stream: `get_range`
+    returns only records PUBLISHED in [start, end). Today's daily grid is listed
+    ~2-3 weeks ahead and re-published weekly, so a `now - 1 day` window catches
+    only sparse increments. This test verifies the source uses the multi-week
+    SEED_LOOKBACK_DAYS constant, not a 1-day offset.
+    """
+    import inspect
+
+    from engine.feed.live import SEED_LOOKBACK_DAYS, _DatabentoLiveClient
+
+    assert SEED_LOOKBACK_DAYS >= 21, (
+        "seed lookback must span ~2-3 weeks of definition publication history; "
+        f"got {SEED_LOOKBACK_DAYS}"
+    )
     src = inspect.getsource(_DatabentoLiveClient._seed_definitions)
-    # The fix: start must include a timedelta(days=N) offset. A bare
-    # now.replace(hour=0, ...) starts at 00:00 UTC today and misses the
-    # ~21:00 UTC prior-day session-open snapshot (all daily 0DTE chains).
-    assert "timedelta(days=" in src or "timedelta(days =" in src, (
-        "_seed_definitions computes start at 00:00 UTC today, missing the "
-        "CME session-open snapshot at ~21:00 UTC prior day. "
-        "Use: start = (now - timedelta(days=1)).replace(...)"
+    assert "SEED_LOOKBACK_DAYS" in src, (
+        "_seed_definitions must compute start from SEED_LOOKBACK_DAYS, not a "
+        "fixed 1-day offset (which misses the listing-date publication of "
+        "today's 0DTE grid)."
+    )
+    assert "timedelta(days=1)" not in src, (
+        "_seed_definitions still uses the disproven 1-day window; the daily 0DTE "
+        "grid is published weeks ahead and a 1-day window misses it."
     )
 
 # --------------------------------------------------------------------------- #
