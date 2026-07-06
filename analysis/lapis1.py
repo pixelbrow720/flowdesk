@@ -31,6 +31,13 @@ from datetime import datetime, timezone
 import databento as db
 from scipy.stats import spearmanr
 
+sys.path.insert(0, ".")  # so `analysis.harness.provenance` imports when run as a script
+# Fail-closed tenor guard. The lapis1 iid map carries only the expiry DATE (not the
+# 16:00-ET ns timestamp the ns-based assert_session_iids_0dte helper needs), so the
+# 0DTE assertion is done inline at each day-resolution chokepoint below — the SAME
+# pattern (and rationale) as ddoi.vol_and_ddoi_flow.
+from analysis.harness.provenance import TenorContaminationError  # noqa: E402
+
 # Windows console/file defaults to cp1252, which cannot encode the Δ/Σ/→ symbols
 # used in the report headers. Force UTF-8 so the harness is portable.
 try:
@@ -167,6 +174,20 @@ def extract_daily_oi(iidmap: dict[int, tuple]) -> dict[str, dict[tuple, float]]:
         meta = iidmap.get(iid)
         if meta is None:
             continue
+        # TENOR PROVENANCE GUARD (fail-closed, BEFORE this OI value enters a metric).
+        # meta[3] (exp_iso) and d are both YYYY-MM-DD ET date strings (day_of), so
+        # this is an exact 0DTE check: a settled OI row whose expiry != its
+        # observation day is NOT 0DTE -> the documented quarterly-as-0DTE
+        # contamination (the 49.2/50.8 artefact). Inline check mirrors
+        # ddoi.vol_and_ddoi_flow (the lapis1 iid map carries only the expiry DATE,
+        # not the 16:00-ET ns timestamp assert_session_iids_0dte needs).
+        if meta[3] != d:
+            raise TenorContaminationError(
+                f"lapis1/extract_daily_oi: settled OI on {d} resolves to "
+                f"instrument_id {iid} with expiry {meta[3]} != observation day "
+                f"(NOT 0DTE). This harness requires a clean 0DTE pull; the matched "
+                f"population is contaminated (see DDOI 49.2/50.8 artefact)."
+            )
         recs.sort(key=lambda x: x[0])     # by ts_recv ascending
         final_oi = recs[-1][1]            # final settlement = latest ts_recv
         out[d][key_of(meta)] = final_oi   # key collisions within a day: last wins
@@ -185,6 +206,17 @@ def net_aggressor_flow(iidmap: dict[int, tuple]) -> dict[str, dict[tuple, float]
             meta = iidmap.get(r.instrument_id)
             if meta is None:
                 continue
+            # TENOR PROVENANCE GUARD (fail-closed, BEFORE flow enters a metric).
+            # Same exact-0DTE check as extract_daily_oi: a trade whose resolved
+            # expiry (meta[3], YYYY-MM-DD) != its trade day is NOT 0DTE and would
+            # reintroduce the quarterly-as-0DTE contamination.
+            if meta[3] != d:
+                raise TenorContaminationError(
+                    f"lapis1/net_aggressor_flow: trade on {d} resolves to "
+                    f"instrument_id {r.instrument_id} with expiry {meta[3]} != "
+                    f"trade day (NOT 0DTE). This harness requires a clean 0DTE "
+                    f"pull; the matched population is contaminated."
+                )
             s = aggressor_sign(getattr(r, "side", "N"))
             if s == 0:
                 continue

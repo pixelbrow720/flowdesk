@@ -35,9 +35,11 @@ honesty labels intact when the FE is rebuilt.
 
 ### 2.1 Locked contract integrity ✅ PASS
 
-- `schema_version=1` is preserved across every commit landed in this
-  build.  Confirmed by `git grep "schema_version" docs/03-data-contract.md`
-  + the `SchemaVersion = 1` constant in `packages/contracts/`.
+- `schema_version` was preserved (then `=1`) across every commit landed in
+  this build. **CORRECTION (2026-07-06):** the canonical value is now **2**
+  (the 1→2 bump landed later at commit `2b13ae2` with the HIRO→FLUX / TRACE→FOG
+  renames). This audit line was accurate at the time; see
+  `docs/02-locked-contract.md` for the current value.
 - The mirror trio (`schema.py` ↔ `snapshot.ts` ↔ `CONTRACT.md`) was not
   touched by this hardening pass — every Phase 2/3 change is at the
   worker / state-store / feed-adapter layer, behind the Snapshot
@@ -100,8 +102,8 @@ No regressions from these on the engine or contract suites.
   out-of-band, gated by the operator runbook (see
   `docs/ops/deploy-runbook.md`).
 - **Test isolation**: 13 dedicated tests, all mocked via
-  `FakeLiveClient`; engine 415 passed; **no CI path imports the real
-  `databento` package**.
+  `FakeLiveClient`; engine 450 passed (as of 2026-07-06); **no CI path
+  imports the real `databento` package**.
 
 ### 2.5 Secrets posture ✅ PASS
 
@@ -126,8 +128,8 @@ No regressions from these on the engine or contract suites.
 
 | Suite | Count | Status |
 |-------|-------|--------|
-| `services/engine/tests` | **415 passed** | green |
-| `services/api/tests` | **116 passed** | green |
+| `services/engine/tests` | **450 passed** | green (as of 2026-07-06) |
+| `services/api/tests` | **118 passed** | green (as of 2026-07-06) |
 | Concurrent collection | known import-collision in `services/engine/test_repo.py` (sys.path issue with `gen_fixture`) | run suites separately — no functional regression |
 
 Coverage of new code:
@@ -156,7 +158,7 @@ Coverage of new code:
 | Gate | Status | Notes |
 |------|--------|-------|
 | Engine purity (no clock/IO/calendar) | ✅ | preserved |
-| Locked Snapshot contract (schema_version=1, mirror trio atomic) | ✅ | not touched |
+| Locked Snapshot contract (schema_version, mirror trio atomic) | ✅ | not touched (canonical value now 2; see §2.1 correction) |
 | Auth / CORS / rate-limit / finiteness | ✅ | hardened in Phase 1 |
 | FLUX bit-equality vs offline generator | ✅ | parity test ≤1e-9 |
 | LiveAdapter cannot accidentally contact real account | ✅ | two-key arming + lazy gated import + breaker |

@@ -67,7 +67,7 @@ Before `apply` / `kubectl rollout restart` / equivalent:
   ```
   cd services/engine && PYTHONPATH=src ../../.venv/Scripts/python.exe -m pytest -q
   ```
-  → expect **415 passed**.
+  → expect **450 passed** (as of 2026-07-06).
 - [ ] API suite green:
   ```
   cd services/api && PYTHONPATH=src:../engine/src ../../.venv/Scripts/python.exe -m pytest -q

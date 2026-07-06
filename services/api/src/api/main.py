@@ -43,10 +43,14 @@ from fastapi.responses import JSONResponse
 from api import __version__
 from api.auth import get_discord_client, register_auth_routes
 from api.auth_session import Session, check_access, serialize_session, set_session_cookie
+from api.config import desk_role_id as _desk_role_id
+from api.config import guild_id as _guild_id
+from api.config import session_secret as _session_secret
 from api.discord_client import DiscordAuthError, DiscordUnavailable
 from api.entitlement import build_me_response
 from api.errors import ApiError, NotFound, ServiceUnavailable, TooManyRequests
 from api.models import HealthResponse, MeResponse, ReplayResponse, ReplaySession
+from api.rate_limit import enforce_rate_limit as _enforce_rate_limit
 from api.security import (
     SESSION_COOKIE,
     parse_session_cookie,
@@ -107,19 +111,6 @@ def _feed_mode() -> str:
     return os.environ.get("FEED_MODE", "historical")
 
 
-def _session_secret() -> str:
-    return os.environ.get("SESSION_SECRET", "")
-
-
-def _guild_id() -> str:
-    return os.environ.get("DISCORD_GUILD_ID", "")
-
-
-def _desk_role_id() -> str:
-    # Locked contract uses DESK_ROLE_ID; fall back to the legacy DISCORD_DESK_ROLE_ID.
-    return os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
-
-
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -165,24 +156,6 @@ def get_repo(request: Request) -> Any:
     if repo is None:
         raise ServiceUnavailable("snapshot repository not configured")
     return repo
-
-
-async def _enforce_rate_limit(scope: str, request: Request) -> None:
-    """Check the rate limit for ``scope`` against ``request.client.host``.
-
-    Raises :class:`TooManyRequests` (HTTP 429 + ``Retry-After``) when the
-    caller is over budget. No-op when no limiter is wired (dev / no-Redis):
-    the limiter itself fails open, so this stays consistent.
-    """
-    limiter = getattr(request.app.state, "rate_limiter", None)
-    if limiter is None:
-        return
-    verdict = await limiter.check(scope, request)
-    if not verdict.allowed:
-        raise TooManyRequests(
-            f"rate limit exceeded for {scope}",
-            retry_after=verdict.retry_after,
-        )
 
 
 async def _run_access_check(
@@ -231,6 +204,16 @@ async def _run_access_check(
 # --------------------------------------------------------------------------- #
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Fail-fast: an empty/unset SESSION_SECRET silently degrades auth to
+    # "everyone anonymous" (cookies can't be signed/verified, so every session
+    # decodes to None). Mirror the CORS fail-fast in _validate_cors_config and
+    # refuse to boot so the misconfig is caught in CI/staging, not in prod.
+    if not _session_secret():
+        raise RuntimeError(
+            "SESSION_SECRET is empty/unset. Refusing to boot: without it, "
+            "session cookies cannot be signed or verified and every request "
+            "silently degrades to anonymous. Set SESSION_SECRET (>=32 bytes)."
+        )
     redis_url = os.environ.get("REDIS_URL")
     dsn = os.environ.get("TIMESCALE_DSN")
     pool = None

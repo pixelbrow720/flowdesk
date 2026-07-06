@@ -160,7 +160,7 @@ class Levels(BaseModel):
     call_walls: list[FiniteFloat]
     """Call walls by GAMMA-DOLLAR (gamma·OI per strike), STATIC at RTH open, ordered by rank (index 0 = rank 1). PRD #0 §2, Divergence #2 (option B gamma-$)."""
     put_walls: list[FiniteFloat]
-    """Put walls by OI, STATIC, ordered by rank (index 0 = rank 1). PRD #0 §2."""
+    """Put walls by GAMMA-DOLLAR (gamma·OI per strike), STATIC at RTH open, ordered by rank (index 0 = rank 1). PRD #0 §2, Divergence #2 (option B gamma-$)."""
     gamma_flip: FiniteFloat | None
     """Gamma flip strike (net-gamma zero-crossing) by VOL, or null. PRD #0 §2."""
     largest_gex: FiniteFloat | None

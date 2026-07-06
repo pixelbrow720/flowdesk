@@ -24,8 +24,9 @@ three actually forecasts price) needs the user's ~90-day manual forward test.
 Zero API. Memory-safe streaming. Reuses the validated black76 + iv + staleness
 fix from rerun_zerodte.
 """
-import sys, math
+import sys, math, os
 sys.path.insert(0, "services/engine/src")
+sys.path.insert(0, ".")  # so `analysis.harness.provenance` imports when run as a script
 from collections import defaultdict
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -35,6 +36,7 @@ from engine.black76 import gamma as b76_gamma
 from engine.exposure import DEALER_SIGN_CALL, DEALER_SIGN_PUT
 from engine.iv import implied_vol
 from engine.snapshot import t_expiry_from_clock, MULTIPLIER
+from analysis.harness.provenance import DefLeg, assert_session_iids_0dte
 
 try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass
@@ -71,6 +73,42 @@ def load_defs():
         if k is None: continue
         m[instr][dkey][r.instrument_id]=("call" if ic=="C" else "put",k)
     return m
+
+def _exp_ns_from_dkey(dkey):
+    """Reconstruct expiration ns (16:00 ET, the documented 0DTE stamp) from the
+    expiry-date bucket key. load_defs keeps the expiry as the bucket key (not in the
+    leg tuple), so the provenance guard rebuilds the ns instant here."""
+    d=datetime.strptime(dkey,"%Y-%m-%d")
+    return int(round(datetime(d.year,d.month,d.day,16,0,tzinfo=NY).timestamp()*1e9))
+
+def flat_def_map_all(defs):
+    """Flatten defs across ALL instruments + expiries -> {iid: DefLeg} for the guard.
+    The day tape is MIXED (ES+NQ); a contaminated non-session id resolves to its real
+    expiry bucket and trips the 0DTE expiry check. Mirrors run_validation._flat_def_map_all."""
+    flat={}
+    for instr,by_expiry in defs.items():
+        for dk,legs in by_expiry.items():
+            ens=_exp_ns_from_dkey(dk)
+            for iid,(otype,k) in legs.items():
+                flat[int(iid)]=DefLeg(expiration_ns=ens, strike=float(k),
+                    instrument_class=("C" if otype=="call" else "P"), instrument=instr)
+    return flat
+
+def raw_traded_iids(path):
+    """DISTINCT instrument_ids in a trades stream — NO iidset filter. Missing file -> empty."""
+    if not os.path.exists(path): return set()
+    ids=set()
+    for r in db.DBNStore.from_file(path): ids.add(int(r.instrument_id))
+    return ids
+
+def raw_settled_iids(path):
+    """DISTINCT instrument_ids in a statistics stream (stat_type 9) — NO filter. Missing -> empty."""
+    if not os.path.exists(path): return set()
+    ids=set()
+    for r in db.DBNStore.from_file(path):
+        if int(getattr(r,"stat_type",-1))!=9: continue
+        ids.add(int(r.instrument_id))
+    return ids
 
 def quotes_at(path, iidset, sample_secs, max_stale=180):
     samples=sorted(sample_secs); res={s:{} for s in samples}; allq=defaultdict(list)
@@ -126,8 +164,21 @@ print("VOL=cum-volume·static (locked engine). OI=open-interest·static (classic
 print("FLOW=aggressor-signed (our native-side edge). *** 4-day STRUCTURAL, not price-validated. ***\n")
 
 defs=load_defs()
+flat_def_map=flat_def_map_all(defs)
 oi_total=0; oi_covered=0
 for day in DAYS:
+    # ---- TENOR PROVENANCE GUARD (fail-closed, BEFORE any GEX metric) -----------
+    # Resolve RAW traded+settled ids (no iidset filter) against the COMBINED def map;
+    # a contaminated non-0DTE id trips assert_0dte's expiry check. Idempotent across
+    # the ES/NQ inner loop. Empty warns+skips; non-empty w/ bad id RAISES. Mirrors
+    # run_validation.run_day.
+    _ts=(raw_traded_iids(f"{ZERO}/trades/{day}.dbn.zst")
+         | raw_settled_iids(f"{ZERO}/statistics/{day}.dbn.zst"))
+    if not _ts:
+        print(f"  [provenance] WARN no traded/settled iids for {day} — skipping"); continue
+    _prov=assert_session_iids_0dte(_ts, flat_def_map,
+        datetime.strptime(day,"%Y-%m-%d").date(), source_label=f"zerodte/{day}")
+    print(f"  [provenance] {_prov.summary()}")
     for instr in ("ES","NQ"):
         legs=defs[instr].get(day,{})
         if not legs: continue

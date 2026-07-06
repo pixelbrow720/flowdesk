@@ -79,7 +79,7 @@ from analysis.harness.synthetic_oi_regime_eval import (  # noqa: E402
 # build_minute_forwards (dense 390-min RTH parity-forward grid), N_MINUTES, K_SET from the
 # FLUX runner; MIN_NONTHIN + the per-day sign / single-day-domination tally from the synth-OI
 # runner; load_defs / flat-def-map / raw-iid / quotes_at / constants from run_validation.
-from analysis.harness.run_hiro_eval import (  # noqa: E402
+from analysis.harness.run_flux_eval import (  # noqa: E402
     K_SET,
     N_MINUTES,
     build_minute_forwards,

@@ -2,9 +2,9 @@
 
 > Dokumen perencanaan untuk menyatukan terminal FlowDesk (`/ES` & `/NQ` 0DTE GEX/DEX) ke dalam website utama FlowJob di `flowjob.id/dashboard/app`.
 >
-> **Status:** Rencana (belum dieksekusi).
+> **Status (update 2026-07-06):** SEBAGIAN BESAR SUDAH DIEKSEKUSI di repo `flowjob-master` (~90%). Komponen Fog + Arc + header sudah di-port, layout-bug utama sudah di-fix & di-push (branch `feat/flowdesk-terminal-integration`). Sisa: verifikasi runtime (wire backend, tes DESK vs non-DESK, build React 18 vs 19). Rencana 9-fase di bawah adalah dokumen ASLI dan sekarang sebagian historis — lihat vault `FlowDesk - flowjob Integration Status.md` untuk state terkini.
 > **Scope:** Frontend FlowDesk dimasukkan ke dalam `flowjob-master` sebagai route `/dashboard/app` yang di-gate oleh tier DESK. Backend FlowDesk di-host terpisah di VPS.
-> **Catatan:** File ini hanya dokumentasi. Tidak ada kode di project FlowDesk atau FlowJob yang disentuh saat pembuatan file ini.
+> **Catatan:** `apps/dashboard` di repo ini adalah dev playground (Strategy A, locked 2026-06-25); copy PRODUKSI ada di `flowjob-master`. Hindari edit UI di dua tempat (two-copy drift).
 
 ---
 

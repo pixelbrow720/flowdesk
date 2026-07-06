@@ -48,6 +48,7 @@ from typing import Any
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 
+from api.config import desk_role_id, guild_id
 from api.security import SESSION_COOKIE, has_active_grace, parse_session_cookie
 
 __all__ = [
@@ -242,11 +243,11 @@ async def _ws_refresh_entitlement(websocket: WebSocket, session: Any) -> Any:
     try:
         member = await client.fetch_member(
             access_token=session.access_token,
-            guild_id=os.environ.get("DISCORD_GUILD_ID", ""),
+            guild_id=guild_id(),
         )
     except Exception:  # Discord down: keep cached entitlement
         member = ...
-    role_id = os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
+    role_id = desk_role_id()
     return check_access(session, now=now, member=member, desk_role_id=role_id).session
 
 

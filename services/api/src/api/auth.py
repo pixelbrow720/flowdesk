@@ -42,6 +42,9 @@ from api.auth_session import (
     sign_value,
     verify_value,
 )
+from api.config import desk_role_id as _desk_role_id
+from api.config import guild_id as _guild_id
+from api.config import session_secret as _session_secret
 from api.discord_client import (
     DiscordAuthError,
     DiscordClient,
@@ -49,6 +52,7 @@ from api.discord_client import (
     client_from_env,
 )
 from api.errors import ApiError, Unauthenticated
+from api.rate_limit import enforce_rate_limit
 
 __all__ = ["register_auth_routes", "get_discord_client", "redirect_uri_for", "cookies_secure"]
 
@@ -58,19 +62,6 @@ class BadRequest(ApiError):
 
     status_code = 400
     code = "BAD_REQUEST"
-
-
-def _session_secret() -> str:
-    return os.environ.get("SESSION_SECRET", "")
-
-
-def _guild_id() -> str:
-    return os.environ.get("DISCORD_GUILD_ID", "")
-
-
-def _desk_role_id() -> str:
-    # Locked contract uses DESK_ROLE_ID; fall back to the legacy DISCORD_DESK_ROLE_ID.
-    return os.environ.get("DESK_ROLE_ID") or os.environ.get("DISCORD_DESK_ROLE_ID", "")
 
 
 def cookies_secure() -> bool:
@@ -147,9 +138,7 @@ def register_auth_routes(app: FastAPI) -> None:
         # Rate-limit BEFORE CSRF check: a flooder hitting /callback with junk
         # query strings should hit the cap before we spend cycles on signature
         # verification and (worse) Discord token exchange.
-        from api.main import _enforce_rate_limit  # local import to avoid cycle
-
-        await _enforce_rate_limit("oauth_callback", request)
+        await enforce_rate_limit("oauth_callback", request)
         # CSRF: the state in the query must match our signed state cookie.
         cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
         if not state or not cookie_state or state != cookie_state:

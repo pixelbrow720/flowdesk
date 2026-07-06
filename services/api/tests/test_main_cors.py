@@ -73,3 +73,38 @@ def test_cors_rejects_trailing_slash(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(RuntimeError, match=r"https://app\.flowdesk\.example/"):
         create_app()
+
+
+# --------------------------------------------------------------------------- #
+# SESSION_SECRET fail-fast (Phase 1, beta-readiness).                          #
+# --------------------------------------------------------------------------- #
+def test_boot_fails_on_empty_session_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An empty/unset SESSION_SECRET must refuse to boot in the lifespan.
+
+    Without it, session cookies cannot be signed/verified and every request
+    silently degrades to anonymous. The guard lives in the lifespan (not
+    create_app) so building the app object stays cheap; entering the TestClient
+    context manager runs the lifespan and must raise.
+    """
+    from fastapi.testclient import TestClient
+
+    from api.main import create_app
+
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.flowdesk.example")
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    app = create_app()  # building the app is fine; boot is what must fail
+    with pytest.raises(RuntimeError, match=r"SESSION_SECRET"), TestClient(app):
+        pass
+
+
+def test_boot_succeeds_with_session_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A present SESSION_SECRET boots clean through the lifespan."""
+    from fastapi.testclient import TestClient
+
+    from api.main import create_app
+
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.flowdesk.example")
+    monkeypatch.setenv("SESSION_SECRET", "test-secret-please-change")
+    app = create_app()
+    with TestClient(app) as client:
+        assert client.get("/api/health").status_code == 200

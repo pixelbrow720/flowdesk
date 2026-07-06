@@ -53,6 +53,9 @@ tmp_*
 # ── Advisor scratch brief (rewritten raw per-prompt, not history) ──
 .kilo/advisor/
 
+# ── Generated docs artifact (17MB pandoc export of 04-engine.md; regenerable) ──
+docs/04-engine.html
+
 # ── OS / editor ──
 .DS_Store
 Thumbs.db

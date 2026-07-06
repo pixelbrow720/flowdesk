@@ -11,8 +11,9 @@ For each (day, instrument): build the chain at sample RTH minutes, run build_sna
 (regime/flip/walls/GEX), fit SVI at midday (ATM vol/skew/EM), and compute VEX/CHEX
 (open vs late). Prints a comparison vs the artefact (140-290% IV) it replaces.
 """
-import sys, glob
+import sys, glob, os
 sys.path.insert(0, "services/engine/src")
+sys.path.insert(0, ".")  # so `analysis.harness.provenance` imports when run as a script
 import math
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -20,6 +21,7 @@ from zoneinfo import ZoneInfo
 import databento as db
 
 from engine.snapshot import build_snapshot, ChainQuote, t_expiry_from_clock, MULTIPLIER
+from analysis.harness.provenance import DefLeg, assert_session_iids_0dte
 from engine.black76 import vanna as b76_vanna, charm as b76_charm
 from engine.exposure import DEALER_SIGN_CALL, DEALER_SIGN_PUT
 from engine.iv import implied_vol
@@ -122,11 +124,64 @@ def oi_map(path, iidset):
         rows[iid].append((getattr(r,"ts_recv",0) or 0, float(getattr(r,"quantity",0) or 0)))
     return {iid:max(v)[1] for iid,v in rows.items()}
 
+def flat_def_map_all(defs):
+    """Flatten defs across ALL instruments + expiries -> {iid: DefLeg} for the guard.
+    load_defs buckets by instrument+expiry; the day tape is MIXED (ES+NQ), so the
+    provenance guard MUST resolve raw ids against every instrument (a per-instrument
+    map would flag the other's ids as unresolved). Mirrors run_validation._flat_def_map_all."""
+    flat={}
+    for instr,by_expiry in defs.items():
+        for _dk,legs in by_expiry.items():
+            for iid,(otype,k,ed) in legs.items():
+                flat[int(iid)]=DefLeg(
+                    expiration_ns=int(round(ed.timestamp()*1e9)),
+                    strike=float(k),
+                    instrument_class=("C" if otype=="call" else "P"),
+                    instrument=instr,
+                )
+    return flat
+
+def raw_traded_iids(path):
+    """DISTINCT instrument_ids in a trades stream — NO iidset filter. Missing file -> empty."""
+    if not os.path.exists(path): return set()
+    ids=set()
+    for r in db.DBNStore.from_file(path): ids.add(int(r.instrument_id))
+    return ids
+
+def raw_settled_iids(path):
+    """DISTINCT instrument_ids in a statistics stream (stat_type 9) — NO filter. Missing -> empty."""
+    if not os.path.exists(path): return set()
+    ids=set()
+    for r in db.DBNStore.from_file(path):
+        if int(getattr(r,"stat_type",-1))!=9: continue
+        ids.add(int(r.instrument_id))
+    return ids
+
 print("================ GREEK RE-RUN ON CORRECT 0DTE DATA (zero API) ================")
 print("Validated engine pipeline on data/raw/zerodte/. Replaces 140-290% artefact.\n")
 defs = load_defs()
+flat_def_map = flat_def_map_all(defs)
 
 for day in DAYS:
+    # ---- TENOR PROVENANCE GUARD (fail-closed, BEFORE any metric/snapshot) -------
+    # Resolve the RAW ids actually traded+settled in the day's streams (no iidset
+    # filter) against a COMBINED def map (ALL instruments + expiries). A contaminated
+    # non-0DTE id resolves to a non-session DefLeg and trips assert_0dte's expiry
+    # check. Idempotent across the ES/NQ inner loop (same session population). Empty
+    # (data absent) warns + skips; non-empty with any bad id RAISES. Mirrors
+    # run_validation.run_day.
+    _traded_settled = (
+        raw_traded_iids(f"{ZERO}/trades/{day}.dbn.zst")
+        | raw_settled_iids(f"{ZERO}/statistics/{day}.dbn.zst")
+    )
+    if not _traded_settled:
+        print(f"  [provenance] WARN no traded/settled iids for {day} — skipping")
+        continue
+    _prov = assert_session_iids_0dte(
+        _traded_settled, flat_def_map,
+        datetime.strptime(day, "%Y-%m-%d").date(), source_label=f"zerodte/{day}",
+    )
+    print(f"  [provenance] {_prov.summary()}")
     for instr in ("ES","NQ"):
         legs = defs[instr].get(day, {})
         if not legs:

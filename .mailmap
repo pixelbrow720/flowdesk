@@ -1,0 +1,5 @@
+# Canonicalize committer identities (see AGENTS.md / git shortlog).
+# Left = canonical name/email shown; right = variants found in history.
+pixelbrow720 <pixelbrow13@gmail.com> <pixelbrow13@gmail.com>
+pixelbrow720 <pixelbrow13@gmail.com> pixlebrow720 <pixelbrow13@gmail.com>
+agent <agent@flowdesk.local> <agent@flowdesk>

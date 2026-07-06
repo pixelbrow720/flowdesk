@@ -45,19 +45,24 @@ expiry lands on the next UTC day and false-rejects by one day. We convert via
 Scope / follow-up
 -----------------
 Only ``assert_0dte`` is implemented for now (the general ``assert_tenor``
-contract can come later). Only the live ``run_validation.py`` chokepoint is
-wired in this phase.
+contract can come later).
 
-TODO (follow-up, NOT done here): route the other duplicated
-``instrument_id -> expiry`` loaders through this guard so no metric path can
-skip it. Known call sites:
-  - ``analysis/harness/run_validation.py``  -> ``load_defs``        (WIRED)
-  - ``analysis/lapis1.py``                  -> ``build_iid_map``    (TODO)
-  - ``analysis/rerun_zerodte.py``           -> def loader           (TODO)
-  - ``analysis/synthetic_oi_v2.py``         -> def loader           (TODO)
-  - ``analysis/synthetic_oi_v3.py``         -> def loader           (TODO)
-  - ``analysis/synthetic_oi_v4.py``         -> def loader           (TODO)
-  - ``analysis/ddoi.py``                    -> reuses lapis1 loader (TODO)
+All duplicated ``instrument_id -> expiry`` loaders are now routed through this
+guard so no metric path can skip it. Two wiring styles are used, matching each
+loader's map shape:
+  * ``assert_session_iids_0dte`` (ns-based) for the zerodte-session loaders whose
+    def map (or a reconstructed 16:00-ET stamp) carries the expiration instant;
+  * an inline ``expiry-date == session-date`` check for the lapis1/ddoi cross-day
+    loaders whose cumulative iid map carries only the expiry DATE (no ns), which
+    is an exact 0DTE check without needing the ns helper.
+Known call sites:
+  - ``analysis/harness/run_validation.py``  -> ``load_defs``        (WIRED: assert_session_iids_0dte)
+  - ``analysis/lapis1.py``                  -> ``build_iid_map``    (WIRED: inline date check in extract_daily_oi + net_aggressor_flow)
+  - ``analysis/rerun_zerodte.py``           -> def loader           (WIRED: assert_session_iids_0dte, per-day)
+  - ``analysis/synthetic_oi_v2.py``         -> def loader           (WIRED: assert_session_iids_0dte, per-day)
+  - ``analysis/synthetic_oi_v3.py``         -> def loader           (WIRED: assert_session_iids_0dte, per-day)
+  - ``analysis/synthetic_oi_v4.py``         -> def loader           (WIRED: assert_session_iids_0dte, per-day)
+  - ``analysis/ddoi.py``                    -> reuses lapis1 loader (WIRED: inline date check in vol_and_ddoi_flow)
 """
 from __future__ import annotations
 

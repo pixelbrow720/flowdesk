@@ -18,10 +18,12 @@ the **methodologically weakest version of the core signal** and is
 ## What is genuinely solid ✅
 
 - **Deterministic, pure engine** with a golden fixture. Same inputs → same Snapshot.
-- **Cross-language contract** byte-for-byte mirrored (pydantic ↔ zod), with a
-  validate step that accepts the example and rejects malformed input.
-- **Good test coverage** of the plumbing: 442 engine tests, 116 API tests
-  (re-counted via `pytest --collect-only` on 2026-06-19), closed-form Black-76
+- **Cross-language contract** mirrored (pydantic ↔ zod), now guarded by an
+  AUTOMATED field-parity test (`services/engine/tests/test_contract_parity.py`,
+  added 2026-07-06) plus a validate step that accepts the example and rejects
+  malformed input. (Previously the sync was manual-only.)
+- **Good test coverage** of the plumbing: 450 engine tests, 118 API tests
+  (re-counted 2026-07-06), closed-form Black-76
   checks, IV convergence, exposure signs, field invariant, level extraction,
   FLUX signing, auth/entitlement/state.
 - **Clean separation**: engine is calendar-free; the API owns time/state.

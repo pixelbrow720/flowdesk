@@ -75,7 +75,8 @@ apps/landing/      @flowdesk/landing — Next.js marketing site (port 4321, dist
                    node_modules + package-lock.json, NOT in pnpm-workspace.yaml.
 analysis/          Offline research/eval harnesses. `analysis/harness/provenance.py`
                    is the chokepoint that enforces 0DTE tenor (rule 2.7).
-infra/             docker-compose etc. (Fase 6 — currently only .gitkeep).
+infra/             docker-compose.yml (DEV Redis + TimescaleDB stack) + .gitkeep.
+                   Prod compose / Caddy / bootstrap land per the ops runbook.
 docs/              ALL human documentation (start at docs/README.md).
 ```
 
@@ -89,8 +90,10 @@ Three ecosystems are managed **separately**:
 
 ## 4. Verification — run after EVERY change
 
-There is **no CI** (`.github/` does not exist) and no pre-commit hook. The
-checks below are the *only* gate; you must run them locally.
+CI exists (`.github/workflows/ci.yml`): pytest is a HARD gate for engine + api,
+ruff/mypy are advisory (`continue-on-error`), and contracts run typecheck + zod
+validate. There is no pre-commit hook. Always run the checks below locally too —
+CI mirrors them but you should not rely on it as your only gate.
 
 ```bash
 # Engine — both linters are strict and gated by mypy strict mode.

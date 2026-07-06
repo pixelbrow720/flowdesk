@@ -51,10 +51,13 @@ import time
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple
 
+from api.errors import TooManyRequests
+
 __all__ = [
     "RateLimiter",
     "RateLimitVerdict",
     "client_identity",
+    "enforce_rate_limit",
     "rate_limit_key",
     "scope_limit",
     "WINDOW_SECONDS",
@@ -226,4 +229,25 @@ class RateLimiter:
         return RateLimitVerdict(
             allowed=True, remaining=limit - count, retry_after=0,
             scope=scope, ident=ident,
+        )
+
+
+async def enforce_rate_limit(scope: str, request: Any) -> None:
+    """Check the rate limit for ``scope`` against ``request.client.host``.
+
+    Raises :class:`~api.errors.TooManyRequests` (HTTP 429 + ``Retry-After``)
+    when the caller is over budget. No-op when no limiter is wired
+    (dev / no-Redis): the limiter itself fails open, so this stays consistent.
+
+    Lives here (not in ``api.main``) so both ``api.main`` and ``api.auth`` can
+    import it at top level without the historical main<->auth import cycle.
+    """
+    limiter = getattr(request.app.state, "rate_limiter", None)
+    if limiter is None:
+        return
+    verdict = await limiter.check(scope, request)
+    if not verdict.allowed:
+        raise TooManyRequests(
+            f"rate limit exceeded for {scope}",
+            retry_after=verdict.retry_after,
         )
